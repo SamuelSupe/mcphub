@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/latest)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -28,9 +28,9 @@ flowchart LR
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [Apache License 2.0](LICENSE)（Copyright 2026 SamuelSupe）
-- [v1.1.0 开发说明](RELEASE_NOTES_v1.1.0.md)、[v1.0.0 发行说明](RELEASE_NOTES_v1.0.0.md)和 [GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.1.0 发行说明](RELEASE_NOTES_v1.1.0.md)、[v1.0.0 历史发行说明](RELEASE_NOTES_v1.0.0.md)、[v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-本分支记录 v1.1.0 开发线（待发布）；v1.0.0 仍是最近一次已发布且可下载的版本。
+MCPHub v1.1.0 是当前最新版本；v1.0.0 仍作为上一版已发布版本和历史参考保留。
 
 ## 能力与边界
 
@@ -48,10 +48,10 @@ flowchart LR
 
 ## 快速开始
 
-要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装带版本标签的 v1.0.0 命令：
+要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装带版本标签的 v1.1.0 命令：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.0.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.1.0
 ```
 
 如果从源码构建，请先复制示例并设置其中的环境变量：
@@ -84,17 +84,19 @@ go run ./cmd/mcphub validate --config ./config.yaml
 go run ./cmd/mcphub serve --config ./config.yaml
 ```
 
-### v1.0.0 预构建下载
+### v1.1.0 预构建下载
 
-[v1.0.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0) 提供以下归档文件和校验文件：
+[v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0) 提供以下归档文件和校验文件：
 
 | 平台 | 下载 |
 | --- | --- |
-| macOS amd64 | [mcphub_v1.0.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_darwin_amd64.tar.gz) |
-| macOS arm64 | [mcphub_v1.0.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub_v1.0.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub_v1.0.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_linux_arm64.tar.gz) |
-| 校验和 | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/SHA256SUMS) |
+| macOS amd64 | [mcphub_v1.1.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_amd64.tar.gz) |
+| macOS arm64 | [mcphub_v1.1.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub_v1.1.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub_v1.1.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_arm64.tar.gz) |
+| 校验和 | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/SHA256SUMS) |
+
+上一版 v1.0.0 请参见其[发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0)和[历史发行说明](RELEASE_NOTES_v1.0.0.md)。
 
 ## 配置
 

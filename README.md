@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/latest)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -28,9 +28,9 @@ flowchart LR
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Apache License 2.0](LICENSE) (copyright 2026 SamuelSupe)
-- [v1.1.0 development notes](RELEASE_NOTES_v1.1.0.md), [v1.0.0 release notes](RELEASE_NOTES_v1.0.0.md), and [GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.1.0 release notes](RELEASE_NOTES_v1.1.0.md), [v1.0.0 historical release notes](RELEASE_NOTES_v1.0.0.md), [v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-This branch documents the v1.1.0 development line (unreleased); v1.0.0 remains the latest published and downloadable release.
+MCPHub v1.1.0 is the latest release. v1.0.0 remains available as the previous published release and historical reference.
 
 ## Capabilities and boundaries
 
@@ -48,10 +48,10 @@ When a backend connection fails, MCPHub retries and retains its last-known catal
 
 ## Quick start
 
-Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the tagged v1.0.0 command with Go:
+Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the tagged v1.1.0 command with Go:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.0.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.1.0
 ```
 
 For a source build, copy the example and set its environment variables:
@@ -84,17 +84,19 @@ go run ./cmd/mcphub validate --config ./config.yaml
 go run ./cmd/mcphub serve --config ./config.yaml
 ```
 
-### Prebuilt v1.0.0 downloads
+### Prebuilt v1.1.0 downloads
 
-The [v1.0.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0) publishes these archives and the checksum file:
+The [v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0) publishes these archives and the checksum file:
 
 | Platform | Download |
 | --- | --- |
-| macOS amd64 | [mcphub_v1.0.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_darwin_amd64.tar.gz) |
-| macOS arm64 | [mcphub_v1.0.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub_v1.0.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub_v1.0.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_linux_arm64.tar.gz) |
-| Checksums | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/SHA256SUMS) |
+| macOS amd64 | [mcphub_v1.1.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_amd64.tar.gz) |
+| macOS arm64 | [mcphub_v1.1.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub_v1.1.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub_v1.1.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_arm64.tar.gz) |
+| Checksums | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/SHA256SUMS) |
+
+For the previous v1.0.0 release, see its [release page](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0) and [historical release notes](RELEASE_NOTES_v1.0.0.md).
 
 ## Configuration
 

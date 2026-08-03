@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'SamuelSupe/mcphub'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          declared_version="$(sed -n 's/^const Value = "\([^"]*\)"$/\1/p' internal/version/version.go)"
+          test -n "$declared_version"
+          test "$GITHUB_REF_NAME" = "v$declared_version"
+          test -f "RELEASE_NOTES_${GITHUB_REF_NAME}.md"
+          git tag --points-at "$GITHUB_SHA" | grep -Fx "$GITHUB_REF_NAME"
+
+      - name: Check formatting
+        run: |
+          gofmt -l ./cmd ./internal | tee /tmp/mcphub-gofmt.txt
+          test ! -s /tmp/mcphub-gofmt.txt
+
+      - name: Test with race detector
+        run: go test -race ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build container
+        run: docker build --tag "mcphub:${GITHUB_REF_NAME}" .
+
+      - name: Build release archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e dist
+          mkdir dist
+          source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            archive="mcphub_${GITHUB_REF_NAME}_${os}_${arch}.tar.gz"
+            stage="$(mktemp -d)"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build \
+              -trimpath \
+              -ldflags="-s -w" \
+              -o "$stage/mcphub" \
+              ./cmd/mcphub
+            cp LICENSE README.md README.zh-CN.md config.example.yaml "$stage/"
+            tar \
+              --sort=name \
+              --mtime="@$source_date_epoch" \
+              --owner=0 \
+              --group=0 \
+              --numeric-owner \
+              -C "$stage" \
+              -czf "dist/$archive" \
+              LICENSE README.md README.zh-CN.md config.example.yaml mcphub
+          done
+          (
+            cd dist
+            sha256sum *.tar.gz > SHA256SUMS
+          )
+
+      - name: Verify release archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find dist -maxdepth 1 -name 'mcphub_*.tar.gz' -type f | wc -l)" -eq 4
+          (
+            cd dist
+            sha256sum --check SHA256SUMS
+            for archive in mcphub_*.tar.gz; do
+              test "$(tar -tzf "$archive" | sort | tr '\n' ' ')" = "LICENSE README.md README.zh-CN.md config.example.yaml mcphub "
+            done
+          )
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*.tar.gz \
+            dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --latest \
+            --title "MCPHub $GITHUB_REF_NAME" \
+            --notes-file "RELEASE_NOTES_${GITHUB_REF_NAME}.md"

@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/latest)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -28,7 +28,9 @@ flowchart LR
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [Apache License 2.0](LICENSE)（Copyright 2026 SamuelSupe）
-- [v1.0.0 发行说明](RELEASE_NOTES_v1.0.0.md)和 [GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.1.0 发行说明](RELEASE_NOTES_v1.1.0.md)、[v1.0.0 历史发行说明](RELEASE_NOTES_v1.0.0.md)、[v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+
+MCPHub v1.1.0 是当前最新版本；v1.0.0 仍作为上一版已发布版本和历史参考保留。
 
 ## 能力与边界
 
@@ -38,6 +40,7 @@ flowchart LR
 - 针对官方 Go MCP SDK v1.7.0 客户端的 `notifications/cancelled` 消息缺少 2026-07-28 metadata，Hub 入站和后端出站都会做兼容规范化，使取消或取消订阅后的同一逻辑 MCP session 仍可复用；这是互操作性 shim，不是自定义扩展。
 - 以 `backend.id` 为命名空间，改写资源 URI，避免不同后端的同名能力和 URI 冲突。
 - 使用 OIDC discovery 和 JWKS 验证 Bearer JWT；按后端 `required_scopes` 过滤目录和调用。
+- 对原始后端 tool name 应用后端本地 `tool_rules` 和 Go `path.Match`；匹配规则的 scope 会合并去重，按 all-of 授权，并从 `tools/list` 隐藏未授权 tool。
 - 支持后端静态请求头，或 OAuth 2.0 `client_credentials`；两者不能同时提供 `Authorization`。
 - 提供健康、就绪和 RFC 9728 Protected Resource Metadata 端点；配置支持 SIGHUP 热重载。
 
@@ -45,10 +48,10 @@ flowchart LR
 
 ## 快速开始
 
-要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装带版本标签的 v1.0.0 命令：
+要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装带版本标签的 v1.1.0 命令：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.0.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.1.0
 ```
 
 如果从源码构建，请先复制示例并设置其中的环境变量：
@@ -81,17 +84,19 @@ go run ./cmd/mcphub validate --config ./config.yaml
 go run ./cmd/mcphub serve --config ./config.yaml
 ```
 
-### v1.0.0 预构建下载
+### v1.1.0 预构建下载
 
-[v1.0.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0) 提供以下归档文件和校验文件：
+[v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0) 提供以下归档文件和校验文件：
 
 | 平台 | 下载 |
 | --- | --- |
-| macOS amd64 | [mcphub_v1.0.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_darwin_amd64.tar.gz) |
-| macOS arm64 | [mcphub_v1.0.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub_v1.0.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub_v1.0.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_linux_arm64.tar.gz) |
-| 校验和 | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/SHA256SUMS) |
+| macOS amd64 | [mcphub_v1.1.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_amd64.tar.gz) |
+| macOS arm64 | [mcphub_v1.1.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub_v1.1.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub_v1.1.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_arm64.tar.gz) |
+| 校验和 | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/SHA256SUMS) |
+
+上一版 v1.0.0 请参见其[发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0)和[历史发行说明](RELEASE_NOTES_v1.0.0.md)。
 
 ## 配置
 
@@ -135,6 +140,7 @@ scope 取自 JWT 的 `scope` 和 `scp` 两个 claim：`scope` 只接受空格分
 | `url` | 无 | 必填绝对 URL。默认只接受 HTTPS；仅当 `allow_insecure_http: true` 且主机是 `localhost`、IPv4/IPv6 loopback 时才允许 HTTP。 |
 | `required` | `false` | required 后端影响 `/readyz`。运行中断线会使就绪变为 503；连接循环会继续重试。 |
 | `required_scopes` | `[]` | 该后端所需的 JWT scope，按 all-of 判断；scope 不能含空白，也不能重复。 |
+| `tool_rules` | `[]` | 可选的后端本地 tool 策略。每条规则包含 `match` glob 和 `required_scopes`；匹配基于原始后端 tool name，使用 Go `path.Match`，整串且区分大小写。 |
 | `request_timeout` | 继承 `server.request_timeout` | 该后端连接、目录发现、刷新和调用的超时；必须大于 0。 |
 | `allow_insecure_http` | `false` | 仅为 loopback 本地 HTTP 开关；不会放宽 `server.public_url` 或任何 issuer 的 HTTPS 要求。 |
 | `headers` | `{}` | 每次后端 MCP HTTP 请求附加的静态头。值支持环境变量展开，不能含 CR/LF；名称大小写不敏感且不能重复。`Accept`、`Content-Type`、任意 `Mcp-*` 头，以及 `Host`、`Content-Length`、`Connection`、`Proxy-Authorization`、`Proxy-Authenticate` 等均由 HTTP/MCP transport 管理并被拒绝。 |
@@ -150,6 +156,14 @@ scope 取自 JWT 的 `scope` 和 `scp` 两个 claim：`scope` 只接受空格分
 | `scopes` | 发给后端 OAuth token endpoint 的 scope 列表；它与 `required_scopes`（验证进入 MCPHub 的 JWT）是两套独立的 scope。 |
 
 后端 OAuth discovery 和 token 请求不会带上该后端的静态 headers；数据面请求才会附加 headers 并自动复用/刷新 client-credentials token。Discovery 只从 RFC 8414/OIDC metadata 读取并精确校验 `issuer` 和 `token_endpoint`，不要求交互式 authorization 或 PKCE metadata。OAuth metadata 响应上限为 1 MiB。后端和 OIDC HTTP 客户端都不跟随重定向。
+
+#### 后端本地 tool 规则
+
+`tool_rules` 按 backend 分别评估，发生在配置的 ID 加到公开 tool name 之前。规则的 `match` 使用 Go `path.Match` 匹配原始后端 tool name：整串匹配且区分大小写，因此 `admin.*` 不会匹配 `Admin.Read` 或字符串中的子串。每条匹配规则贡献自己的 `required_scopes`；MCPHub 会合并去重这些 scope，并要求它们与 backend 级 `required_scopes` 一起全部满足。
+
+配置校验会对 `match` 和规则 scope 字符串执行现有 `${ENV}` 展开；每个 `match` 必须非空且是有效的 Go `path.Match` 模式，每条规则必须声明非空的 `required_scopes`，其项不能含空白或重复，同一 backend 内重复的 `match` 会被拒绝。
+
+不满足策略的 tool 不会出现在 `tools/list`。客户端直接调用已知但缺少所需 scope 的 tool 时，MCPHub 返回 403，并给出精确的 `WWW-Authenticate` challenge，其中包含 `error="insufficient_scope"`、路径感知的 `resource_metadata` URL，以及列出缺失 scope 的空格分隔 `scope` 值。当前目录 generation 没有匹配 tool 的规则会发出一次 warning，但配置仍有效，后续目录刷新出现匹配 tool 后即可生效。`tool_rules` 支持通过 SIGHUP 热重载，并随重载后的 backend policy 生效。
 
 Backend ID 的唯一性按大小写不敏感检查。tool/prompt 名称保留配置中的 ID；所有公开 resource 或 resource-template URI 使用小写 authority，并解析回配置中的 ID。
 
@@ -188,7 +202,7 @@ kill -HUP <mcphub-pid>   # 重读同一个 --config 文件
 kill -TERM <mcphub-pid>  # 优雅关停
 ```
 
-SIGHUP 会先完整加载、环境展开和校验配置，再构建 candidate runtime；失败时保留旧 runtime。新 runtime 的 required 后端必须首次连接成功；旧 runtime 会在 `drain_timeout` 内等待活动请求后关闭；runtime 代际最终关闭时，会先取消绑定到该代际的 request context，再关闭其 Hub/backend 状态，避免 session 晚到登记竞态。该取消会立即让底层 write deadline 到期，打断 drain 后仍在慢速或未读取的 subscription write；普通请求仍保留 `request_timeout` deadline。可热重载的包括 allowed origins、目录/请求/关停参数、后端列表及后端认证和 scope。以下字段变化会被拒绝，必须重启：
+SIGHUP 会先完整加载、环境展开和校验配置，再构建 candidate runtime；失败时保留旧 runtime。新 runtime 的 required 后端必须首次连接成功；旧 runtime 会在 `drain_timeout` 内等待活动请求后关闭；runtime 代际最终关闭时，会先取消绑定到该代际的 request context，再关闭其 Hub/backend 状态，避免 session 晚到登记竞态。该取消会立即让底层 write deadline 到期，打断 drain 后仍在慢速或未读取的 subscription write；普通请求仍保留 `request_timeout` deadline。可热重载的包括 allowed origins、目录/请求/关停参数、后端列表及后端认证、scope 和后端本地 `tool_rules`。以下字段变化会被拒绝，必须重启：
 
 - `server.listen`
 - `server.public_url`
@@ -200,7 +214,7 @@ SIGHUP candidate 启动使用可取消的 context；关停开始时仍在连接�
 
 SIGINT 和 SIGTERM 会先停止接收新请求，再保留当前 runtime 与 backend context，让 HTTP 请求在 `drain_timeout` 内完成 drain。HTTP drain 超时后，MCPHub 会强制关闭剩余 HTTP 连接；随后代际关闭会先取消绑定到该代际的 request context，再关闭 backend 状态。
 
-SIGHUP 创建 unavailable optional backend 时，只有目录来源身份未变才会继承上一代内存目录：backend ID 和 URL、`allow_insecure_http`、全部固定 header，以及 OAuth 配置是否存在和 `type`、`issuer`、`client_id`、`client_secret`、`scopes` 必须完全一致。任意凭证、OAuth 或 tenant-selection header 变化都会阻止复用；`required`、`required_scopes`、timeout 等不标识目录来源的字段不阻止复用；继承的目录不会把新 backend 标记为 ready。
+SIGHUP 创建 unavailable optional backend 时，只有目录来源身份未变才会继承上一代内存目录：backend ID 和 URL、`allow_insecure_http`、全部固定 header，以及 OAuth 配置是否存在和 `type`、`issuer`、`client_id`、`client_secret`、`scopes` 必须完全一致。任意凭证、OAuth 或 tenant-selection header 变化都会阻止复用；`required`、`required_scopes`、`tool_rules`、timeout 等不标识目录来源的字段不阻止复用；继承的目录不会把新 backend 标记为 ready。
 
 ## Docker
 

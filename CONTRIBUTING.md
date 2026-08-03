@@ -6,7 +6,7 @@
 
 Thank you for contributing to MCPHub. Please keep changes small, observable, and aligned with the current HTTP aggregation boundary.
 
-This public repository is [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub), documenting v1.0.0 with module path `github.com/SamuelSupe/mcphub`. The project is released under the [Apache License 2.0](LICENSE); see the [v1.0.0 release notes](RELEASE_NOTES_v1.0.0.md) for the shipped scope.
+This public repository is [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub), documenting v1.1.0 with module path `github.com/SamuelSupe/mcphub`. The project is released under the [Apache License 2.0](LICENSE); see the [v1.1.0 release notes](RELEASE_NOTES_v1.1.0.md) for the shipped scope. The v1.0.0 release remains available as historical reference.
 
 ### Before you start
 
@@ -56,7 +56,7 @@ Documentation must reflect the current code, not a planned design. Keep `README.
 
 感谢你为 MCPHub 贡献代码。请让改动保持聚焦、可观察，并符合当前的 HTTP 聚合边界。
 
-本公开仓库是 [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub)，当前文档对应 v1.0.0，module path 为 `github.com/SamuelSupe/mcphub`。项目采用 [Apache License 2.0](LICENSE)；已发布范围见 [v1.0.0 发行说明](RELEASE_NOTES_v1.0.0.md)。
+本公开仓库是 [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub)，当前文档对应 v1.1.0，module path 为 `github.com/SamuelSupe/mcphub`。项目采用 [Apache License 2.0](LICENSE)；已发布范围见 [v1.1.0 发行说明](RELEASE_NOTES_v1.1.0.md)。v1.0.0 仍作为历史参考保留。
 
 ### 开始前
 

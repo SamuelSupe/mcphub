@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/latest)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -28,7 +28,9 @@ flowchart LR
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Apache License 2.0](LICENSE) (copyright 2026 SamuelSupe)
-- [v1.0.0 release notes](RELEASE_NOTES_v1.0.0.md) and [GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.1.0 release notes](RELEASE_NOTES_v1.1.0.md), [v1.0.0 historical release notes](RELEASE_NOTES_v1.0.0.md), [v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+
+MCPHub v1.1.0 is the latest release. v1.0.0 remains available as the previous published release and historical reference.
 
 ## Capabilities and boundaries
 
@@ -38,6 +40,7 @@ flowchart LR
 - Normalizes missing 2026-07-28 metadata on `notifications/cancelled` from official Go MCP SDK v1.7.0 clients on both Hub ingress and backend egress, so the same logical MCP session remains reusable after cancellation or unsubscribe; this is an interoperability shim, not a custom extension.
 - Namespaces capabilities with `backend.id` and rewrites resource URIs to avoid same-name capability and URI collisions between backends.
 - Verifies Bearer JWTs with OIDC discovery and JWKS, then filters catalogs and calls by each backend's `required_scopes`.
+- Applies backend-local `tool_rules` to original tool names with Go `path.Match`; matching rules union and deduplicate required scopes, use all-of authorization, and hide unauthorized tools from `tools/list`.
 - Supports static backend request headers or OAuth 2.0 `client_credentials`; neither mode may provide a static `Authorization` header together with OAuth.
 - Provides health, readiness, and RFC 9728 Protected Resource Metadata endpoints, plus SIGHUP configuration reload.
 
@@ -45,10 +48,10 @@ When a backend connection fails, MCPHub retries and retains its last-known catal
 
 ## Quick start
 
-Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the tagged v1.0.0 command with Go:
+Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the tagged v1.1.0 command with Go:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.0.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.1.0
 ```
 
 For a source build, copy the example and set its environment variables:
@@ -81,17 +84,19 @@ go run ./cmd/mcphub validate --config ./config.yaml
 go run ./cmd/mcphub serve --config ./config.yaml
 ```
 
-### Prebuilt v1.0.0 downloads
+### Prebuilt v1.1.0 downloads
 
-The [v1.0.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0) publishes these archives and the checksum file:
+The [v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0) publishes these archives and the checksum file:
 
 | Platform | Download |
 | --- | --- |
-| macOS amd64 | [mcphub_v1.0.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_darwin_amd64.tar.gz) |
-| macOS arm64 | [mcphub_v1.0.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub_v1.0.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub_v1.0.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/mcphub_v1.0.0_linux_arm64.tar.gz) |
-| Checksums | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.0.0/SHA256SUMS) |
+| macOS amd64 | [mcphub_v1.1.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_amd64.tar.gz) |
+| macOS arm64 | [mcphub_v1.1.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub_v1.1.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub_v1.1.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_arm64.tar.gz) |
+| Checksums | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/SHA256SUMS) |
+
+For the previous v1.0.0 release, see its [release page](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0) and [historical release notes](RELEASE_NOTES_v1.0.0.md).
 
 ## Configuration
 
@@ -135,6 +140,7 @@ At least one backend is required. Each `id` must match `[A-Za-z0-9_-]{1,32}` and
 | `url` | none | Required absolute URL. HTTPS is required by default; HTTP is accepted only when `allow_insecure_http: true` and the host is `localhost` or an IPv4/IPv6 loopback. Fragments are rejected. |
 | `required` | `false` | Required backends affect `/readyz`. A runtime disconnect makes readiness 503 while the reconnect loop continues. |
 | `required_scopes` | `[]` | JWT scopes required for this backend, checked with all-of semantics; scope entries cannot contain whitespace or duplicates. |
+| `tool_rules` | `[]` | Optional backend-local tool policies. Each rule has a `match` glob and `required_scopes`; matching uses Go `path.Match` against the original backend tool name, full-string and case-sensitive. |
 | `request_timeout` | inherits `server.request_timeout` | Timeout for this backend's connection, discovery, refresh, and calls; must be positive. |
 | `allow_insecure_http` | `false` | Loopback-only local HTTP switch. It does not relax HTTPS requirements for `server.public_url` or any issuer. |
 | `headers` | `{}` | Static headers added to every backend MCP HTTP request. Values support environment expansion, may not contain CR/LF, and names are case-insensitively unique. `Accept`, `Content-Type`, any `Mcp-*` header, and transport-managed headers such as `Host`, `Content-Length`, `Connection`, `Proxy-Authorization`, and `Proxy-Authenticate` are rejected. |
@@ -150,6 +156,14 @@ At least one backend is required. Each `id` must match `[A-Za-z0-9_-]{1,32}` and
 | `scopes` | Scopes requested from the backend OAuth token endpoint. These are independent of `required_scopes`, which gate the JWT presented to MCPHub. |
 
 Backend OAuth discovery and token requests do not receive the backend's static headers; data-plane requests do and automatically reuse/refresh the client-credentials token. Discovery probes RFC 8414/OIDC metadata for an exact `issuer` and `token_endpoint` only; it does not require interactive authorization or PKCE metadata. OAuth metadata responses are capped at 1 MiB. Backend and OIDC HTTP clients do not follow redirects.
+
+#### Backend-local tool rules
+
+`tool_rules` is evaluated per backend before the configured ID is added to a public tool name. A rule's `match` uses Go `path.Match` on the original backend tool name: matching is full-string and case-sensitive, so a pattern such as `admin.*` does not match `Admin.Read` or a substring. Every matching rule contributes its `required_scopes`; MCPHub unions and deduplicates those scopes, then requires all of them together with the backend-level `required_scopes`.
+
+Validation expands existing `${ENV}` placeholders in `match` and rule scope strings; every `match` must be non-empty and a valid Go `path.Match` pattern, every rule must declare non-empty `required_scopes` entries with no whitespace or duplicates, and duplicate `match` entries within one backend are rejected.
+
+Tools that fail this policy are omitted from `tools/list`. If a client directly calls a known tool without the required scopes, MCPHub returns 403 and a precise `WWW-Authenticate` challenge with `error="insufficient_scope"`, the path-aware `resource_metadata` URL, and a space-delimited `scope` value containing the missing scopes. A rule that matches no tool in the current catalog generation emits one warning, remains valid, and can match after a later catalog refresh. Editing `tool_rules` is supported by SIGHUP and takes effect with the reloaded backend policy.
 
 Backend IDs are compared case-insensitively for uniqueness. Tool and prompt names retain the configured ID, while every exposed resource or resource-template URI uses a lowercase authority and resolves back to the configured ID.
 
@@ -188,7 +202,7 @@ kill -HUP <mcphub-pid>   # reload the same --config file
 kill -TERM <mcphub-pid>  # graceful shutdown
 ```
 
-SIGHUP fully loads, expands, and validates the configuration before building a candidate runtime; failures leave the old runtime in place. Required backends in the new runtime must connect successfully on the initial attempt. The old runtime waits for active requests for `drain_timeout` before closing; when a runtime generation closes, it cancels request contexts bound to that generation before closing its Hub/backend state, preventing late session registration. That cancellation immediately expires the underlying write deadline, interrupting slow or unread subscription writes after the drain; ordinary requests retain their `request_timeout` deadline. Allowed origins, catalog/request/drain parameters, the backend list, backend authentication, and scopes can be reloaded. Changes to these fields are rejected and require a restart:
+SIGHUP fully loads, expands, and validates the configuration before building a candidate runtime; failures leave the old runtime in place. Required backends in the new runtime must connect successfully on the initial attempt. The old runtime waits for active requests for `drain_timeout` before closing; when a runtime generation closes, it cancels request contexts bound to that generation before closing its Hub/backend state, preventing late session registration. That cancellation immediately expires the underlying write deadline, interrupting slow or unread subscription writes after the drain; ordinary requests retain their `request_timeout` deadline. Allowed origins, catalog/request/drain parameters, the backend list, backend authentication, scopes, and backend-local `tool_rules` can be reloaded. Changes to these fields are rejected and require a restart:
 
 - `server.listen`
 - `server.public_url`
@@ -200,7 +214,7 @@ SIGHUP candidate startup uses a cancelable context; shutdown cancels a candidate
 
 SIGINT and SIGTERM first stop MCPHub from accepting new requests, then keep the current runtime and backend context alive while HTTP requests drain for `drain_timeout`. If the HTTP drain reaches that timeout, MCPHub force-closes the remaining HTTP connections; generation close then cancels request contexts bound to the generation before backend state is closed.
 
-When SIGHUP creates an unavailable optional backend, it inherits the previous in-memory catalog only when its catalog-source identity is unchanged: backend ID and URL, `allow_insecure_http`, every fixed header, and OAuth configuration presence plus `type`, `issuer`, `client_id`, `client_secret`, and `scopes` must match. Any credential, OAuth, or tenant-selection-header change blocks reuse. Fields that do not identify the catalog source, such as `required`, `required_scopes`, and timeouts, do not block reuse; inherited data never marks the new backend ready.
+When SIGHUP creates an unavailable optional backend, it inherits the previous in-memory catalog only when its catalog-source identity is unchanged: backend ID and URL, `allow_insecure_http`, every fixed header, and OAuth configuration presence plus `type`, `issuer`, `client_id`, `client_secret`, and `scopes` must match. Any credential, OAuth, or tenant-selection-header change blocks reuse. Fields that do not identify the catalog source, such as `required`, `required_scopes`, `tool_rules`, and timeouts, do not block reuse; inherited data never marks the new backend ready.
 
 ## Docker
 

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +27,8 @@ import (
 func TestAppEnforcesScopesAndPublishesResourceMetadata(t *testing.T) {
 	subscribed := make(chan string, 1)
 	unsubscribed := make(chan string, 1)
+	protectedToolName := "delete_" + strings.Repeat("x", 121)
+	var protectedCalls atomic.Int32
 	backendServer := mcp.NewServer(&mcp.Implementation{Name: "backend", Version: "1"}, &mcp.ServerOptions{
 		SubscribeHandler: func(_ context.Context, req *mcp.SubscribeRequest) error {
 			subscribed <- req.Params.URI
@@ -41,6 +44,13 @@ func TestAppEnforcesScopesAndPublishesResourceMetadata(t *testing.T) {
 		InputSchema: map[string]any{"type": "object"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "allowed"}}}, nil
+	})
+	backendServer.AddTool(&mcp.Tool{
+		Name:        protectedToolName,
+		InputSchema: map[string]any{"type": "object"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		protectedCalls.Add(1)
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "protected"}}}, nil
 	})
 	backendServer.AddResource(&mcp.Resource{Name: "shared", URI: "memory://shared"}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: req.Params.URI, Text: "shared"}}}, nil
@@ -68,10 +78,20 @@ func TestAppEnforcesScopesAndPublishesResourceMetadata(t *testing.T) {
 		},
 		Auth: config.AuthConfig{Issuer: "https://idp.example.com"},
 		Backends: []config.BackendConfig{{
-			ID:                "alpha",
-			URL:               backendHTTP.URL,
-			Required:          true,
-			RequiredScopes:    []string{"mcp:alpha"},
+			ID:             "alpha",
+			URL:            backendHTTP.URL,
+			Required:       true,
+			RequiredScopes: []string{"mcp:alpha"},
+			ToolRules: []config.ToolRule{{
+				Match:          "delete_*",
+				RequiredScopes: []string{"mcp:alpha:dangerous"},
+			}, {
+				Match:          "delete_?*",
+				RequiredScopes: []string{"mcp:alpha:audit"},
+			}, {
+				Match:          "future_*",
+				RequiredScopes: []string{"mcp:alpha:dangerous"},
+			}},
 			RequestTimeout:    config.Duration{Duration: 5 * time.Second},
 			AllowInsecureHTTP: true,
 		}},
@@ -111,7 +131,7 @@ func TestAppEnforcesScopesAndPublishesResourceMetadata(t *testing.T) {
 		if metadata.Resource != cfg.Server.PublicURL || len(metadata.AuthorizationServers) != 1 || metadata.AuthorizationServers[0] != cfg.Auth.Issuer {
 			t.Fatalf("metadata = %#v", metadata)
 		}
-		if len(metadata.ScopesSupported) != 1 || metadata.ScopesSupported[0] != "mcp:alpha" {
+		if got, want := strings.Join(metadata.ScopesSupported, " "), "mcp:alpha mcp:alpha:audit mcp:alpha:dangerous"; got != want {
 			t.Fatalf("metadata scopes = %v", metadata.ScopesSupported)
 		}
 	}
@@ -161,6 +181,82 @@ func TestAppEnforcesScopesAndPublishesResourceMetadata(t *testing.T) {
 	}
 	if text, ok := result.Content[0].(*mcp.TextContent); !ok || text.Text != "allowed" {
 		t.Fatalf("allowed tool result = %#v", result.Content)
+	}
+
+	protectedListChanged := make(chan struct{}, 1)
+	privilegedSession := connectAppClientWithOptions(t, ctx, hubHTTP.URL+"/mcp", "privileged", &mcp.ClientOptions{
+		ToolListChangedHandler: func(context.Context, *mcp.ToolListChangedRequest) {
+			select {
+			case protectedListChanged <- struct{}{}:
+			default:
+			}
+		},
+	})
+	t.Cleanup(func() { _ = privilegedSession.Close() })
+	privilegedTools, err := privilegedSession.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("list tools with tool scope: %v", err)
+	}
+	if len(privilegedTools.Tools) != 2 {
+		t.Fatalf("tools with tool scope = %v, want echo and protected tool", privilegedTools.Tools)
+	}
+	protectedExposedName := ""
+	for _, tool := range privilegedTools.Tools {
+		if tool.Name != "alpha.echo" {
+			protectedExposedName = tool.Name
+		}
+	}
+	if len(protectedExposedName) != 128 || !strings.HasPrefix(protectedExposedName, "alpha.delete_") {
+		t.Fatalf("protected exposed tool name = %q", protectedExposedName)
+	}
+	protectedBody := []byte(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"` + protectedExposedName + `","arguments":{}}}`)
+	toolForbidden := doRequest(t, http.MethodPost, hubHTTP.URL+"/mcp", "allowed", "application/json", protectedBody)
+	toolChallenge := toolForbidden.Header.Get("WWW-Authenticate")
+	if toolForbidden.StatusCode != http.StatusForbidden || !strings.Contains(toolChallenge, `scope="mcp:alpha:audit mcp:alpha:dangerous"`) {
+		t.Fatalf("tool-scope forbidden status/challenge = %d, %q", toolForbidden.StatusCode, toolChallenge)
+	}
+	_ = toolForbidden.Body.Close()
+	if protectedCalls.Load() != 0 {
+		t.Fatalf("protected backend calls after tool-scope rejection = %d, want 0", protectedCalls.Load())
+	}
+
+	allScopesForbidden := doRequest(t, http.MethodPost, hubHTTP.URL+"/mcp", "denied", "application/json", protectedBody)
+	allScopesChallenge := allScopesForbidden.Header.Get("WWW-Authenticate")
+	if allScopesForbidden.StatusCode != http.StatusForbidden || !strings.Contains(allScopesChallenge, `scope="mcp:alpha mcp:alpha:audit mcp:alpha:dangerous"`) {
+		t.Fatalf("combined-scope forbidden status/challenge = %d, %q", allScopesForbidden.StatusCode, allScopesChallenge)
+	}
+	_ = allScopesForbidden.Body.Close()
+	if protectedCalls.Load() != 0 {
+		t.Fatalf("protected backend calls after combined-scope rejection = %d, want 0", protectedCalls.Load())
+	}
+
+	protectedResult, err := privilegedSession.CallTool(ctx, &mcp.CallToolParams{Name: protectedExposedName, Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("call protected tool with scope: %v", err)
+	}
+	if text, ok := protectedResult.Content[0].(*mcp.TextContent); !ok || text.Text != "protected" || protectedCalls.Load() != 1 {
+		t.Fatalf("protected tool result/calls = %#v/%d", protectedResult.Content, protectedCalls.Load())
+	}
+
+	backendServer.AddTool(&mcp.Tool{Name: "future_delete", InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "future"}}}, nil
+	})
+	listChangeCtx, cancelListChange := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelListChange()
+	select {
+	case <-protectedListChanged:
+	case <-listChangeCtx.Done():
+		t.Fatal("timed out waiting for protected list-changed refresh")
+	}
+	privilegedTools, err = privilegedSession.ListTools(listChangeCtx, nil)
+	if err != nil || len(privilegedTools.Tools) != 3 {
+		t.Fatalf("tools after protected list change = %v, err=%v", privilegedTools.Tools, err)
+	}
+	postChangeAllowedSession := connectAppClient(t, ctx, hubHTTP.URL+"/mcp", "allowed")
+	defer postChangeAllowedSession.Close()
+	allowedTools, err = postChangeAllowedSession.ListTools(ctx, nil)
+	if err != nil || len(allowedTools.Tools) != 1 || allowedTools.Tools[0].Name != "alpha.echo" {
+		t.Fatalf("backend-only tools after protected list change = %v, err=%v", allowedTools.Tools, err)
 	}
 	resourcePage, err := allowedSession.ListResources(ctx, nil)
 	if err != nil || len(resourcePage.Resources) != 1 {
@@ -478,6 +574,9 @@ func (staticVerifier) Verify(_ context.Context, token string, _ *http.Request) (
 	case "allowed":
 		info.Scopes = []string{"mcp:alpha"}
 		return info, nil
+	case "privileged":
+		info.Scopes = []string{"mcp:alpha", "mcp:alpha:audit", "mcp:alpha:dangerous"}
+		return info, nil
 	case "denied":
 		return info, nil
 	default:
@@ -498,8 +597,12 @@ func (t bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func connectAppClient(t *testing.T, ctx context.Context, endpoint, token string) *mcp.ClientSession {
+	return connectAppClientWithOptions(t, ctx, endpoint, token, nil)
+}
+
+func connectAppClientWithOptions(t *testing.T, ctx context.Context, endpoint, token string, options *mcp.ClientOptions) *mcp.ClientSession {
 	t.Helper()
-	client := mcp.NewClient(&mcp.Implementation{Name: "app-test", Version: "1"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "app-test", Version: "1"}, options)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint: endpoint,
 		HTTPClient: &http.Client{Transport: bearerTransport{

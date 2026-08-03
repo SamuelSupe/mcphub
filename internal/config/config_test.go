@@ -10,6 +10,8 @@ import (
 
 func TestLoadExpandsEnvironmentAndAppliesDefaults(t *testing.T) {
 	t.Setenv("MCPHUB_TEST_KEY", "secret-value")
+	t.Setenv("MCPHUB_TEST_TOOL_MATCH", "delete_*")
+	t.Setenv("MCPHUB_TEST_TOOL_SCOPE", "mcp:alpha:dangerous")
 	path := writeConfig(t, `
 server:
   public_url: https://hub.example.com/mcp
@@ -19,6 +21,9 @@ backends:
   - id: alpha
     url: https://alpha.example.com/mcp
     required_scopes: [mcp:alpha]
+    tool_rules:
+      - match: "${MCPHUB_TEST_TOOL_MATCH}"
+        required_scopes: ["${MCPHUB_TEST_TOOL_SCOPE}"]
     headers:
       X-API-Key: ${MCPHUB_TEST_KEY}
 `)
@@ -41,6 +46,15 @@ backends:
 	}
 	if got, want := cfg.Backends[0].RequestTimeout.Duration, 60*time.Second; got != want {
 		t.Fatalf("backend timeout = %s, want %s", got, want)
+	}
+	if got, want := cfg.Backends[0].ToolRules[0].Match, "delete_*"; got != want {
+		t.Fatalf("expanded tool match = %q, want %q", got, want)
+	}
+	if got, want := cfg.Backends[0].ToolRules[0].RequiredScopes[0], "mcp:alpha:dangerous"; got != want {
+		t.Fatalf("expanded tool scope = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(cfg.AllScopes(), ","), "mcp:alpha,mcp:alpha:dangerous"; got != want {
+		t.Fatalf("all scopes = %q, want %q", got, want)
 	}
 	if got, want := cfg.ResourceMetadataPath(), "/.well-known/oauth-protected-resource/mcp"; got != want {
 		t.Fatalf("metadata path = %q, want %q", got, want)
@@ -116,6 +130,47 @@ backends:
 			want:    "managed by the HTTP or MCP transport",
 		},
 		{
+			name:    "empty tool rule match",
+			content: strings.Replace(valid, "    url: https://alpha.example.com/mcp", "    url: https://alpha.example.com/mcp\n    tool_rules:\n      - match: \"\"\n        required_scopes: [mcp:alpha:write]", 1),
+			want:    "match is required",
+		},
+		{
+			name:    "invalid tool rule glob",
+			content: strings.Replace(valid, "    url: https://alpha.example.com/mcp", "    url: https://alpha.example.com/mcp\n    tool_rules:\n      - match: \"[broken\"\n        required_scopes: [mcp:alpha:write]", 1),
+			want:    "match \"[broken\" is invalid",
+		},
+		{
+			name:    "empty tool rule scopes",
+			content: strings.Replace(valid, "    url: https://alpha.example.com/mcp", "    url: https://alpha.example.com/mcp\n    tool_rules:\n      - match: delete_*\n        required_scopes: []", 1),
+			want:    "required_scopes must not be empty",
+		},
+		{
+			name: "duplicate tool rule match",
+			content: strings.Replace(valid, "    url: https://alpha.example.com/mcp", `    url: https://alpha.example.com/mcp
+    tool_rules:
+      - match: delete_*
+        required_scopes: [mcp:alpha:write]
+      - match: delete_*
+        required_scopes: [mcp:alpha:dangerous]`, 1),
+			want: "duplicate match",
+		},
+		{
+			name: "duplicate tool rule scope",
+			content: strings.Replace(valid, "    url: https://alpha.example.com/mcp", `    url: https://alpha.example.com/mcp
+    tool_rules:
+      - match: delete_*
+        required_scopes: [mcp:alpha:write, mcp:alpha:write]`, 1),
+			want: "duplicate scope",
+		},
+		{
+			name: "invalid tool rule scope",
+			content: strings.Replace(valid, "    url: https://alpha.example.com/mcp", `    url: https://alpha.example.com/mcp
+    tool_rules:
+      - match: delete_*
+        required_scopes: ["mcp:alpha write"]`, 1),
+			want: "invalid scope",
+		},
+		{
 			name:    "proxy credential header",
 			content: strings.Replace(valid, "    url: https://alpha.example.com/mcp", "    url: https://alpha.example.com/mcp\n    headers:\n      Proxy-Authorization: Basic secret", 1),
 			want:    "managed by the HTTP or MCP transport",
@@ -134,6 +189,27 @@ backends:
 				t.Fatalf("Load() error = %v, want error containing %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestRequiredToolScopesUnionsAllMatchingRules(t *testing.T) {
+	backend := BackendConfig{ToolRules: []ToolRule{
+		{Match: "delete_*", RequiredScopes: []string{"mcp:write", "mcp:dangerous"}},
+		{Match: "delete_[a-z]?", RequiredScopes: []string{"mcp:audit", "mcp:write"}},
+		{Match: "Delete_*", RequiredScopes: []string{"mcp:uppercase"}},
+	}}
+
+	if got, want := strings.Join(backend.RequiredToolScopes("delete_ab"), ","), "mcp:audit,mcp:dangerous,mcp:write"; got != want {
+		t.Fatalf("matching tool scopes = %q, want %q", got, want)
+	}
+	if got := backend.RequiredToolScopes("delete_abc"); len(got) != 2 || got[0] != "mcp:dangerous" || got[1] != "mcp:write" {
+		t.Fatalf("full-string glob scopes = %v", got)
+	}
+	if got := backend.RequiredToolScopes("Delete_ab"); len(got) != 1 || got[0] != "mcp:uppercase" {
+		t.Fatalf("case-sensitive glob scopes = %v", got)
+	}
+	if got := backend.RequiredToolScopes("read_ab"); len(got) != 0 {
+		t.Fatalf("unmatched tool scopes = %v, want none", got)
 	}
 }
 

@@ -51,6 +51,38 @@ func TestReloadRetainsLastKnownGoodCatalogForUnavailableOptionalBackend(t *testi
 	}
 }
 
+func TestReloadReappliesToolRulesToLastKnownGoodCatalog(t *testing.T) {
+	backendHTTP := startReloadBackend(t)
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	writeReloadConfig(t, configPath, backendHTTP.URL, false, "")
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		t.Fatalf("load initial config: %v", err)
+	}
+	application := newReloadTestApp(t, cfg, configPath)
+	if got := runtimeToolNames(t, application.currentRuntime()); len(got) != 1 || got[0] != "alpha.echo" {
+		t.Fatalf("initial tools = %v, want [alpha.echo]", got)
+	}
+
+	backendHTTP.CloseClientConnections()
+	backendHTTP.Close()
+	setReloadToolRules(t, configPath, `    tool_rules:
+      - match: echo
+        required_scopes: [mcp:alpha:dangerous]
+`)
+	if err := application.Reload(); err != nil {
+		t.Fatalf("reload tool rules with unavailable optional backend: %v", err)
+	}
+	current := application.currentRuntime()
+	client, _ := current.manager.Client("alpha")
+	if client.Catalog() == nil || client.Ready() {
+		t.Fatalf("reloaded optional backend catalog=%v ready=%v, want LKG and unavailable", client.Catalog() != nil, client.Ready())
+	}
+	if got := runtimeToolNames(t, current); len(got) != 0 {
+		t.Fatalf("tools after rule reload = %v, want protected LKG tool hidden", got)
+	}
+}
+
 func TestReloadDoesNotReuseCatalogAcrossBackendCredentialChange(t *testing.T) {
 	backendHTTP := startReloadBackend(t)
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
@@ -288,4 +320,46 @@ func setReloadBackendHeader(t *testing.T, path, tenant string) {
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatalf("write reload config header: %v", err)
 	}
+}
+
+func setReloadToolRules(t *testing.T, path, rules string) {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read reload config: %v", err)
+	}
+	needle := "    request_timeout: 500ms\n"
+	updated := strings.Replace(string(content), needle, needle+rules, 1)
+	if updated == string(content) {
+		t.Fatal("reload config does not contain the tool rule insertion point")
+	}
+	if err := os.WriteFile(path, []byte(updated), 0o600); err != nil {
+		t.Fatalf("write reload tool rules: %v", err)
+	}
+}
+
+func runtimeToolNames(t *testing.T, rt *runtime) []string {
+	t.Helper()
+	server := httptest.NewServer(rt.mcpHandler)
+	t.Cleanup(func() {
+		server.CloseClientConnections()
+		server.Close()
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client := mcp.NewClient(&mcp.Implementation{Name: "reload-policy-test", Version: "1"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: server.URL}, nil)
+	if err != nil {
+		t.Fatalf("connect runtime MCP handler: %v", err)
+	}
+	defer session.Close()
+	page, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("list runtime tools: %v", err)
+	}
+	names := make([]string, 0, len(page.Tools))
+	for _, tool := range page.Tools {
+		names = append(names, tool.Name)
+	}
+	return names
 }

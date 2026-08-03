@@ -3,6 +3,7 @@ package hub
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -21,17 +22,21 @@ type Hub struct {
 	viewsMu sync.RWMutex
 	views   map[string]*view
 
+	toolDefinitionsMu    sync.Mutex
+	toolDefinitionCaches map[string]*toolDefinitionCache
+
 	issuedMu        sync.RWMutex
 	issuedResources map[string]*issuedResourceSet
 }
 
 func New(cfg *config.Config, manager *backend.Manager, logger *slog.Logger) *Hub {
 	return &Hub{
-		cfg:             cfg,
-		manager:         manager,
-		logger:          logger,
-		views:           make(map[string]*view),
-		issuedResources: make(map[string]*issuedResourceSet),
+		cfg:                  cfg,
+		manager:              manager,
+		logger:               logger,
+		views:                make(map[string]*view),
+		toolDefinitionCaches: make(map[string]*toolDefinitionCache),
+		issuedResources:      make(map[string]*issuedResourceSet),
 	}
 }
 
@@ -41,8 +46,8 @@ func (h *Hub) ServerForRequest(req *http.Request) *mcp.Server {
 	if token != nil {
 		scopes = token.Scopes
 	}
-	ids := h.manager.AllowedIDs(scopes)
-	key := strings.Join(ids, "\x00")
+	ids, toolScopes := h.manager.AllowedProfile(scopes)
+	key := viewCacheKey(ids, toolScopes)
 
 	h.viewsMu.RLock()
 	existing := h.views[key]
@@ -51,7 +56,7 @@ func (h *Hub) ServerForRequest(req *http.Request) *mcp.Server {
 		return existing.server
 	}
 
-	candidate := newView(h, ids)
+	candidate := newView(h, ids, toolScopes)
 	candidate.reconcile()
 	inserted := false
 	h.viewsMu.Lock()
@@ -113,4 +118,19 @@ func (h *Hub) Close() {
 
 func (h *Hub) MissingScopes(backendID string, scopes []string) ([]string, bool) {
 	return h.manager.MissingScopes(backendID, scopes)
+}
+
+func viewCacheKey(ids, toolScopes []string) string {
+	var key strings.Builder
+	appendValues := func(values []string) {
+		for _, value := range values {
+			key.WriteString(strconv.Itoa(len(value)))
+			key.WriteByte(':')
+			key.WriteString(value)
+		}
+	}
+	appendValues(ids)
+	key.WriteByte('|')
+	appendValues(toolScopes)
+	return key.String()
 }

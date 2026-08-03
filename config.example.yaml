@@ -1,0 +1,55 @@
+# MCPHub configuration template.
+# Copy to config.yaml and replace/export every ${...} environment variable.
+# Environment placeholders have no default value; an unset variable makes
+# `mcphub validate` fail. Keep this file free of real credentials.
+
+server:
+  listen: ":8080"
+  public_url: ${MCPHUB_PUBLIC_URL}
+  page_size: 1000
+  request_timeout: 60s
+  drain_timeout: 15s
+  refresh_interval: 5m
+  catalog_ttl: 30s
+  max_request_body_bytes: 4194304
+  allowed_origins:
+    - ${MCPHUB_CONSOLE_ORIGIN}
+
+auth:
+  issuer: ${MCPHUB_AUTH_ISSUER}
+
+backends:
+  # Required backend with a static API header.
+  - id: primary
+    url: ${MCPHUB_PRIMARY_BACKEND_URL}
+    required: true
+    required_scopes:
+      - mcp:primary.read
+    request_timeout: 30s
+    headers:
+      X-API-Key: ${MCPHUB_PRIMARY_API_KEY}
+
+  # Optional backend using OAuth 2.0 client_credentials.
+  # `required_scopes` are scopes on the JWT presented to MCPHub.
+  # `oauth.scopes` are scopes requested from this backend's token endpoint.
+  - id: optional-crm
+    url: ${MCPHUB_CRM_BACKEND_URL}
+    required: false
+    required_scopes:
+      - mcp:crm.read
+      - mcp:crm.write
+    oauth:
+      type: client_credentials
+      issuer: ${MCPHUB_CRM_OAUTH_ISSUER}
+      client_id: ${MCPHUB_CRM_CLIENT_ID}
+      client_secret: ${MCPHUB_CRM_CLIENT_SECRET}
+      scopes:
+        - crm.mcp
+
+  # Local development only. HTTP is accepted only for loopback hosts when
+  # this flag is explicitly true; remote HTTP and all public/issuer URLs are
+  # still rejected. Uncomment and replace a backend entry when needed:
+  # - id: local
+  #   url: http://127.0.0.1:9000/mcp
+  #   allow_insecure_http: true
+  #   required: false

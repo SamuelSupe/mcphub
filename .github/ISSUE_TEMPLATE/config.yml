@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability / 报告安全漏洞
+    url: https://github.com/SamuelSupe/mcphub/security/advisories/new
+    about: Use GitHub's private vulnerability reporting instead of a public issue. / 请使用 GitHub 私有漏洞报告，不要创建公开 Issue。
+  - name: Security policy / 安全策略
+    url: https://github.com/SamuelSupe/mcphub/blob/main/SECURITY.md
+    about: Read the repository security policy before reporting. / 报告前请阅读仓库安全策略。

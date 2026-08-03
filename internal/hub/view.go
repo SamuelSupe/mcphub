@@ -15,11 +15,12 @@ import (
 )
 
 type view struct {
-	hub     *Hub
-	server  *mcp.Server
-	allowed map[string]struct{}
-	byHost  map[string]string
-	ids     []string
+	hub        *Hub
+	server     *mcp.Server
+	allowed    map[string]struct{}
+	byHost     map[string]string
+	ids        []string
+	toolScopes map[string]struct{}
 
 	reconcileMu sync.RWMutex
 	tools       map[string]string
@@ -53,13 +54,6 @@ type sessionSubscription struct {
 	exposed string
 }
 
-type toolDefinition struct {
-	backendID   string
-	original    string
-	tool        *mcp.Tool
-	fingerprint string
-}
-
 type promptDefinition struct {
 	backendID   string
 	original    string
@@ -80,12 +74,13 @@ type templateDefinition struct {
 	fingerprint string
 }
 
-func newView(h *Hub, ids []string) *view {
+func newView(h *Hub, ids, toolScopes []string) *view {
 	v := &view{
 		hub:               h,
 		allowed:           make(map[string]struct{}, len(ids)),
 		byHost:            make(map[string]string, len(ids)),
 		ids:               slices.Clone(ids),
+		toolScopes:        make(map[string]struct{}, len(toolScopes)),
 		tools:             make(map[string]string),
 		prompts:           make(map[string]string),
 		resources:         make(map[string]string),
@@ -100,6 +95,9 @@ func newView(h *Hub, ids []string) *view {
 	for _, id := range ids {
 		v.allowed[id] = struct{}{}
 		v.byHost[strings.ToLower(id)] = id
+	}
+	for _, scope := range toolScopes {
+		v.toolScopes[scope] = struct{}{}
 	}
 	v.server = mcp.NewServer(
 		&mcp.Implementation{Name: "mcphub", Version: version.Value},
@@ -153,27 +151,15 @@ func (v *view) reconcile() {
 		if catalog == nil {
 			continue
 		}
-		for _, tool := range catalog.Tools {
-			if tool == nil {
-				continue
-			}
-			exposed, err := exposeName(id, tool.Name)
-			if err != nil {
-				v.hub.logger.Warn("omit invalid backend tool", "backend", id, "capability_id", shortHash(tool.Name), "error_type", fmt.Sprintf("%T", err))
-				continue
-			}
-			copyTool := *tool
-			copyTool.Name = exposed
-			fingerprint, err := fingerprint(&copyTool)
-			if err != nil {
-				v.hub.logger.Warn("omit backend tool with invalid metadata", "backend", id, "name", tool.Name, "error_type", fmt.Sprintf("%T", err))
+		for exposed, definition := range v.hub.toolDefinitions(id, client.Config(), catalog, true) {
+			if !hasRequiredScopes(v.toolScopes, definition.requiredScopes) {
 				continue
 			}
 			if _, collision := toolDefs[exposed]; collision {
-				v.hub.logger.Warn("omit colliding backend tool", "backend", id, "name", tool.Name, "exposed_name", exposed)
+				v.hub.logger.Warn("omit colliding backend tool", "backend", id, "name", definition.original, "exposed_name", exposed)
 				continue
 			}
-			toolDefs[exposed] = toolDefinition{id, tool.Name, &copyTool, fingerprint}
+			toolDefs[exposed] = definition
 		}
 		for _, prompt := range catalog.Prompts {
 			if prompt == nil {

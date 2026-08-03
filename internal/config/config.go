@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	pathpkg "path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -76,10 +77,16 @@ type BackendConfig struct {
 	URL               string            `yaml:"url"`
 	Required          bool              `yaml:"required"`
 	RequiredScopes    []string          `yaml:"required_scopes"`
+	ToolRules         []ToolRule        `yaml:"tool_rules"`
 	RequestTimeout    Duration          `yaml:"request_timeout"`
 	AllowInsecureHTTP bool              `yaml:"allow_insecure_http"`
 	Headers           map[string]string `yaml:"headers"`
 	OAuth             *OAuthConfig      `yaml:"oauth"`
+}
+
+type ToolRule struct {
+	Match          string   `yaml:"match"`
+	RequiredScopes []string `yaml:"required_scopes"`
 }
 
 type OAuthConfig struct {
@@ -159,6 +166,13 @@ func expandEnvironment(cfg *Config) error {
 		}
 		for j := range backend.RequiredScopes {
 			fields = append(fields, &backend.RequiredScopes[j])
+		}
+		for j := range backend.ToolRules {
+			rule := &backend.ToolRules[j]
+			fields = append(fields, &rule.Match)
+			for k := range rule.RequiredScopes {
+				fields = append(fields, &rule.RequiredScopes[k])
+			}
 		}
 	}
 	for _, field := range fields {
@@ -270,6 +284,9 @@ func (cfg *Config) Validate() error {
 		if err := validateScopes("backend "+backend.ID+" required_scopes", backend.RequiredScopes); err != nil {
 			return err
 		}
+		if err := validateToolRules(backend); err != nil {
+			return err
+		}
 		canonicalHeaders := make(map[string]string, len(backend.Headers))
 		for name, value := range backend.Headers {
 			if !headerName.MatchString(name) {
@@ -291,6 +308,31 @@ func (cfg *Config) Validate() error {
 			if err := validateOAuth(backend); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func validateToolRules(backend *BackendConfig) error {
+	seen := make(map[string]struct{}, len(backend.ToolRules))
+	for i := range backend.ToolRules {
+		rule := &backend.ToolRules[i]
+		field := fmt.Sprintf("backend %s tool_rules[%d]", backend.ID, i)
+		if rule.Match == "" {
+			return fmt.Errorf("%s match is required", field)
+		}
+		if _, err := pathpkg.Match(rule.Match, ""); err != nil {
+			return fmt.Errorf("%s match %q is invalid: %w", field, rule.Match, err)
+		}
+		if _, exists := seen[rule.Match]; exists {
+			return fmt.Errorf("backend %q: tool_rules contains duplicate match %q", backend.ID, rule.Match)
+		}
+		seen[rule.Match] = struct{}{}
+		if len(rule.RequiredScopes) == 0 {
+			return fmt.Errorf("%s required_scopes must not be empty", field)
+		}
+		if err := validateScopes(field+" required_scopes", rule.RequiredScopes); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -431,6 +473,34 @@ func (cfg *Config) AllScopes() []string {
 	set := make(map[string]struct{})
 	for _, backend := range cfg.Backends {
 		for _, scope := range backend.RequiredScopes {
+			set[scope] = struct{}{}
+		}
+		for _, rule := range backend.ToolRules {
+			for _, scope := range rule.RequiredScopes {
+				set[scope] = struct{}{}
+			}
+		}
+	}
+	scopes := make([]string, 0, len(set))
+	for scope := range set {
+		scopes = append(scopes, scope)
+	}
+	slices.Sort(scopes)
+	return scopes
+}
+
+func (rule ToolRule) Matches(toolName string) bool {
+	matched, err := pathpkg.Match(rule.Match, toolName)
+	return err == nil && matched
+}
+
+func (backend BackendConfig) RequiredToolScopes(toolName string) []string {
+	set := make(map[string]struct{})
+	for _, rule := range backend.ToolRules {
+		if !rule.Matches(toolName) {
+			continue
+		}
+		for _, scope := range rule.RequiredScopes {
 			set[scope] = struct{}{}
 		}
 	}

@@ -172,25 +172,35 @@ func sameCatalogSource(previous, current config.BackendConfig) bool {
 }
 
 func (m *Manager) AllowedIDs(scopes []string) []string {
-	granted := make(map[string]struct{}, len(scopes))
-	for _, scope := range scopes {
-		granted[scope] = struct{}{}
-	}
+	allowed, _ := m.AllowedProfile(scopes)
+	return allowed
+}
+
+func (m *Manager) AllowedProfile(scopes []string) ([]string, []string) {
+	granted := scopeSet(scopes)
+	relevantToolScopes := make(map[string]struct{})
 	allowed := make([]string, 0, len(m.clients))
 	for _, id := range m.ids {
 		client := m.clients[id]
-		permitted := true
-		for _, scope := range client.Config().RequiredScopes {
-			if _, ok := granted[scope]; !ok {
-				permitted = false
-				break
+		backendConfig := client.Config()
+		if !hasAllScopes(granted, backendConfig.RequiredScopes) {
+			continue
+		}
+		allowed = append(allowed, id)
+		for _, rule := range backendConfig.ToolRules {
+			for _, scope := range rule.RequiredScopes {
+				if _, ok := granted[scope]; ok {
+					relevantToolScopes[scope] = struct{}{}
+				}
 			}
 		}
-		if permitted {
-			allowed = append(allowed, id)
-		}
 	}
-	return allowed
+	profileScopes := make([]string, 0, len(relevantToolScopes))
+	for scope := range relevantToolScopes {
+		profileScopes = append(profileScopes, scope)
+	}
+	slices.Sort(profileScopes)
+	return allowed, profileScopes
 }
 
 func (m *Manager) MissingScopes(id string, scopes []string) ([]string, bool) {
@@ -201,10 +211,7 @@ func (m *Manager) MissingScopes(id string, scopes []string) ([]string, bool) {
 	if !ok {
 		return nil, false
 	}
-	granted := make(map[string]struct{}, len(scopes))
-	for _, scope := range scopes {
-		granted[scope] = struct{}{}
-	}
+	granted := scopeSet(scopes)
 	var missing []string
 	for _, scope := range client.Config().RequiredScopes {
 		if _, ok := granted[scope]; !ok {
@@ -213,4 +220,21 @@ func (m *Manager) MissingScopes(id string, scopes []string) ([]string, bool) {
 	}
 	slices.Sort(missing)
 	return missing, true
+}
+
+func scopeSet(scopes []string) map[string]struct{} {
+	granted := make(map[string]struct{}, len(scopes))
+	for _, scope := range scopes {
+		granted[scope] = struct{}{}
+	}
+	return granted
+}
+
+func hasAllScopes(granted map[string]struct{}, required []string) bool {
+	for _, scope := range required {
+		if _, ok := granted[scope]; !ok {
+			return false
+		}
+	}
+	return true
 }

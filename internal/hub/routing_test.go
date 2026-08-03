@@ -123,7 +123,7 @@ func TestListedUppercaseBackendResourceResolvesFromLowercaseAuthority(t *testing
 	}
 	manager := backend.NewManager(cfg, logger, nil, nil)
 	h := New(cfg, manager, logger)
-	v := newView(h, []string{backendID})
+	v := newView(h, []string{backendID}, nil)
 	t.Cleanup(func() {
 		v.close()
 		manager.Close()

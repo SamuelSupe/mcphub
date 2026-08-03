@@ -89,7 +89,11 @@ func (c *Client) seedCatalog(catalog *Catalog) bool {
 	if catalog == nil || c.Catalog() != nil {
 		return false
 	}
-	return c.catalog.CompareAndSwap(nil, catalog)
+	if !c.catalog.CompareAndSwap(nil, catalog) {
+		return false
+	}
+	c.warnUnmatchedToolRules(catalog)
+	return true
 }
 
 func (c *Client) ConnectOnce(ctx context.Context) error {
@@ -186,7 +190,7 @@ func (c *Client) ConnectOnce(ctx context.Context) error {
 		_ = session.Close()
 		return fmt.Errorf("backend %s is closed", c.cfg.ID)
 	}
-	c.catalog.Store(catalog)
+	c.publishCatalog(catalog)
 	c.ready.Store(true)
 	c.mu.Unlock()
 	c.logger.Info("backend ready",
@@ -253,9 +257,29 @@ func (c *Client) refresh(ctx context.Context) {
 		c.markDisconnected(session)
 		return
 	}
-	c.catalog.Store(catalog)
+	c.publishCatalog(catalog)
 	if c.onCatalogChanged != nil {
 		c.onCatalogChanged(c.cfg.ID)
+	}
+}
+
+func (c *Client) publishCatalog(catalog *Catalog) {
+	c.catalog.Store(catalog)
+	c.warnUnmatchedToolRules(catalog)
+}
+
+func (c *Client) warnUnmatchedToolRules(catalog *Catalog) {
+	for _, rule := range c.cfg.ToolRules {
+		matched := false
+		for _, tool := range catalog.Tools {
+			if tool != nil && rule.Matches(tool.Name) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			c.logger.Warn("tool rule matches no catalog tool", "match", rule.Match)
+		}
 	}
 }
 

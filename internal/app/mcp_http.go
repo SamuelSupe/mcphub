@@ -120,6 +120,14 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 			missingSet[scope] = struct{}{}
 		}
 	}
+	if toolName, ok := envelope.toolName(); ok {
+		missing, known := rt.hub.MissingToolScopes(toolName, scopes)
+		if known {
+			for _, scope := range missing {
+				missingSet[scope] = struct{}{}
+			}
+		}
+	}
 	if len(missingSet) == 0 {
 		return envelope.Method, true
 	}
@@ -141,6 +149,19 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 type rpcEnvelope struct {
 	Method string          `json:"method"`
 	Params json.RawMessage `json:"params"`
+}
+
+func (e rpcEnvelope) toolName() (string, bool) {
+	if e.Method != "tools/call" {
+		return "", false
+	}
+	var params struct {
+		Name string `json:"name"`
+	}
+	if json.Unmarshal(e.Params, &params) != nil || params.Name == "" {
+		return "", false
+	}
+	return params.Name, true
 }
 
 func (e rpcEnvelope) backendIDs() []string {

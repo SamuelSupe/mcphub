@@ -12,6 +12,15 @@ import (
 
 func (v *view) toolHandler(definition toolDefinition) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if !hasRequiredScopes(v.toolScopes, definition.requiredScopes) {
+			// The HTTP authorization layer normally rejects this request first. Keep
+			// the forwarding boundary closed if a handler is reached through another
+			// transport path or during a catalog reconciliation race.
+			return nil, &jsonrpc.Error{
+				Code:    jsonrpc.CodeInvalidParams,
+				Message: fmt.Sprintf("unknown tool %q", definition.tool.Name),
+			}
+		}
 		client, _ := v.hub.manager.Client(definition.backendID)
 		params := &mcp.CallToolParams{
 			Meta:           req.Params.Meta,

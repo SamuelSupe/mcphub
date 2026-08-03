@@ -1,12 +1,14 @@
 package backend
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,6 +17,37 @@ import (
 
 	"github.com/SamuelSupe/mcphub/internal/config"
 )
+
+func TestCatalogPublicationWarnsOncePerUnmatchedRuleAndGeneration(t *testing.T) {
+	var logs bytes.Buffer
+	client := NewClient(
+		config.BackendConfig{
+			ID: "alpha",
+			ToolRules: []config.ToolRule{
+				{Match: "echo", RequiredScopes: []string{"mcp:echo"}},
+				{Match: "delete_*", RequiredScopes: []string{"mcp:dangerous"}},
+			},
+		},
+		time.Minute,
+		slog.New(slog.NewTextHandler(&logs, nil)),
+		nil,
+		nil,
+	)
+	t.Cleanup(client.Close)
+
+	client.publishCatalog(&Catalog{Tools: []*mcp.Tool{{Name: "echo"}}})
+	if got := strings.Count(logs.String(), "tool rule matches no catalog tool"); got != 1 {
+		t.Fatalf("first catalog unmatched warnings = %d, want 1; logs=%q", got, logs.String())
+	}
+	if !strings.Contains(logs.String(), "match=delete_*") || strings.Contains(logs.String(), "match=echo") {
+		t.Fatalf("first catalog warning fields = %q", logs.String())
+	}
+
+	client.publishCatalog(&Catalog{Tools: []*mcp.Tool{{Name: "echo"}}})
+	if got := strings.Count(logs.String(), "tool rule matches no catalog tool"); got != 2 {
+		t.Fatalf("two catalog generations unmatched warnings = %d, want 2; logs=%q", got, logs.String())
+	}
+}
 
 func TestDisconnectSignalImmediatelyInvalidatesOnlyCurrentSession(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "backend-test", Version: "1"}, nil)
@@ -120,6 +153,10 @@ func TestManagerMissingScopesResolvesLowercaseAuthorityAndAllowedIDsCanonical(t 
 		Backends: []config.BackendConfig{{
 			ID:             "Alpha",
 			RequiredScopes: []string{"mcp:alpha"},
+			ToolRules: []config.ToolRule{{
+				Match:          "delete_*",
+				RequiredScopes: []string{"mcp:alpha:dangerous"},
+			}},
 		}},
 	}
 	manager := NewManager(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil)
@@ -137,6 +174,13 @@ func TestManagerMissingScopesResolvesLowercaseAuthorityAndAllowedIDsCanonical(t 
 	allowed := manager.AllowedIDs([]string{"mcp:alpha"})
 	if len(allowed) != 1 || allowed[0] != "Alpha" {
 		t.Fatalf("AllowedIDs = %v, want [Alpha]", allowed)
+	}
+	profileIDs, profileScopes := manager.AllowedProfile([]string{"attacker:controlled", "mcp:alpha", "mcp:alpha:dangerous"})
+	if len(profileIDs) != 1 || profileIDs[0] != "Alpha" {
+		t.Fatalf("AllowedProfile IDs = %v, want [Alpha]", profileIDs)
+	}
+	if len(profileScopes) != 1 || profileScopes[0] != "mcp:alpha:dangerous" {
+		t.Fatalf("AllowedProfile tool scopes = %v, want only configured granted scope", profileScopes)
 	}
 }
 

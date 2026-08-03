@@ -25,6 +25,12 @@ backends:
     required: true
     required_scopes:
       - mcp:primary.read
+    # Optional backend-local tool policy. `match` uses the original backend
+    # tool name with Go path.Match semantics; matching rules add all scopes.
+    tool_rules:
+      - match: "admin.*"
+        required_scopes:
+          - mcp:primary.admin
     request_timeout: 30s
     headers:
       X-API-Key: ${MCPHUB_PRIMARY_API_KEY}

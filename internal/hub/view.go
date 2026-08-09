@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -15,12 +16,15 @@ import (
 )
 
 type view struct {
-	hub        *Hub
-	server     *mcp.Server
-	allowed    map[string]struct{}
-	byHost     map[string]string
-	ids        []string
-	toolScopes map[string]struct{}
+	hub         *Hub
+	server      *mcp.Server
+	allowed     map[string]struct{}
+	allowedHTTP map[string]struct{}
+	dynamicHTTP bool
+	granted     []string
+	byHost      map[string]string
+	ids         []string
+	toolScopes  map[string]struct{}
 
 	reconcileMu sync.RWMutex
 	tools       map[string]string
@@ -74,10 +78,17 @@ type templateDefinition struct {
 	fingerprint string
 }
 
-func newView(h *Hub, ids, toolScopes []string) *view {
+func newView(h *Hub, ids []string, profiles ...[]string) *view {
+	var httpGroupIDs, toolScopes []string
+	if len(profiles) == 1 {
+		toolScopes = profiles[0]
+	} else if len(profiles) >= 2 {
+		httpGroupIDs, toolScopes = profiles[0], profiles[1]
+	}
 	v := &view{
 		hub:               h,
 		allowed:           make(map[string]struct{}, len(ids)),
+		allowedHTTP:       make(map[string]struct{}, len(httpGroupIDs)),
 		byHost:            make(map[string]string, len(ids)),
 		ids:               slices.Clone(ids),
 		toolScopes:        make(map[string]struct{}, len(toolScopes)),
@@ -95,6 +106,9 @@ func newView(h *Hub, ids, toolScopes []string) *view {
 	for _, id := range ids {
 		v.allowed[id] = struct{}{}
 		v.byHost[strings.ToLower(id)] = id
+	}
+	for _, id := range httpGroupIDs {
+		v.allowedHTTP[id] = struct{}{}
 	}
 	for _, scope := range toolScopes {
 		v.toolScopes[scope] = struct{}{}
@@ -126,8 +140,24 @@ func newView(h *Hub, ids, toolScopes []string) *view {
 	return v
 }
 
+func newViewWithHTTP(h *Hub, backendIDs, groupIDs, toolScopes, grantedScopes []string) *view {
+	v := newView(h, backendIDs, groupIDs, toolScopes)
+	v.dynamicHTTP = true
+	v.granted = slices.Clone(grantedScopes)
+	return v
+}
+
 func (v *view) allows(id string) bool {
 	_, ok := v.allowed[id]
+	return ok
+}
+
+func (v *view) allowsHTTPGroup(id string) bool {
+	if v.dynamicHTTP {
+		ids, _ := v.hub.currentHTTPTools().AllowedProfile(v.granted)
+		return slices.Contains(ids, id)
+	}
+	_, ok := v.allowedHTTP[id]
 	return ok
 }
 
@@ -210,6 +240,31 @@ func (v *view) reconcile() {
 				continue
 			}
 			templateDefs[route.exposed] = templateDefinition{route, &copyTemplate, fingerprint}
+		}
+	}
+	httpGroups := v.allowedHTTP
+	toolScopes := v.toolScopes
+	if v.dynamicHTTP {
+		ids, scopes := v.hub.currentHTTPTools().AllowedProfile(v.granted)
+		httpGroups = make(map[string]struct{}, len(ids))
+		for _, id := range ids {
+			httpGroups[id] = struct{}{}
+		}
+		toolScopes = maps.Clone(v.toolScopes)
+		for _, scope := range scopes {
+			toolScopes[scope] = struct{}{}
+		}
+	}
+	for id := range httpGroups {
+		for exposed, definition := range v.hub.httpToolDefinitions(id) {
+			if !hasRequiredScopes(toolScopes, definition.requiredScopes) {
+				continue
+			}
+			if _, collision := toolDefs[exposed]; collision {
+				v.hub.logger.Warn("omit colliding HTTP tool", "tool_group", id, "name", definition.original, "exposed_name", exposed)
+				continue
+			}
+			toolDefs[exposed] = definition
 		}
 	}
 

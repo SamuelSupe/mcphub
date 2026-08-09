@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 	"github.com/SamuelSupe/mcphub/internal/backend"
 	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/internal/httptool"
 	"github.com/SamuelSupe/mcphub/internal/hub"
 )
 
@@ -29,7 +31,20 @@ type runtime struct {
 }
 
 func newRuntime(parent context.Context, cfg *config.Config, logger *slog.Logger, requireReady bool) (*runtime, error) {
+	return newRuntimeWithGroups(parent, cfg, nil, logger, requireReady)
+}
+
+func newRuntimeWithGroups(parent context.Context, cfg *config.Config, groups []httptool.GroupConfig, logger *slog.Logger, requireReady bool) (*runtime, error) {
 	ctx, cancel := context.WithCancel(parent)
+	if err := httptool.ValidateGroups(groups, backendIDs(cfg)); err != nil {
+		cancel()
+		return nil, err
+	}
+	httpTools, err := httptool.NewManager(ctx, groups, logger)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
 	var currentHub *hub.Hub
 	manager := backend.NewManager(
 		cfg,
@@ -45,7 +60,7 @@ func newRuntime(parent context.Context, cfg *config.Config, logger *slog.Logger,
 			}
 		},
 	)
-	currentHub = hub.New(cfg, manager, logger)
+	currentHub = hub.NewWithHTTPTools(cfg, manager, httpTools, logger)
 	if err := manager.Start(ctx, requireReady); err != nil {
 		currentHub.Close()
 		cancel()
@@ -60,12 +75,8 @@ func newRuntime(parent context.Context, cfg *config.Config, logger *slog.Logger,
 	}
 
 	rt := &runtime{
-		cfg:     cfg,
-		manager: manager,
-		hub:     currentHub,
-		origins: origins,
-		ctx:     ctx,
-		cancel:  cancel,
+		cfg: cfg, manager: manager, hub: currentHub,
+		origins: origins, ctx: ctx, cancel: cancel,
 	}
 	rt.mcpHandler = mcp.NewStreamableHTTPHandler(
 		currentHub.ServerForRequest,
@@ -81,8 +92,22 @@ func newRuntime(parent context.Context, cfg *config.Config, logger *slog.Logger,
 	return rt, nil
 }
 
+func backendIDs(cfg *config.Config) []string {
+	ids := make([]string, 0, len(cfg.Backends))
+	for _, value := range cfg.Backends {
+		ids = append(ids, value.ID)
+	}
+	return ids
+}
+
 func (r *runtime) ready() bool {
 	return r.manager.Ready()
+}
+
+func (r *runtime) allScopes() []string {
+	values := append(r.cfg.AllScopes(), r.hub.HTTPToolScopes()...)
+	slices.Sort(values)
+	return slices.Compact(values)
 }
 
 func (r *runtime) close() {

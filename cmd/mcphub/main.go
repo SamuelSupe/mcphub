@@ -46,7 +46,7 @@ func validateCommand(args []string) error {
 	if *path == "" {
 		return fmt.Errorf("--config is required")
 	}
-	if _, err := config.Load(*path); err != nil {
+	if err := app.ValidateConfig(context.Background(), *path); err != nil {
 		return err
 	}
 	fmt.Fprintln(os.Stdout, "configuration valid")
@@ -65,7 +65,7 @@ func serveCommand(args []string) error {
 	if *path == "" {
 		return fmt.Errorf("--config is required")
 	}
-	cfg, err := config.Load(*path)
+	cfg, err := config.LoadStatic(*path)
 	if err != nil {
 		return err
 	}

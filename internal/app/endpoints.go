@@ -45,7 +45,7 @@ func (a *App) serveResourceMetadata(w http.ResponseWriter, req *http.Request, rt
 	handler := mcpauth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
 		Resource:               rt.cfg.Server.PublicURL,
 		AuthorizationServers:   []string{rt.cfg.Auth.Issuer},
-		ScopesSupported:        rt.cfg.AllScopes(),
+		ScopesSupported:        rt.allScopes(),
 		BearerMethodsSupported: []string{"header"},
 		ResourceName:           "MCPHub",
 	})

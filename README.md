@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.2.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,7 +9,7 @@
 
 MCPHub is an aggregation gateway for remote MCP Servers. It exposes one Streamable HTTP entry point, connects to multiple backends, builds a per-request backend view from JWT permissions, and routes tools, prompts, resources, and resource templates to the correct backend.
 
-The current implementation is a single-process, in-memory HTTP aggregation layer. It has no administration UI, persistent configuration/catalog, metrics endpoint, or cluster coordination. The configuration file and backend MCP endpoints remain the deployment source of truth.
+MCPHub v1.2.0 remains a single-process HTTP aggregation layer and adds an optional loopback-only administration UI with encrypted SQLite configuration, managed HTTP tools, and OpenAPI imports. It still has no metrics endpoint, persistent remote MCP catalog, or cluster coordination.
 
 ## Architecture
 
@@ -28,9 +28,9 @@ flowchart LR
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Apache License 2.0](LICENSE) (copyright 2026 SamuelSupe)
-- [v1.1.0 release notes](RELEASE_NOTES_v1.1.0.md), [v1.0.0 historical release notes](RELEASE_NOTES_v1.0.0.md), [v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.2.0 release notes](RELEASE_NOTES_v1.2.0.md), [v1.1.0 historical release notes](RELEASE_NOTES_v1.1.0.md), [v1.2.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.2.0), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-MCPHub v1.1.0 is the latest release. v1.0.0 remains available as the previous published release and historical reference.
+MCPHub v1.2.0 is the latest release. v1.1.0 and v1.0.0 remain available as historical references.
 
 ## Capabilities and boundaries
 
@@ -42,16 +42,17 @@ MCPHub v1.1.0 is the latest release. v1.0.0 remains available as the previous pu
 - Verifies Bearer JWTs with OIDC discovery and JWKS, then filters catalogs and calls by each backend's `required_scopes`.
 - Applies backend-local `tool_rules` to original tool names with Go `path.Match`; matching rules union and deduplicate required scopes, use all-of authorization, and hide unauthorized tools from `tools/list`.
 - Supports static backend request headers or OAuth 2.0 `client_credentials`; neither mode may provide a static `Authorization` header together with OAuth.
+- The v1.2.0 admin platform defaults to Chinese and can persistently switch to English. Groups can publish hand-authored HTTP tools and multiple OpenAPI 3.0/3.1 imports through `/mcp`; group Base URL, headers, OAuth, scopes, and timeout are shared, and no raw HTTP proxy is exposed.
 - Provides health, readiness, and RFC 9728 Protected Resource Metadata endpoints, plus SIGHUP configuration reload.
 
 When a backend connection fails, MCPHub retries and retains its last-known catalog. The catalog may remain listable while calls fail until the connection recovers. Startup does not exit just because a required backend is temporarily unavailable, so `/readyz` remains 503; a runtime created by SIGHUP requires its required backends to connect successfully on the initial attempt. Backend-authored JSON-RPC errors are returned unchanged. Network or transport failures are exposed only as `backend <id> unavailable`, so internal backend URLs, query strings, and credentials do not cross the Hub boundary. On reconnect, every tracked resource subscription must be restored successfully before the backend is marked ready; a restore failure keeps it unavailable and triggers another reconnect attempt.
 
 ## Quick start
 
-Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the tagged v1.1.0 command with Go:
+Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the tagged v1.2.0 command with Go:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.1.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.2.0
 ```
 
 For a source build, copy the example and set its environment variables:
@@ -75,7 +76,7 @@ go build -trimpath -o ./mcphub ./cmd/mcphub
 ./mcphub serve --config ./config.yaml
 ```
 
-`validate` only reads, expands, and validates configuration; success prints `configuration valid` to stdout. `serve` writes structured JSON logs to stderr. Both subcommands require `--config PATH`.
+`validate` performs read-only validation and prints `configuration valid` on success. In admin mode it reads an existing SQLite database without changing it, or validates YAML bootstrap backends when the database does not yet exist. `serve` writes structured JSON logs to stderr. Both subcommands require `--config PATH`.
 
 You can also run without producing a binary:
 
@@ -84,23 +85,23 @@ go run ./cmd/mcphub validate --config ./config.yaml
 go run ./cmd/mcphub serve --config ./config.yaml
 ```
 
-### Prebuilt v1.1.0 downloads
+### Prebuilt v1.2.0 downloads
 
-The [v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0) publishes these archives and the checksum file:
+The [v1.2.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.2.0) publishes these archives and the checksum file:
 
 | Platform | Download |
 | --- | --- |
-| macOS amd64 | [mcphub_v1.1.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_amd64.tar.gz) |
-| macOS arm64 | [mcphub_v1.1.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub_v1.1.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub_v1.1.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_arm64.tar.gz) |
-| Checksums | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/SHA256SUMS) |
+| macOS amd64 | [mcphub_v1.2.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_darwin_amd64.tar.gz) |
+| macOS arm64 | [mcphub_v1.2.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub_v1.2.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub_v1.2.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_linux_arm64.tar.gz) |
+| Checksums | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/SHA256SUMS) |
 
 For the previous v1.0.0 release, see its [release page](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0) and [historical release notes](RELEASE_NOTES_v1.0.0.md).
 
 ## Configuration
 
-Configuration is one YAML document decoded with strict field checking. Unknown fields, multiple YAML documents, and missing environment variables are rejected. `${NAME}` placeholders in string configuration fields are expanded from the current process environment; `NAME` must match `[A-Za-z_][A-Za-z0-9_]*`, and there is no default-value syntax. Duration, integer, and boolean fields do not accept placeholders. Loading and SIGHUP reload both expand the environment again.
+Configuration is one YAML document decoded with strict field checking. Unknown fields, multiple YAML documents, and missing environment variables are rejected. `${NAME}` placeholders in string configuration fields are expanded from the current process environment; `NAME` must match `[A-Za-z_][A-Za-z0-9_]*`, and there is no default-value syntax. Duration, integer, and boolean fields do not accept placeholders. Loading and SIGHUP reload both expand the environment again. After the admin database has been initialized, YAML backends and their environment placeholders are ignored.
 
 ### `server`
 
@@ -130,9 +131,50 @@ For JWKS readiness, a usable key has no `use` or `use: sig`; if `key_ops` is pre
 
 Scopes are read from both JWT `scope` and `scp` claims. `scope` accepts only a space-delimited string (including an empty string or JSON `null`); `scp` accepts a space-delimited string or a string array. The two claims are merged and deduplicated; array entries may not contain whitespace. Backend access uses **all-of** semantics: `required_scopes: [a, b]` requires the token to contain both `a` and `b`. If either is missing, that backend is absent from the token's catalog view and an identified direct call returns 403 `insufficient_scope`. A backend with no `required_scopes` is not scope-gated. Protected Resource Metadata reports the deduplicated union of all backend required scopes in `scopes_supported`.
 
+### `admin`
+
+The unreleased v1.2.0 administration platform is opt-in. When enabled it serves an embedded UI and JSON API from a separate, unauthenticated loopback listener. It manages backend and tool-group configuration; `server`, `auth`, and `admin` remain YAML/restart settings.
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `enabled` | `false` | Enables the local administration platform and SQLite backend source of truth. |
+| `listen` | `127.0.0.1:8081` | Must use numeric IPv4 or IPv6 loopback. It cannot be changed with SIGHUP. |
+| `database_path` | none | Required when enabled. Relative paths resolve from the YAML file's directory. |
+| `encryption_key_env` | `MCPHUB_CONFIG_KEY` | Environment variable containing a Base64-encoded 32-byte AES key. Losing or changing this key makes stored secrets unreadable. |
+
+On the first start with an empty database, expanded YAML backends are imported in one transaction. SQLite becomes the sole backend source after the bootstrap marker is written; later YAML backend edits have no effect. Header values and OAuth client secrets are encrypted with AES-256-GCM and are never returned by the management API.
+
+The UI is available at `http://127.0.0.1:8081/` by default. It can register, probe, edit, enable, disable, and delete backends without restarting the process. Required backend failures reject a change without replacing the current runtime; an unavailable optional backend is saved and continues reconnecting in the background.
+
+The JSON API is rooted at `/api/v1`. Individual backend responses include an `ETag`; update and delete requests must send that revision in `If-Match`, and stale writes fail with `409 revision_conflict`. Secret fields are returned only as configured markers. Omitting a secret value during an edit preserves it, while omitting the Header or OAuth configuration removes it. Audit events identify the actor as `local` and contain only redacted outcomes.
+
+#### Tool groups and managed HTTP API tools (v1.2.0)
+
+Tool groups are managed objects in the administration API, not YAML configuration. A group owns the shared HTTPS base URL, static headers or OAuth 2.0 `client_credentials`, JWT required scopes, and request timeout for its tools. Header values and OAuth client secrets are encrypted in SQLite; the API exposes only configured/not-configured markers. Group scope checks retain the same all-of semantics as backend scopes; optional group-local tool rules can add scopes to selected tools.
+
+A group may contain hand-authored HTTP tools and multiple OpenAPI 3.0 or 3.1 imports. OpenAPI imports can be inspected before they are saved. Both kinds are MCP capabilities: they are listed and invoked only through the configured `/mcp` Streamable HTTP endpoint. MCPHub does not expose a raw HTTP proxy or an arbitrary method/path passthrough route.
+
+The stable management paths are:
+
+| Operation | Path |
+| --- | --- |
+| List/create groups | `GET/POST /api/v1/tool-groups` |
+| Read/update/delete a group; probe it | `GET/PUT/DELETE /api/v1/tool-groups/{groupID}`, `POST .../{groupID}/probe` |
+| List/create or read/update/delete manual tools | `GET/POST .../{groupID}/tools`, `GET/PUT/DELETE .../{groupID}/tools/{toolName}` |
+| Inspect, list/create, or read/update/delete OpenAPI imports | `POST .../{groupID}/imports/inspect`, `GET/POST .../{groupID}/imports`, `GET/PUT/DELETE .../{groupID}/imports/{importID}` |
+| Refresh an OpenAPI import | `POST .../{groupID}/imports/{importID}/refresh` |
+
+Group, manual-tool, and import resources return an `ETag`. Updates and deletes require the matching `If-Match`; a stale revision returns `409 revision_conflict`. These resources are persisted and changed only through the admin API and SQLite; there is intentionally no `tool_groups` (or equivalent) YAML schema and SIGHUP does not import one.
+
+Group base URLs and OpenAPI source URLs must use HTTPS; group HTTP requests and source fetches do not follow redirects. A source fetched from another origin never receives the group's static headers or OAuth secret. OpenAPI documents are capped at 5 MiB, requests carrying a document at 6 MiB, and HTTP-tool responses at 1 MiB by default; the response limit is configurable from 64 KiB through 16 MiB. A URL-backed import refreshes automatically every 15 minutes by default (allowed range 1 minute to 24 hours); a failed refresh keeps the last-known-good document/tools and retries with backoff.
+
+#### Upgrade notes for v1.2.0
+
+Existing v1.1.0 YAML-only deployments remain unchanged while `admin.enabled` is `false`. To adopt the v1.2.0 administration platform, set the loopback `admin` listener, provide the Base64-encoded 32-byte `MCPHUB_CONFIG_KEY`, and provision a writable SQLite path. The first start imports the existing YAML backends in one transaction; after the bootstrap marker is written, SQLite is the sole backend source and later YAML backend edits are ignored. Create tool groups, manual HTTP tools, and OpenAPI imports through `/api/v1/tool-groups`; no YAML migration is expected because these objects have no YAML representation.
+
 ### `backends`
 
-At least one backend is required. Each `id` must match `[A-Za-z0-9_-]{1,32}` and be unique case-insensitively; uppercase letters are allowed.
+At least one backend is required in YAML-only mode. Admin mode may start empty so the first backend can be registered in the UI. Each `id` must match `[A-Za-z0-9_-]{1,32}` and be unique case-insensitively; uppercase letters are allowed.
 
 | Field | Default | Description |
 | --- | --- | --- |
@@ -207,8 +249,9 @@ SIGHUP fully loads, expands, and validates the configuration before building a c
 - `server.listen`
 - `server.public_url`
 - `auth.issuer`
+- every `admin` field
 
-These values determine the bound listener, RFC 9728/JWT audience, and OIDC verifier, so they cannot be changed by replacing only the in-memory runtime.
+These values determine bound listeners, storage/encryption identity, RFC 9728/JWT audience, and the OIDC verifier, so they cannot be changed by replacing only the in-memory runtime. In admin mode SIGHUP reloads static YAML fields and composes backends from SQLite; YAML backend changes are ignored after first import.
 
 SIGHUP candidate startup uses a cancelable context; shutdown cancels a candidate that is still connecting. Candidate required backends must connect successfully before the swap, and each candidate or retired runtime closes its own backend sessions and connections.
 
@@ -232,6 +275,8 @@ docker run --rm \
 
 The container listen address must match the published port (the example uses `:8080`). `--env-file` injects environment variables only; the configuration is mounted read-only. Restrict permissions on the host `config.yaml` and `.env`. The image entrypoint is already `/usr/local/bin/mcphub`, so pass `serve` or `validate` as arguments.
 
+Admin mode additionally requires a writable volume for `database_path` and `MCPHUB_CONFIG_KEY` in the container environment. Because the unauthenticated admin server is deliberately bound to container loopback, ordinary `-p 8081:8081` publishing cannot reach it. Use a host installation or Linux host networking for local administration; do not broaden the listener address to expose it remotely.
+
 ## Security notes
 
 - Use HTTPS for production `public_url`, `auth.issuer`, and remote backend URLs. `allow_insecure_http` permits only loopback backends; it cannot make a remote plaintext URL valid.
@@ -244,11 +289,13 @@ The container listen address must match the published port (the example uses `:8
 - Every HTTP route keeps the `request_timeout` request-body read deadline until the body is consumed or closed, so unauthenticated and rejected requests with slow bodies are bounded. A `subscriptions/listen` POST is exempt from ordinary response-write and request-context timeouts only after its body has been read.
 - Backend SSE responses are streaming passthrough. Progress inspection buffers at most 1 MiB per event; an oversized event is forwarded unchanged without progress inspection.
 - Acknowledged 2026 resource subscription IDs map updates back to their original subscription URI(s), including when an update event URI differs; timeout, cancellation, and session/reconnect cleanup remove the mapping.
+- The administration API has no login in this development version. Configuration validation forces it onto numeric loopback, rejects cross-origin and unexpected Host requests, and applies a restrictive CSP. Never expose it through a public reverse proxy.
+- Keep `MCPHUB_CONFIG_KEY` outside YAML and backups. The SQLite file uses `0600`, but its availability and recoverability depend on retaining the exact 32-byte key.
 
 ## Known limits and troubleshooting
 
-- There is currently no administration API, metrics endpoint, persistent catalog, cross-instance subscription state, or high-availability coordination. Each process owns its backend connections, catalogs, and token views.
-- This release does not provide stdio, a standalone legacy GET SSE endpoint, native TLS, a database, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. TLS and external rate limiting belong at the reverse proxy.
+- The local admin platform persists backend and tool-group configuration only. There is still no metrics endpoint, persistent MCP catalog, cross-instance subscription state, or high-availability coordination; each process owns its backend connections, catalogs, and token views.
+- This development version does not provide admin users/remote admin authentication, stdio, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. TLS and external rate limiting belong at the reverse proxy.
 - The aggregator advertises and implements only tools, prompts, resources (including subscriptions), and completions. Other backend capabilities do not automatically become gateway capabilities. Invalid names, URI templates, and SDK-rejected metadata are omitted.
 - A disconnected backend keeps its last-known-good catalog, but calls require a live connection. A required backend makes `/readyz` return 503; an optional backend does not block overall readiness.
 - `server.refresh_interval` is the maximum refresh period; a shorter backend TTL refreshes sooner. There is no forced-refresh API.

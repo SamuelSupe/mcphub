@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/oauth2"
 
 	"github.com/SamuelSupe/mcphub/internal/config"
 )
@@ -134,6 +135,36 @@ func TestBackendHTTPClientDoesNotFollowRedirects(t *testing.T) {
 	if resp.StatusCode != http.StatusFound || destinationCalled.Load() {
 		t.Fatalf("redirect status = %d, destination called = %v", resp.StatusCode, destinationCalled.Load())
 	}
+}
+
+func TestCloseIdleConnectionsPropagatesThroughCredentialTransports(t *testing.T) {
+	base := &closeTrackingRoundTripper{}
+	lifecycle := &lifecycleTransport{
+		ctx:  context.Background(),
+		base: &headerTransport{base: base},
+	}
+	lifecycle.CloseIdleConnections()
+	if got := base.calls.Load(); got != 1 {
+		t.Fatalf("nested lifecycle/header CloseIdleConnections calls = %d, want 1", got)
+	}
+
+	oauthBase := &closeTrackingRoundTripper{}
+	closeIdleConnections(&oauth2.Transport{Base: oauthBase})
+	if got := oauthBase.calls.Load(); got != 1 {
+		t.Fatalf("OAuth base CloseIdleConnections calls = %d, want 1", got)
+	}
+}
+
+type closeTrackingRoundTripper struct {
+	calls atomic.Int32
+}
+
+func (t *closeTrackingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, io.EOF
+}
+
+func (t *closeTrackingRoundTripper) CloseIdleConnections() {
+	t.calls.Add(1)
 }
 
 func TestProgressBodyBoundsOversizedEventAndForwardsFollowingProgress(t *testing.T) {

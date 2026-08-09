@@ -20,6 +20,16 @@ type Manager struct {
 	cancel  context.CancelFunc
 }
 
+type StatusDetail struct {
+	ID                string `json:"id"`
+	Ready             bool   `json:"ready"`
+	Required          bool   `json:"required"`
+	Tools             int    `json:"tools"`
+	Prompts           int    `json:"prompts"`
+	Resources         int    `json:"resources"`
+	ResourceTemplates int    `json:"resource_templates"`
+}
+
 func NewManager(
 	cfg *config.Config,
 	logger *slog.Logger,
@@ -121,6 +131,21 @@ func (m *Manager) Status() (ready, total, requiredReady, requiredTotal int) {
 		}
 	}
 	return ready, total, requiredReady, requiredTotal
+}
+
+func (m *Manager) StatusDetails() map[string]StatusDetail {
+	result := make(map[string]StatusDetail, len(m.clients))
+	for id, client := range m.clients {
+		detail := StatusDetail{ID: id, Ready: client.Ready(), Required: client.Required()}
+		if catalog := client.Catalog(); catalog != nil {
+			detail.Tools = len(catalog.Tools)
+			detail.Prompts = len(catalog.Prompts)
+			detail.Resources = len(catalog.Resources)
+			detail.ResourceTemplates = len(catalog.ResourceTemplates)
+		}
+		result[strings.ToLower(id)] = detail
+	}
+	return result
 }
 
 func (m *Manager) Client(id string) (*Client, bool) {

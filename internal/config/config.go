@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	pathpkg "path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -53,6 +55,7 @@ func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
 type Config struct {
 	Server   ServerConfig    `yaml:"server"`
 	Auth     AuthConfig      `yaml:"auth"`
+	Admin    AdminConfig     `yaml:"admin"`
 	Backends []BackendConfig `yaml:"backends"`
 }
 
@@ -72,6 +75,13 @@ type AuthConfig struct {
 	Issuer string `yaml:"issuer"`
 }
 
+type AdminConfig struct {
+	Enabled          bool   `yaml:"enabled"`
+	Listen           string `yaml:"listen"`
+	DatabasePath     string `yaml:"database_path"`
+	EncryptionKeyEnv string `yaml:"encryption_key_env"`
+}
+
 type BackendConfig struct {
 	ID                string            `yaml:"id"`
 	URL               string            `yaml:"url"`
@@ -85,8 +95,8 @@ type BackendConfig struct {
 }
 
 type ToolRule struct {
-	Match          string   `yaml:"match"`
-	RequiredScopes []string `yaml:"required_scopes"`
+	Match          string   `yaml:"match" json:"match"`
+	RequiredScopes []string `yaml:"required_scopes" json:"required_scopes"`
 }
 
 type OAuthConfig struct {
@@ -98,6 +108,50 @@ type OAuthConfig struct {
 }
 
 func Load(path string) (*Config, error) {
+	cfg, err := decode(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := expandEnvironment(cfg); err != nil {
+		return nil, err
+	}
+	resolveAdminDatabasePath(cfg, path)
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// LoadStatic loads server, auth, and admin configuration without expanding or
+// validating YAML backends when the SQLite-backed admin platform is enabled.
+// This lets an initialized database remain the sole backend source even after
+// bootstrap-only environment variables have been removed.
+func LoadStatic(path string) (*Config, error) {
+	cfg, err := decode(path)
+	if err != nil {
+		return nil, err
+	}
+	if !cfg.Admin.Enabled {
+		if err := expandEnvironment(cfg); err != nil {
+			return nil, err
+		}
+		if err := cfg.Validate(); err != nil {
+			return nil, err
+		}
+		return cfg, nil
+	}
+	if err := expandStaticEnvironment(cfg); err != nil {
+		return nil, err
+	}
+	resolveAdminDatabasePath(cfg, path)
+	cfg.Backends = nil
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+func decode(path string) (*Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open config: %w", err)
@@ -117,32 +171,32 @@ func Load(path string) (*Config, error) {
 		}
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
-	if err := expandEnvironment(cfg); err != nil {
-		return nil, err
-	}
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
 	return cfg, nil
 }
 
 func defaults() *Config {
-	return &Config{Server: ServerConfig{
-		Listen:              defaultListen,
-		PageSize:            defaultPageSize,
-		RequestTimeout:      Duration{defaultRequestTimeout},
-		DrainTimeout:        Duration{defaultDrainTimeout},
-		RefreshInterval:     Duration{defaultRefreshInterval},
-		CatalogTTL:          Duration{defaultCatalogTTL},
-		MaxRequestBodyBytes: defaultMaxRequestBodyBytes,
-	}}
+	return &Config{
+		Server: ServerConfig{
+			Listen:              defaultListen,
+			PageSize:            defaultPageSize,
+			RequestTimeout:      Duration{defaultRequestTimeout},
+			DrainTimeout:        Duration{defaultDrainTimeout},
+			RefreshInterval:     Duration{defaultRefreshInterval},
+			CatalogTTL:          Duration{defaultCatalogTTL},
+			MaxRequestBodyBytes: defaultMaxRequestBodyBytes,
+		},
+		Admin: AdminConfig{
+			Listen:           "127.0.0.1:8081",
+			EncryptionKeyEnv: "MCPHUB_CONFIG_KEY",
+		},
+	}
 }
 
 func expandEnvironment(cfg *Config) error {
-	fields := []*string{&cfg.Server.Listen, &cfg.Server.PublicURL, &cfg.Auth.Issuer}
-	for i := range cfg.Server.AllowedOrigins {
-		fields = append(fields, &cfg.Server.AllowedOrigins[i])
+	if err := expandStaticEnvironment(cfg); err != nil {
+		return err
 	}
+	fields := make([]*string, 0)
 	for i := range cfg.Backends {
 		backend := &cfg.Backends[i]
 		fields = append(fields, &backend.ID, &backend.URL)
@@ -175,6 +229,25 @@ func expandEnvironment(cfg *Config) error {
 			}
 		}
 	}
+	return expandFields(fields)
+}
+
+func expandStaticEnvironment(cfg *Config) error {
+	fields := []*string{
+		&cfg.Server.Listen,
+		&cfg.Server.PublicURL,
+		&cfg.Auth.Issuer,
+		&cfg.Admin.Listen,
+		&cfg.Admin.DatabasePath,
+		&cfg.Admin.EncryptionKeyEnv,
+	}
+	for i := range cfg.Server.AllowedOrigins {
+		fields = append(fields, &cfg.Server.AllowedOrigins[i])
+	}
+	return expandFields(fields)
+}
+
+func expandFields(fields []*string) error {
 	for _, field := range fields {
 		expanded, err := expandString(*field)
 		if err != nil {
@@ -183,6 +256,17 @@ func expandEnvironment(cfg *Config) error {
 		*field = expanded
 	}
 	return nil
+}
+
+func resolveAdminDatabasePath(cfg *Config, configPath string) {
+	if !cfg.Admin.Enabled || cfg.Admin.DatabasePath == "" || filepath.IsAbs(cfg.Admin.DatabasePath) {
+		return
+	}
+	resolved := filepath.Join(filepath.Dir(configPath), cfg.Admin.DatabasePath)
+	if absolute, err := filepath.Abs(resolved); err == nil {
+		resolved = absolute
+	}
+	cfg.Admin.DatabasePath = resolved
 }
 
 func expandString(value string) (string, error) {
@@ -250,7 +334,10 @@ func (cfg *Config) Validate() error {
 	if err := validateOrigins(cfg.Server.AllowedOrigins); err != nil {
 		return err
 	}
-	if len(cfg.Backends) == 0 {
+	if err := validateAdmin(cfg.Admin); err != nil {
+		return err
+	}
+	if len(cfg.Backends) == 0 && !cfg.Admin.Enabled {
 		return fmt.Errorf("at least one backend is required")
 	}
 
@@ -311,6 +398,47 @@ func (cfg *Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func validateAdmin(admin AdminConfig) error {
+	if !admin.Enabled {
+		return nil
+	}
+	host, port, err := net.SplitHostPort(admin.Listen)
+	if err != nil {
+		return fmt.Errorf("admin.listen must be a host:port address: %w", err)
+	}
+	if host != "127.0.0.1" && host != "::1" {
+		return fmt.Errorf("admin.listen must use 127.0.0.1 or [::1]")
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return fmt.Errorf("admin.listen must use a numeric port between 1 and 65535")
+	}
+	if admin.DatabasePath == "" {
+		return fmt.Errorf("admin.database_path is required")
+	}
+	if !envNamePattern.MatchString(admin.EncryptionKeyEnv) {
+		return fmt.Errorf("admin.encryption_key_env must be an environment variable name")
+	}
+	if _, err := AdminEncryptionKey(admin); err != nil {
+		return err
+	}
+	return nil
+}
+
+var envNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func AdminEncryptionKey(admin AdminConfig) ([]byte, error) {
+	raw, ok := os.LookupEnv(admin.EncryptionKeyEnv)
+	if !ok {
+		return nil, fmt.Errorf("environment variable %s is not set", admin.EncryptionKeyEnv)
+	}
+	key, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil || len(key) != 32 {
+		return nil, fmt.Errorf("environment variable %s must contain a base64-encoded 32-byte key", admin.EncryptionKeyEnv)
+	}
+	return key, nil
 }
 
 func validateToolRules(backend *BackendConfig) error {
@@ -530,6 +658,9 @@ func (cfg *Config) ImmutableEqual(other *Config) error {
 	}
 	if cfg.Auth.Issuer != other.Auth.Issuer {
 		return fmt.Errorf("auth.issuer requires a restart")
+	}
+	if cfg.Admin != other.Admin {
+		return fmt.Errorf("admin configuration requires a restart")
 	}
 	return nil
 }

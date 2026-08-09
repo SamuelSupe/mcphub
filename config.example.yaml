@@ -18,6 +18,20 @@ server:
 auth:
   issuer: ${MCPHUB_AUTH_ISSUER}
 
+# Optional local configuration platform. It is disabled by default so existing
+# YAML-only deployments keep their v1.1 behavior. When enabled, the listener
+# must use a numeric loopback address and MCPHUB_CONFIG_KEY must contain a
+# base64-encoded 32-byte key. YAML backends are imported only on first start;
+# SQLite is the backend source of truth afterwards.
+# Tool groups, manual HTTP tools, and OpenAPI imports are intentionally not
+# represented in YAML. Manage them through the loopback admin API under
+# /api/v1/tool-groups; SQLite remains their source of truth.
+admin:
+  enabled: false
+  listen: "127.0.0.1:8081"
+  database_path: ./data/mcphub.db
+  encryption_key_env: MCPHUB_CONFIG_KEY
+
 backends:
   # Required backend with a static API header.
   - id: primary

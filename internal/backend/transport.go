@@ -20,6 +20,21 @@ import (
 )
 
 func newHTTPClient(ctx context.Context, cfg config.BackendConfig) (*http.Client, error) {
+	return NewOutboundHTTPClient(ctx, OutboundHTTPConfig{
+		Headers: cfg.Headers, OAuth: cfg.OAuth, RequestTimeout: cfg.RequestTimeout.Duration,
+	})
+}
+
+type OutboundHTTPConfig struct {
+	Headers        map[string]string
+	OAuth          *config.OAuthConfig
+	RequestTimeout time.Duration
+}
+
+// NewOutboundHTTPClient builds the shared credentialed transport used by MCP
+// backends and administrator-defined HTTP tools. The returned client owns
+// tracked connections bound to ctx and never follows redirects.
+func NewOutboundHTTPClient(ctx context.Context, cfg OutboundHTTPConfig) (*http.Client, error) {
 	base := http.DefaultTransport.(*http.Transport).Clone()
 	tracker := newConnectionTracker(ctx)
 	dialContext := base.DialContext
@@ -35,7 +50,7 @@ func newHTTPClient(ctx context.Context, cfg config.BackendConfig) (*http.Client,
 	base.MaxIdleConnsPerHost = 20
 	base.IdleConnTimeout = 90 * time.Second
 	base.TLSHandshakeTimeout = 10 * time.Second
-	base.ResponseHeaderTimeout = min(cfg.RequestTimeout.Duration, 30*time.Second)
+	base.ResponseHeaderTimeout = min(cfg.RequestTimeout, 30*time.Second)
 
 	headeredTransport := &headerTransport{
 		base:    base,
@@ -53,15 +68,16 @@ func newHTTPClient(ctx context.Context, cfg config.BackendConfig) (*http.Client,
 
 	authClient := &http.Client{
 		Transport: base,
-		Timeout:   min(cfg.RequestTimeout.Duration, 30*time.Second),
+		Timeout:   min(cfg.RequestTimeout, 30*time.Second),
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	discoveryCtx, cancel := context.WithTimeout(ctx, min(cfg.RequestTimeout.Duration, 30*time.Second))
+	discoveryCtx, cancel := context.WithTimeout(ctx, min(cfg.RequestTimeout, 30*time.Second))
 	tokenEndpoint, err := discoverOAuthTokenEndpoint(discoveryCtx, cfg.OAuth.Issuer, authClient)
 	cancel()
 	if err != nil {
+		base.CloseIdleConnections()
 		return nil, fmt.Errorf("discover OAuth issuer: %w", err)
 	}
 
@@ -76,6 +92,7 @@ func newHTTPClient(ctx context.Context, cfg config.BackendConfig) (*http.Client,
 	source := redactingTokenSource{source: tokenConfig.TokenSource(tokenCtx)}
 	token, err := source.Token()
 	if err != nil {
+		base.CloseIdleConnections()
 		return nil, err
 	}
 	client.Transport = &lifecycleTransport{ctx: ctx, base: &oauth2.Transport{
@@ -285,6 +302,10 @@ type headerTransport struct {
 	headers http.Header
 }
 
+func (t *headerTransport) CloseIdleConnections() {
+	closeIdleConnections(t.base)
+}
+
 type lifecycleTransport struct {
 	ctx  context.Context
 	base http.RoundTripper
@@ -292,6 +313,20 @@ type lifecycleTransport struct {
 	watchOnce sync.Once
 	mu        sync.Mutex
 	responses map[*lifecycleBody]struct{}
+}
+
+func (t *lifecycleTransport) CloseIdleConnections() {
+	closeIdleConnections(t.base)
+}
+
+func closeIdleConnections(transport http.RoundTripper) {
+	if closer, ok := transport.(interface{ CloseIdleConnections() }); ok {
+		closer.CloseIdleConnections()
+		return
+	}
+	if oauthTransport, ok := transport.(*oauth2.Transport); ok && oauthTransport.Base != nil {
+		closeIdleConnections(oauthTransport.Base)
+	}
 }
 
 func (t *lifecycleTransport) RoundTrip(req *http.Request) (*http.Response, error) {

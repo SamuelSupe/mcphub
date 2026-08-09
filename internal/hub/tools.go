@@ -8,14 +8,40 @@ import (
 
 	"github.com/SamuelSupe/mcphub/internal/backend"
 	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/internal/httptool"
 )
 
 type toolDefinition struct {
 	backendID      string
 	original       string
+	httpTool       bool
 	tool           *mcp.Tool
 	fingerprint    string
 	requiredScopes []string
+	httpManager    *httptool.Manager
+}
+
+func (h *Hub) httpToolDefinitions(groupID string) map[string]toolDefinition {
+	manager, generation := h.currentHTTPToolsSnapshot()
+	values := manager.Definitions(groupID)
+	definitions := make(map[string]toolDefinition, len(values))
+	for exposed, value := range values {
+		copyTool := *value.Tool
+		requiredScopes := slices.Clone(value.RequiredScopes)
+		fingerprint, err := fingerprint(struct {
+			Tool           *mcp.Tool `json:"tool"`
+			RequiredScopes []string  `json:"required_scopes"`
+			Generation     uint64    `json:"generation"`
+		}{Tool: &copyTool, RequiredScopes: requiredScopes, Generation: generation})
+		if err != nil {
+			continue
+		}
+		definitions[exposed] = toolDefinition{
+			backendID: groupID, original: value.Original, httpTool: true,
+			tool: &copyTool, fingerprint: fingerprint, requiredScopes: requiredScopes, httpManager: manager,
+		}
+	}
+	return definitions
 }
 
 type toolDefinitionCache struct {
@@ -116,6 +142,9 @@ func (h *Hub) MissingToolScopes(exposedName string, scopes []string) ([]string, 
 		return nil, false
 	}
 	definition, known := h.backendToolDefinitions(backendID, false)[exposedName]
+	if !known {
+		definition, known = h.httpToolDefinitions(backendID)[exposedName]
+	}
 	if !known {
 		return nil, false
 	}

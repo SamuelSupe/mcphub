@@ -12,7 +12,7 @@ import (
 
 func (v *view) toolHandler(definition toolDefinition) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if !hasRequiredScopes(v.toolScopes, definition.requiredScopes) {
+		if !v.hasToolScopes(definition) {
 			// The HTTP authorization layer normally rejects this request first. Keep
 			// the forwarding boundary closed if a handler is reached through another
 			// transport path or during a catalog reconciliation race.
@@ -20,6 +20,18 @@ func (v *view) toolHandler(definition toolDefinition) mcp.ToolHandler {
 				Code:    jsonrpc.CodeInvalidParams,
 				Message: fmt.Sprintf("unknown tool %q", definition.tool.Name),
 			}
+		}
+		if definition.httpTool {
+			if definition.httpManager == nil {
+				return nil, &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "HTTP tool unavailable"}
+			}
+			result, err := definition.httpManager.Call(ctx, definition.backendID, definition.original, req.Params.Arguments)
+			if err != nil {
+				failure := &mcp.CallToolResult{}
+				failure.SetError(fmt.Errorf("HTTP tool request is invalid"))
+				return failure, nil
+			}
+			return result, nil
 		}
 		client, _ := v.hub.manager.Client(definition.backendID)
 		params := &mcp.CallToolParams{
@@ -42,6 +54,17 @@ func (v *view) toolHandler(definition toolDefinition) mcp.ToolHandler {
 		}
 		return v.hub.rewriteToolResult(definition.backendID, result), nil
 	}
+}
+
+func (v *view) hasToolScopes(definition toolDefinition) bool {
+	if !definition.httpTool || !v.dynamicHTTP {
+		return hasRequiredScopes(v.toolScopes, definition.requiredScopes)
+	}
+	granted := make(map[string]struct{}, len(v.granted))
+	for _, scope := range v.granted {
+		granted[scope] = struct{}{}
+	}
+	return hasRequiredScopes(granted, definition.requiredScopes)
 }
 
 func (v *view) promptHandler(definition promptDefinition) mcp.PromptHandler {

@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.2.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,7 +9,7 @@
 
 MCPHub 是一个面向远端 MCP Server 的聚合网关。它用一个 Streamable HTTP 入口连接多个后端，按 JWT 权限为每个请求生成可见的后端视图，并把工具、提示、资源和资源模板路由回正确的后端。
 
-当前实现的边界是“单进程、内存态、HTTP 聚合层”：没有管理后台、持久化配置/目录、指标端点或集群协调。配置文件和后端 MCP 端点仍然是部署时的事实来源。
+MCPHub v1.2.0 仍是单进程 HTTP 聚合层，并新增了可选的仅回环地址管理平台、加密 SQLite 配置、托管 HTTP tools 和 OpenAPI 导入。当前仍没有指标端点、持久化远程 MCP 目录或集群协调。
 
 ## 架构
 
@@ -28,9 +28,9 @@ flowchart LR
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [Apache License 2.0](LICENSE)（Copyright 2026 SamuelSupe）
-- [v1.1.0 发行说明](RELEASE_NOTES_v1.1.0.md)、[v1.0.0 历史发行说明](RELEASE_NOTES_v1.0.0.md)、[v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.2.0 发行说明](RELEASE_NOTES_v1.2.0.md)、[v1.1.0 历史发行说明](RELEASE_NOTES_v1.1.0.md)、[v1.2.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.2.0)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-MCPHub v1.1.0 是当前最新版本；v1.0.0 仍作为上一版已发布版本和历史参考保留。
+MCPHub v1.2.0 是当前最新版本；v1.1.0 和 v1.0.0 仍作为历史版本保留。
 
 ## 能力与边界
 
@@ -42,16 +42,17 @@ MCPHub v1.1.0 是当前最新版本；v1.0.0 仍作为上一版已发布版本�
 - 使用 OIDC discovery 和 JWKS 验证 Bearer JWT；按后端 `required_scopes` 过滤目录和调用。
 - 对原始后端 tool name 应用后端本地 `tool_rules` 和 Go `path.Match`；匹配规则的 scope 会合并去重，按 all-of 授权，并从 `tools/list` 隐藏未授权 tool。
 - 支持后端静态请求头，或 OAuth 2.0 `client_credentials`；两者不能同时提供 `Authorization`。
+- v1.2.0 管理平台默认使用中文并可持久切换到 English。工具组可以把手工 HTTP tool 和多个 OpenAPI 3.0/3.1 import 通过 `/mcp` 发布；组内共享 Base URL、Header、OAuth、scope 和 timeout，且不会暴露 raw HTTP proxy。
 - 提供健康、就绪和 RFC 9728 Protected Resource Metadata 端点；配置支持 SIGHUP 热重载。
 
 后端连接失败时，MCPHub 会重试并保留已知的后端目录；目录可能仍可列出，但具体调用会在连接恢复前失败。启动时不会因为 required 后端暂时不可用而退出，`/readyz` 会保持 503；SIGHUP 创建新运行时则要求 candidate 中的 required 后端首次连接成功。后端产生的 JSON-RPC error 原样返回。网络或 transport 失败对外只返回 `backend <id> unavailable`，不会泄露内部 backend URL、query 或 credential。后端重连时，所有 tracked resource subscription 必须全部恢复成功后才会标记 ready；任一恢复失败都会保持 unavailable 并触发后续重连。
 
 ## 快速开始
 
-要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装带版本标签的 v1.1.0 命令：
+要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装带版本标签的 v1.2.0 命令：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.1.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.2.0
 ```
 
 如果从源码构建，请先复制示例并设置其中的环境变量：
@@ -75,7 +76,7 @@ go build -trimpath -o ./mcphub ./cmd/mcphub
 ./mcphub serve --config ./config.yaml
 ```
 
-`validate` 只读取、展开和校验配置；成功时在 stdout 输出 `configuration valid`。`serve` 把结构化 JSON 日志写到 stderr。两个子命令都要求 `--config PATH`。
+`validate` 只读校验配置，成功时在 stdout 输出 `configuration valid`。管理模式下，数据库存在时会只读检查 SQLite；数据库尚不存在时校验 YAML bootstrap backends，不创建文件。`serve` 把结构化 JSON 日志写到 stderr。两个子命令都要求 `--config PATH`。
 
 也可以直接运行而不生成二进制：
 
@@ -84,23 +85,23 @@ go run ./cmd/mcphub validate --config ./config.yaml
 go run ./cmd/mcphub serve --config ./config.yaml
 ```
 
-### v1.1.0 预构建下载
+### v1.2.0 预构建下载
 
-[v1.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.1.0) 提供以下归档文件和校验文件：
+[v1.2.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.2.0) 提供以下归档文件和校验文件：
 
 | 平台 | 下载 |
 | --- | --- |
-| macOS amd64 | [mcphub_v1.1.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_amd64.tar.gz) |
-| macOS arm64 | [mcphub_v1.1.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub_v1.1.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub_v1.1.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/mcphub_v1.1.0_linux_arm64.tar.gz) |
-| 校验和 | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.1.0/SHA256SUMS) |
+| macOS amd64 | [mcphub_v1.2.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_darwin_amd64.tar.gz) |
+| macOS arm64 | [mcphub_v1.2.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub_v1.2.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub_v1.2.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_linux_arm64.tar.gz) |
+| 校验和 | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/SHA256SUMS) |
 
 上一版 v1.0.0 请参见其[发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0)和[历史发行说明](RELEASE_NOTES_v1.0.0.md)。
 
 ## 配置
 
-配置是单个 YAML 文档，解码使用严格字段检查；未知字段、多文档 YAML、缺失环境变量都会被拒绝。字符串配置项中的 `${NAME}` 占位符会从当前进程环境展开，`NAME` 必须匹配 `[A-Za-z_][A-Za-z0-9_]*`；没有默认值语法。duration、整数和布尔字段不支持占位符。配置加载和 SIGHUP 重载都会重新展开环境变量。
+配置是单个 YAML 文档，解码使用严格字段检查；未知字段、多文档 YAML、缺失环境变量都会被拒绝。字符串配置项中的 `${NAME}` 占位符会从当前进程环境展开，`NAME` 必须匹配 `[A-Za-z_][A-Za-z0-9_]*`；没有默认值语法。duration、整数和布尔字段不支持占位符。配置加载和 SIGHUP 重载都会重新展开环境变量。管理数据库完成初始化后，YAML backends 及其环境变量占位符会被忽略。
 
 ### `server`
 
@@ -130,9 +131,50 @@ JWKS ready 还要求至少一个可用 key：`use` 为空或为 `sig`；存在 `
 
 scope 取自 JWT 的 `scope` 和 `scp` 两个 claim：`scope` 只接受空格分隔字符串（包括空字符串或 JSON `null`）；`scp` 接受空格分隔字符串或字符串数组。两个 claim 的值会合并、去重；数组项不能包含空白。后端访问采用 **all-of** 语义：`required_scopes: [a, b]` 要求 token 同时拥有 `a` 和 `b`；缺任一项，该后端不会出现在该 token 的目录视图中，对已识别的直接调用返回 403 `insufficient_scope`。未配置 `required_scopes` 的后端不受 scope 限制。Protected Resource Metadata 的 `scopes_supported` 是所有后端 required scope 的去重并集。
 
+### `admin`
+
+尚未发布的 v1.2.0 管理平台默认关闭。启用后，它通过独立、无认证的回环监听器提供嵌入式 UI 和 JSON API，管理 backend 和工具组配置；`server`、`auth` 和 `admin` 仍由 YAML 管理并需要重启才能修改。
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `enabled` | `false` | 启用本地管理平台，并让 SQLite 成为 backend 配置事实来源。 |
+| `listen` | `127.0.0.1:8081` | 必须是数字形式的 IPv4/IPv6 回环地址，SIGHUP 不可修改。 |
+| `database_path` | 无 | 启用时必填；相对路径以 YAML 文件所在目录解析。 |
+| `encryption_key_env` | `MCPHUB_CONFIG_KEY` | 保存 Base64 编码 32 字节 AES 密钥的环境变量名；丢失或改变密钥会导致已存 Secret 无法解密。 |
+
+空数据库首次启动时，MCPHub 会在一个事务中导入展开后的 YAML backends。bootstrap 标记写入后，SQLite 成为唯一 backend 来源，之后修改 YAML backend 不再生效。Header 值和 OAuth client secret 使用 AES-256-GCM 加密，管理 API 永不返回明文。
+
+默认 UI 地址为 `http://127.0.0.1:8081/`，可以在不中断进程的情况下注册、测试、编辑、启停和删除后端。Required 后端连接失败时变更会被拒绝，当前 runtime 不受影响；optional 后端不可用时可以保存，并在后台持续重连。
+
+JSON API 位于 `/api/v1`。单项 backend 响应携带 `ETag`；更新和删除必须通过 `If-Match` 提交该 revision，过期写入返回 `409 revision_conflict`。Secret 字段只返回是否已配置；编辑时省略 Secret 值表示保留，省略对应 Header 或 OAuth 配置表示删除。审计事件的 actor 固定为 `local`，只记录脱敏结果。
+
+#### 工具组与托管 HTTP API tool（v1.2.0）
+
+工具组是管理 API 中的对象，不是 YAML 配置。每个组统一持有其 tool 使用的 HTTPS Base URL、静态 Header 或 OAuth 2.0 `client_credentials`、JWT required scope 和请求 timeout；不要在每个 tool 中重复配置凭证。Header 值和 OAuth client secret 加密存储在 SQLite，API 只返回“已配置/未配置”标记。工具组 scope 仍采用 backend 相同的 all-of 语义；可选的组内 tool 规则可以为选定 tool 追加 scope。
+
+一个工具组可以包含手工定义的 HTTP tool，以及多个 OpenAPI 3.0 或 3.1 import。OpenAPI import 可以先 inspect 再保存。两类对象都只作为 MCP capability，经配置的 `/mcp` Streamable HTTP 入口列出和调用；MCPHub 不提供 raw HTTP proxy 或任意 method/path 透传路由。
+
+稳定的管理路径如下：
+
+| 操作 | 路径 |
+| --- | --- |
+| 列出/创建工具组 | `GET/POST /api/v1/tool-groups` |
+| 读取/更新/删除工具组；探测工具组 | `GET/PUT/DELETE /api/v1/tool-groups/{groupID}`、`POST .../{groupID}/probe` |
+| 列出/创建或读取/更新/删除手工 tool | `GET/POST .../{groupID}/tools`、`GET/PUT/DELETE .../{groupID}/tools/{toolName}` |
+| inspect、列出/创建或读取/更新/删除 OpenAPI import | `POST .../{groupID}/imports/inspect`、`GET/POST .../{groupID}/imports`、`GET/PUT/DELETE .../{groupID}/imports/{importID}` |
+| 刷新 OpenAPI import | `POST .../{groupID}/imports/{importID}/refresh` |
+
+工具组、手工 tool 和 import 资源各自返回 `ETag`；更新和删除必须提交匹配的 `If-Match`，revision 过期时返回 `409 revision_conflict`。这些资源只能通过 admin API 管理并持久化到 SQLite；有意不提供 `tool_groups`（或同类）YAML schema，SIGHUP 也不会导入它们。
+
+工具组 Base URL 和 OpenAPI source URL 必须使用 HTTPS；工具组 HTTP 请求和 source 抓取都不跟随重定向。若 source 与工具组是不同 origin，抓取时绝不会发送该组的静态 Header 或 OAuth secret。OpenAPI 文档上限为 5 MiB，携带文档的请求 body 上限为 6 MiB，HTTP tool 响应默认上限为 1 MiB；响应上限可配置为 64 KiB 至 16 MiB。URL-backed import 默认每 15 分钟自动刷新（可设为 1 分钟至 24 小时）；刷新失败时保留 last-known-good 文档和 tools，并采用退避重试。
+
+#### v1.2.0 升级说明
+
+`admin.enabled` 为 `false` 时，现有 v1.1.0 YAML-only 部署不变。要采用 v1.2.0 管理平台，请配置回环 `admin` listener，提供 Base64 编码的 32 字节 `MCPHUB_CONFIG_KEY`，并为 SQLite 路径准备可写卷。首次启动会在一个事务中导入已有 YAML backends；bootstrap 标记写入后 SQLite 成为唯一 backend 来源，之后修改 YAML backend 不再生效。工具组、手工 HTTP tool 和 OpenAPI import 请通过 `/api/v1/tool-groups` 创建；由于这些对象没有 YAML 表示，不提供 YAML migration。
+
 ### `backends`
 
-至少配置一个后端。每个 `id` 必须匹配 `[A-Za-z0-9_-]{1,32}`，并按大小写不敏感规则保持唯一；允许大写字母。
+YAML-only 模式至少配置一个后端；管理模式允许从空数据库启动并在网页注册第一个后端。每个 `id` 必须匹配 `[A-Za-z0-9_-]{1,32}`，并按大小写不敏感规则保持唯一；允许大写字母。
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -207,8 +249,9 @@ SIGHUP 会先完整加载、环境展开和校验配置，再构建 candidate ru
 - `server.listen`
 - `server.public_url`
 - `auth.issuer`
+- 全部 `admin` 字段
 
-这些值分别决定已绑定的监听器、RFC 9728/JWT audience 和 OIDC verifier，不能只替换内存中的 runtime。
+这些值决定监听器、存储/加密身份、RFC 9728/JWT audience 和 OIDC verifier，不能只替换内存中的 runtime。管理模式下 SIGHUP 只重载 YAML 静态字段，backend 始终从 SQLite 组合；首次导入后 YAML backend 变化会被忽略。
 
 SIGHUP candidate 启动使用可取消的 context；关停开始时仍在连接的 candidate 会被取消。candidate 的 required backend 必须先连接成功才能替换当前代际；每个 candidate 或已退役 runtime 都会关闭自己持有的 backend session 和连接。
 
@@ -232,6 +275,8 @@ docker run --rm \
 
 容器内监听地址应与端口映射匹配（示例为 `:8080`）。`--env-file` 只为进程注入环境变量，配置以只读方式挂载；请限制宿主机 `config.yaml` 和 `.env` 的权限。镜像入口点已经是 `/usr/local/bin/mcphub`，因此 `serve`/`validate` 直接作为参数传入。
 
+管理模式还需要为 `database_path` 挂载可写卷，并在容器环境中提供 `MCPHUB_CONFIG_KEY`。由于未认证管理服务刻意绑定容器回环地址，普通 `-p 8081:8081` 无法访问它；请使用宿主机安装或 Linux host networking 做本机管理，不要扩大监听地址把它暴露到远端。
+
 ## 安全说明
 
 - 生产环境对外的 `public_url`、`auth.issuer` 和远端 backend URL 使用 HTTPS。`allow_insecure_http` 只允许 loopback 后端，不能把远端明文连接变成合法配置。
@@ -244,11 +289,13 @@ docker run --rm \
 - 所有 HTTP 路由在 request body 被消费或关闭前都保持 `request_timeout` 读取 deadline，因此未认证或被拒绝请求的慢 body 也有界。`subscriptions/listen` POST 只有在 body 读完后才不受普通 response 写入和 request context timeout 限制。
 - 后端 SSE 响应保持 streaming passthrough。progress 检查每个 event 最多缓存 1 MiB；超大 event 原样转发但跳过 progress 检查。
 - 已确认的 2026 resource subscription ID 会把更新映射回原订阅 URI，包括 update event URI 不同的情况；timeout、取消订阅和 session/重连清理会删除映射。
+- 当前开发版的管理 API 没有登录机制。配置校验强制它使用数字回环地址，并拒绝跨域和意外 Host 请求，同时设置严格 CSP；不要通过公网反向代理暴露。
+- `MCPHUB_CONFIG_KEY` 应放在 YAML 和数据库备份之外安全保存。SQLite 文件权限为 `0600`，但恢复其中 Secret 必须保留完全相同的 32 字节密钥。
 
 ## 已知限制与排障提示
 
-- 当前没有管理 API、指标、持久化目录、跨实例共享订阅或高可用协调；每个进程维护自己的后端连接、目录和 token view。
-- 当前不提供 stdio、独立旧式 GET SSE 端点、原生 TLS、数据库、动态租户/按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展；TLS 和外部限流由反向代理负责。
+- 本地管理平台只持久化 backend 和工具组配置；当前仍没有指标、持久化 MCP 目录、跨实例共享订阅或高可用协调，每个进程维护自己的后端连接、目录和 token view。
+- 当前开发版不提供管理用户/远程管理认证、stdio、独立旧式 GET SSE 端点、原生 TLS、动态租户/按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展；TLS 和外部限流由反向代理负责。
 - 聚合器只声明并实现 tools、prompts、resources（含订阅）和 completions 能力；后端声明的其他能力不会自动变成网关能力。非法名称、非法 URI 模板和 SDK 拒绝的元数据会被省略。
 - 后端断线时保留 last-known-good 目录，但调用需要实时连接；required 后端会使 `/readyz` 变为 503，optional 后端不会阻塞整体就绪。
 - `server.refresh_interval` 是最大刷新周期，后端返回更短 TTL 时会更快刷新；不会提供强制即时刷新 API。

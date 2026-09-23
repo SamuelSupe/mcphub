@@ -46,7 +46,7 @@ assignees: ""
 ### Scope check
 
 - [ ] I checked the README known-limits section.
-- [ ] This is not a request for an explicitly excluded capability such as stdio, standalone legacy SSE, native TLS, Tasks, MCP Apps, or custom MCP extensions.
+- [ ] This is not a request for an explicitly excluded capability such as stdio backends, standalone legacy SSE, native TLS, Tasks, MCP Apps, or custom MCP extensions.
 - [ ] I removed secrets, bearer tokens, private keys, and personal data.
 
 ## 中文
@@ -89,5 +89,5 @@ assignees: ""
 ### 范围确认
 
 - [ ] 我已检查 README 的已知限制。
-- [ ] 这不是对明确排除能力（例如 stdio、独立旧 SSE、原生 TLS、Tasks、MCP Apps 或自定义 MCP 扩展）的请求。
+- [ ] 这不是对明确排除能力（例如 stdio 后端接入、独立旧 SSE、原生 TLS、Tasks、MCP Apps 或自定义 MCP 扩展）的请求。
 - [ ] 我已删除 secret、Bearer token、私钥和个人数据。

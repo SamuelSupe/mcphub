@@ -6,13 +6,13 @@
 
 Thank you for contributing to MCPHub. Please keep changes small, observable, and aligned with the current HTTP aggregation boundary.
 
-This public repository is [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub), documenting v1.1.0 with module path `github.com/SamuelSupe/mcphub`. The project is released under the [Apache License 2.0](LICENSE); see the [v1.1.0 release notes](RELEASE_NOTES_v1.1.0.md) for the shipped scope. The v1.0.0 release remains available as historical reference.
+This public repository is [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub), documenting v1.3.0 with module path `github.com/SamuelSupe/mcphub`. The project is released under the [Apache License 2.0](LICENSE); see the [v1.3.0 release notes](RELEASE_NOTES_v1.3.0.md) for the shipped scope. Earlier releases remain available as historical references.
 
 ### Before you start
 
 1. Read the [English README](README.md) and the [Chinese README](README.zh-CN.md), especially the configuration, security, and known-limits sections.
 2. For a vulnerability or a suspected secret leak, do not open a public issue; follow [SECURITY.md](SECURITY.md).
-3. Check the explicit exclusions before proposing a feature. The current release does not provide stdio, a standalone legacy SSE endpoint, native TLS, a database, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions.
+3. Check the explicit exclusions before proposing a feature. The current release does not provide stdio backends, a standalone legacy SSE endpoint, native TLS, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The release includes encrypted SQLite for optional local administration and a separate local stdio-to-HTTP connector; see the management UI and browser login sections in the README.
 
 ### Development setup
 
@@ -22,6 +22,7 @@ Use Go 1.26. The repository's module declares `go 1.26.0`.
 go version
 go mod download
 go build ./cmd/mcphub
+go build ./cmd/mcphub-cli
 ```
 
 For configuration-driven work, copy `config.example.yaml`, set the required environment variables, and run:
@@ -40,6 +41,14 @@ The loader rejects unknown YAML fields, multiple documents, missing `${NAME}` en
 - Keep credentials, bearer tokens, and real backend URLs out of source, fixtures, logs, and pull requests.
 - Format Go code with `gofmt`. Before requesting review, run the relevant package tests; for a full local check, use `go test ./...` and `go vet ./...` with the repository's Go 1.26 toolchain.
 
+The `internal/client` integration tests run a disposable HTTPS identity service, the real gateway and an MCP backend. Run `go test -race ./internal/client` for login, credential rotation, concurrent connectors and transport checks. On macOS, the following opt-in check opens the system browser for authorization, denial and cancellation. Follow the terminal prompts; it uses temporary profiles and a loopback consent page, with HTTPS retained for discovery, token exchange and gateway calls.
+
+```bash
+CGO_ENABLED=0 MCPHUB_BROWSER_QA=1 go test ./internal/client -run '^TestNativeBrowserLogin$' -v -timeout=8m
+```
+
+For admin UI changes, validate the served pages in local Chrome: navigation, search/filter, editors, error/empty states, language switching, and a narrow viewport. The UI is embedded by Go and has no frontend build step; rebuilding the server is required to serve changed assets. Check JavaScript syntax with `node --check` for `app.js`, `shell.js`, and `i18n.js`.
+
 ### Pull requests
 
 - Use a focused title that states the user-visible or operational change.
@@ -56,13 +65,13 @@ Documentation must reflect the current code, not a planned design. Keep `README.
 
 感谢你为 MCPHub 贡献代码。请让改动保持聚焦、可观察，并符合当前的 HTTP 聚合边界。
 
-本公开仓库是 [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub)，当前文档对应 v1.1.0，module path 为 `github.com/SamuelSupe/mcphub`。项目采用 [Apache License 2.0](LICENSE)；已发布范围见 [v1.1.0 发行说明](RELEASE_NOTES_v1.1.0.md)。v1.0.0 仍作为历史参考保留。
+本公开仓库是 [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub)，当前文档对应 v1.3.0，module path 为 `github.com/SamuelSupe/mcphub`。项目采用 [Apache License 2.0](LICENSE)；已发布范围见 [v1.3.0 发行说明](RELEASE_NOTES_v1.3.0.md)。更早版本仍作为历史参考保留。
 
 ### 开始前
 
 1. 阅读[中文 README](README.zh-CN.md)和[英文 README](README.md)，尤其是配置、安全和已知限制部分。
 2. 漏洞或疑似 secret 泄露不要提交公开 Issue，请遵循 [SECURITY.md](SECURITY.md) 的私下报告流程。
-3. 提议新功能前先检查明确排除项。本版本不提供 stdio、独立旧 SSE 端点、原生 TLS、数据库、动态租户或按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。
+3. 提议新功能前先检查明确排除项。本版本不提供 stdio 后端接入、独立旧 SSE 端点、原生 TLS、动态租户或按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本版本包含用于可选本地管理的加密 SQLite，以及独立的本地 stdio 到 HTTP 连接器，参见 README 的管理 UI 和浏览器登录章节。
 
 ### 开发环境
 
@@ -72,6 +81,7 @@ Documentation must reflect the current code, not a planned design. Keep `README.
 go version
 go mod download
 go build ./cmd/mcphub
+go build ./cmd/mcphub-cli
 ```
 
 涉及配置时，复制 `config.example.yaml`，设置所需环境变量，然后运行：
@@ -89,6 +99,14 @@ go run ./cmd/mcphub validate --config ./config.yaml
 - 优先在可观察的行为边界添加测试：认证 claim、scope all-of 过滤、就绪、重载不变量、传输/请求头安全和路由/改写行为。
 - 不要把凭证、Bearer token 或真实后端 URL 放入源码、fixture、日志或 Pull Request。
 - Go 代码使用 `gofmt`。提交评审前运行相关包测试；完整本地检查可使用 Go 1.26 工具链执行 `go test ./...` 和 `go vet ./...`。
+
+`internal/client` 集成测试启动临时 HTTPS 身份服务、真实网关和 MCP 后端。使用 `go test -race ./internal/client` 验证登录、凭证轮换、并发连接器与传输行为。macOS 上可显式运行以下检查，按终端提示在系统浏览器中完成授权、拒绝和取消；它使用临时 profile 和回环 consent 页面，discovery、换码及网关调用仍使用 HTTPS。
+
+```bash
+CGO_ENABLED=0 MCPHUB_BROWSER_QA=1 go test ./internal/client -run '^TestNativeBrowserLogin$' -v -timeout=8m
+```
+
+管理 UI 变更应在本机 Chrome 验证实际页面：导航、搜索/筛选、编辑器、错误/空状态、语言切换及窄屏布局。UI 由 Go 内嵌，无需前端构建步骤；修改静态资源后需要重新构建服务端。对 `app.js`、`shell.js` 和 `i18n.js` 使用 `node --check` 做语法检查。
 
 ### Pull Request
 

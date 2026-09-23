@@ -3,85 +3,77 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="light">
   <title>MCPHub 配置中心</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/editors.css">
 </head>
 <body>
-  <div class="ambient ambient-one"></div>
-  <div class="ambient ambient-two"></div>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h6M11 17.5h6"/></symbol>
+    <symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H6a2 2 0 0 0-2 2v4a3 3 0 0 1-2 3 3 3 0 0 1 2 3v4a2 2 0 0 0 2 2h2M16 3h2a2 2 0 0 1 2 2v4a3 3 0 0 0 2 3 3 3 0 0 0-2 3v4a2 2 0 0 1-2 2h-2"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8M12 16v5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 2l1 4M4 12l1 4a8 8 0 0 0 13 2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-network" viewBox="0 0 24 24"><circle cx="12" cy="4" r="2.5"/><circle cx="5" cy="20" r="2.5"/><circle cx="19" cy="20" r="2.5"/><path d="M12 6.5v5M5 17.5V14a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3.5"/></symbol>
+  </svg>
+  <a class="skip-link" href="#main-content">跳转到内容</a>
   <div class="app-shell">
-    <aside class="sidebar glass">
-      <div class="brand" aria-label="MCPHub">
-        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
-        <div><strong>MCPHub</strong><small>配置中心</small></div>
-      </div>
+    <aside class="sidebar">
+      <a class="brand" href="#overview" aria-label="MCPHub">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span><strong>MCPHub</strong><small>配置中心</small></span>
+      </a>
       <nav aria-label="主导航">
-        <a class="nav-item active" href="#backends"><span aria-hidden="true">⌘</span>后端服务</a>
-        <a class="nav-item" href="#tool-groups"><span aria-hidden="true">⌗</span>工具组</a>
-        <a class="nav-item" href="#activity"><span aria-hidden="true">↻</span>最近变更</a>
+        <p class="nav-section-label">工作空间</p>
+        <a class="nav-item active" href="#overview" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg><span>概览</span></a>
+        <a class="nav-item" href="#backends"><svg class="icon"><use href="#i-server"/></svg><span>MCP 后端</span><span class="nav-count" id="nav-backend-count">—</span></a>
+        <a class="nav-item" href="#tool-groups"><svg class="icon"><use href="#i-braces"/></svg><span>HTTP 工具组</span><span class="nav-count" id="nav-group-count">—</span></a>
+        <p class="nav-section-label nav-divider">管理</p>
+        <a class="nav-item" href="#activity"><svg class="icon"><use href="#i-clock"/></svg><span>变更记录</span></a>
       </nav>
-      <div class="sidebar-note">
-        <span class="status-dot local"></span>
-        <div><strong>仅限本机</strong><small>未启用远程访问</small></div>
-      </div>
+      <div class="sidebar-note"><svg class="icon"><use href="#i-monitor"/></svg><div><strong>本地管理</strong><small>仅在本机访问</small></div></div>
     </aside>
-
-    <main>
-      <header class="topbar glass">
-        <div>
-          <p class="eyebrow">配置管理</p>
-          <h1>后端服务</h1>
-        </div>
-        <div class="topbar-actions">
-          <button class="language-button pressable" id="language-toggle" type="button" aria-label="Switch to English">EN</button>
-          <button class="primary pressable" id="register-button" type="button">
-            <span aria-hidden="true">＋</span> 注册后端
-          </button>
-          <button class="secondary pressable" id="new-group-button" type="button"><span aria-hidden="true">＋</span> 新建工具组</button>
-        </div>
+    <main id="main-content" tabindex="-1">
+      <header class="topbar">
+        <div class="breadcrumb"><span>工作空间</span><span aria-hidden="true">/</span><strong id="breadcrumb-page">概览</strong></div>
+        <div class="topbar-actions"><span class="sync-status" id="sync-status" role="status">正在读取配置…</span><button class="language-button" id="language-toggle" type="button" aria-label="Switch to English">EN</button></div>
       </header>
-
       <div class="content">
-        <section class="metric-grid" aria-label="运行概览">
-          <article class="metric-card"><span>已注册</span><strong id="metric-total">—</strong><small>全部后端</small></article>
-          <article class="metric-card"><span>运行中</span><strong id="metric-ready">—</strong><small><i class="status-dot ready"></i>连接正常</small></article>
-          <article class="metric-card"><span>Required</span><strong id="metric-required">—</strong><small>影响就绪状态</small></article>
-          <article class="metric-card"><span>Optional</span><strong id="metric-optional">—</strong><small>不阻塞就绪</small></article>
-          <article class="metric-card warning-card"><span>需要关注</span><strong id="metric-unavailable">—</strong><small>离线或重连中</small></article>
+        <div class="page-heading"><div><h1 id="page-title">概览</h1><p id="page-description">将分散的服务与 API，统一为可供 AI 调用的工具。</p></div><div class="page-actions"><button class="secondary" id="refresh-button" type="button"><svg class="icon"><use href="#i-refresh"/></svg><span>刷新</span></button><button class="primary" id="register-button" type="button" hidden>＋ 添加 MCP 后端</button><button class="primary" id="new-group-button" type="button" hidden>＋ 创建工具组</button></div></div>
+        <div class="page-error" id="page-error" role="alert" hidden><svg class="icon"><use href="#i-info"/></svg><span id="page-error-message"></span><button class="text-button" id="retry-button" type="button">重试</button></div>
+
+        <section data-page="overview" aria-label="概览">
+          <div class="metric-strip" aria-label="运行概览"><a href="#backends"><strong id="metric-total">—</strong><span>MCP 后端</span></a><a href="#backends"><strong id="metric-ready">—</strong><span>已连接</span></a><a href="#tool-groups"><strong id="metric-groups">—</strong><span>HTTP 工具组</span></a><a href="#tool-groups"><strong id="metric-tools">—</strong><span>可用 HTTP 工具</span></a></div>
+          <div class="section-title"><h2 id="onboarding-title">从接入第一个服务开始</h2><p>根据已有服务的类型，选择一种接入方式。</p></div>
+          <div class="connection-options">
+            <article class="connection-option"><div class="option-symbol"><svg class="icon"><use href="#i-network"/></svg></div><div><h3>接入 MCP 服务</h3><p>适用于已经提供 MCP 协议的服务。保留工具、资源和提示词能力。</p><button class="primary" data-create="backend" type="button">添加 MCP 后端<svg class="icon"><use href="#i-arrow"/></svg></button></div></article>
+            <article class="connection-option"><div class="option-symbol"><svg class="icon"><use href="#i-braces"/></svg></div><div><h3>将 HTTP API 转为工具</h3><p>适用于 REST API。手工定义接口，或从 OpenAPI 文档导入。</p><button class="secondary" data-create="group" type="button">创建工具组<svg class="icon"><use href="#i-arrow"/></svg></button></div></article>
+          </div>
+          <ol class="setup-steps"><li><span>01</span><div><strong>接入服务</strong><p>填写地址与上游凭证</p></div></li><li><span>02</span><div><strong>设置访问权限</strong><p>用 Scope 控制哪些客户端可以调用</p></div></li><li><span>03</span><div><strong>测试并启用</strong><p>验证连接后向客户端提供工具</p></div></li></ol>
+          <div class="overview-bottom"><section class="recent-panel"><div class="section-inline"><h2>最近变更</h2><a href="#activity">查看全部<svg class="icon"><use href="#i-arrow"/></svg></a></div><ol class="event-list compact-events" id="recent-event-list"><li class="event-empty">正在读取配置…</li></ol></section><aside class="permission-note"><svg class="icon"><use href="#i-info"/></svg><div><h3>理解两种权限</h3><p><strong>上游认证</strong><span>：MCPHub 如何连接你的服务。</span></p><p><strong>访问权限</strong><span>：哪些客户端可以通过 MCPHub 调用工具。</span></p></div></aside></div>
+          <p class="page-footnote"><svg class="icon"><use href="#i-info"/></svg><span>管理界面仅在本机开放。客户端身份认证由 OIDC 服务提供。</span></p>
         </section>
 
-        <section class="panel" id="tool-groups">
-          <div class="panel-header">
-            <div><h2>HTTP API 工具组</h2><p>共享 Base URL 与认证；手工 API 和 OpenAPI operations 都发布为 MCP tools。</p></div>
-          </div>
-          <div class="backend-list" id="tool-group-list" aria-live="polite"></div>
-          <div class="empty-state" id="tool-group-empty" hidden>
-            <div class="empty-symbol" aria-hidden="true">⌗</div>
-            <h3>创建第一个工具组</h3>
-            <p>组 ID 将成为公开工具名称的前缀。</p>
-            <button class="secondary pressable" id="empty-group-button" type="button">创建工具组</button>
-          </div>
+        <section data-page="backends" aria-label="MCP 后端" hidden>
+          <div class="context-note"><svg class="icon"><use href="#i-info"/></svg><p>已有 MCP 服务？在这里连接。只有 REST API？<a href="#tool-groups">前往 HTTP 工具组</a>。</p></div>
+          <div class="list-toolbar"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="搜索名称或地址" aria-label="搜索后端"></label><label class="filter"><span>连接状态</span><select id="backend-filter"><option value="all">全部状态</option><option value="ready">已连接</option><option value="unavailable">连接异常</option><option value="disabled">已停用</option></select></label><span class="list-count" id="backend-count"></span></div>
+          <div class="list-panel"><div class="list-columns" aria-hidden="true"><span>后端 / 服务地址</span><span>能力 / 上游认证</span><span>访问权限</span><span>状态 / 操作</span></div><div class="backend-list" id="backend-list" aria-busy="true"></div><div class="empty-state" id="empty-state" hidden><span class="empty-symbol"><svg class="icon"><use href="#i-server"/></svg></span><h2>接入第一个 MCP 服务</h2><p>填写服务地址、认证和访问权限，测试连接后即可启用。</p><button class="primary" id="empty-register" type="button">添加 MCP 后端</button></div><div class="empty-state" id="backend-no-results" hidden><h3>没有找到匹配的后端</h3><p>试试其他关键词，或清除筛选条件。</p><button class="secondary" id="clear-backend-filter" type="button">清除筛选</button></div></div>
+          <p class="page-footnote">关键后端连接失败会影响网关就绪状态；普通后端会在后台重连。</p>
         </section>
 
-        <section class="panel" id="backends">
-          <div class="panel-header">
-            <div><h2>所有后端</h2><p>在线修改会以新的 runtime generation 原子应用。</p></div>
-            <label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索名称或地址" aria-label="搜索后端"></label>
-          </div>
-          <div class="backend-list" id="backend-list" aria-live="polite"></div>
-          <div class="empty-state" id="empty-state" hidden>
-            <div class="empty-symbol" aria-hidden="true">＋</div>
-            <h3>注册第一个 MCP 后端</h3>
-            <p>连接远端 Streamable HTTP Server，并立即加入聚合目录。</p>
-            <button class="secondary pressable" id="empty-register" type="button">开始注册</button>
-          </div>
+        <section data-page="tool-groups" aria-label="HTTP 工具组" hidden>
+          <div class="context-note"><svg class="icon"><use href="#i-info"/></svg><p>一个工具组共享服务地址、上游凭证和访问权限。创建后可添加接口或导入 OpenAPI。</p></div>
+          <div class="list-toolbar"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="group-search" type="search" placeholder="搜索组名或 API 地址" aria-label="搜索工具组"></label><span class="list-count" id="group-count"></span></div>
+          <div class="list-panel"><div class="list-columns" aria-hidden="true"><span>工具组 / API 地址</span><span>工具 / 上游认证</span><span>访问权限</span><span>状态 / 操作</span></div><div class="backend-list" id="tool-group-list" aria-busy="true"></div><div class="empty-state" id="tool-group-empty" hidden><span class="empty-symbol"><svg class="icon"><use href="#i-braces"/></svg></span><h2>把已有 API 变成 AI 工具</h2><p>先创建工具组，再手工添加接口或从 OpenAPI 文档导入。</p><button class="primary" id="empty-group-button" type="button">创建工具组</button></div><div class="empty-state" id="group-no-results" hidden><h3>没有找到匹配的工具组</h3><p>试试其他关键词，或清除筛选条件。</p><button class="secondary" id="clear-group-search" type="button">清除筛选</button></div></div>
         </section>
 
-        <section class="panel activity-panel" id="activity">
-          <div class="panel-header"><div><h2>最近变更</h2><p>敏感值不会出现在活动记录中。</p></div></div>
-          <ol class="event-list" id="event-list"></ol>
-        </section>
+        <section data-page="activity" aria-label="变更记录" hidden><div class="section-inline activity-heading"><h2>最近 50 条变更</h2><span>敏感值不会出现在活动记录中。</span></div><div class="list-panel"><ol class="event-list" id="event-list"><li class="event-empty">正在读取配置…</li></ol></div></section>
       </div>
     </main>
   </div>
@@ -89,67 +81,49 @@
   <div class="scrim" id="scrim" hidden></div>
   <section class="inspector" id="inspector" role="dialog" aria-modal="true" aria-labelledby="inspector-title" hidden>
     <div class="drag-handle" id="drag-handle" aria-hidden="true"></div>
-    <header class="inspector-header glass">
-      <button class="icon-button pressable" id="close-inspector" type="button" aria-label="关闭">×</button>
-      <div><p class="eyebrow" id="inspector-kicker">新建配置</p><h2 id="inspector-title">注册 MCP 后端</h2></div>
-      <span class="revision" id="revision-label"></span>
+    <header class="inspector-header">
+      <div><span id="inspector-kicker" class="sr-only">新建配置</span><h2 id="inspector-title">添加 MCP 后端</h2><p>连接已有的 MCP 服务，将能力统一提供给客户端。</p><span class="revision" id="revision-label"></span></div>
+      <button class="icon-button" id="close-inspector" type="button" aria-label="关闭">×</button>
     </header>
     <form id="backend-form" novalidate>
       <div class="form-body">
         <section class="form-section">
-          <div class="section-heading"><span>1</span><div><h3>基本信息</h3><p>定义公开命名空间与 MCP 入口。</p></div></div>
+          <div class="section-heading"><span>01</span><div><h3>连接信息</h3><p>填写服务地址，并设置工具名称前缀。</p></div></div>
           <div class="field-grid">
-            <label class="field"><span>Backend ID</span><input id="field-id" name="id" required pattern="[A-Za-z0-9_-]{1,32}" placeholder="primary"><small>创建后不可修改</small></label>
-            <label class="field full"><span>Streamable HTTP URL</span><input id="field-url" name="url" type="url" required placeholder="https://mcp.example.com/mcp"></label>
-            <label class="field"><span>请求超时</span><input id="field-timeout" name="request_timeout" value="60s" placeholder="60s"></label>
-            <label class="switch-row"><input id="field-enabled" type="checkbox" checked><span class="switch" aria-hidden="true"></span><span><strong>启用后端</strong><small>关闭时保留配置但不连接</small></span></label>
-            <label class="switch-row"><input id="field-required" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>Required</strong><small>连接失败会影响 /readyz</small></span></label>
-            <label class="switch-row"><input id="field-insecure" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>允许本地 HTTP</strong><small>仅 loopback 开发地址</small></span></label>
+            <label class="field full"><span>后端标识</span><input id="field-id" name="id" required pattern="[A-Za-z0-9_-]{1,32}" placeholder="primary" autocomplete="off"><small>用于公开工具名称，例如 primary.search；创建后不可修改。</small></label>
+            <label class="field full"><span>MCP 服务地址</span><input id="field-url" name="url" type="url" required placeholder="https://mcp.example.com/mcp"><small>支持 Streamable HTTP 协议的 MCP 入口地址。</small></label>
+            <label class="switch-row"><input id="field-enabled" type="checkbox" checked><span class="switch" aria-hidden="true"></span><span><strong>启用后端</strong><small>停用时保留配置，不连接服务</small></span></label>
           </div>
         </section>
-
         <section class="form-section">
-          <div class="section-heading"><span>2</span><div><h3>访问控制</h3><p>Token 必须同时拥有列出的 Scope。</p></div></div>
-          <label class="field full"><span>Required Scopes</span><textarea id="field-scopes" rows="2" placeholder="mcp:primary.read, mcp:primary.write"></textarea><small>使用逗号、空格或换行分隔</small></label>
-        </section>
-
-        <section class="form-section">
-          <div class="section-heading"><span>3</span><div><h3>后端认证</h3><p>Secret 加密保存，编辑时留空即可保留。</p></div></div>
+          <div class="section-heading"><span>02</span><div><h3>上游认证</h3><p>MCPHub 连接此服务时使用的凭证。</p></div></div>
           <div class="segmented" role="group" aria-label="认证方式">
-            <button type="button" data-auth="headers" class="active">静态 Headers</button>
-            <button type="button" data-auth="oauth">OAuth 2.0</button>
-            <button type="button" data-auth="both">组合</button>
-            <button type="button" data-auth="none">无需认证</button>
+            <button type="button" data-auth="headers" class="active" aria-pressed="true">Header 凭证</button><button type="button" data-auth="oauth" aria-pressed="false">OAuth 2.0</button><button type="button" data-auth="both" aria-pressed="false">组合</button><button type="button" data-auth="none" aria-pressed="false">无需认证</button>
           </div>
-          <div id="headers-panel">
-            <div class="repeat-list" id="headers-list"></div>
-            <button class="text-button pressable" id="add-header" type="button">＋ 添加 Header</button>
-          </div>
-          <div id="oauth-panel" hidden>
-            <div class="field-grid">
-              <label class="field full"><span>Issuer</span><input id="oauth-issuer" type="url" placeholder="https://idp.example.com"></label>
-              <label class="field"><span>Client ID</span><input id="oauth-client-id" autocomplete="off"></label>
-              <label class="field"><span>Client Secret</span><input id="oauth-secret" type="password" autocomplete="new-password" placeholder="留空保留现有值"></label>
-              <label class="field full"><span>OAuth Scopes</span><input id="oauth-scopes" placeholder="crm.mcp"></label>
-            </div>
-          </div>
+          <div id="headers-panel"><div class="header-labels" aria-hidden="true"><span>Header 名称</span><span>凭证值</span></div><div class="repeat-list" id="headers-list"></div><button class="text-button" id="add-header" type="button">＋ 添加 Header</button></div>
+          <div id="oauth-panel" hidden><div class="field-grid">
+            <label class="field full"><span>Issuer</span><input id="oauth-issuer" type="url" placeholder="https://idp.example.com"></label>
+            <label class="field"><span>Client ID</span><input id="oauth-client-id" autocomplete="off"></label>
+            <label class="field"><span>Client Secret</span><input id="oauth-secret" type="password" autocomplete="new-password" placeholder="留空保留现有值"></label>
+            <label class="field full"><span>OAuth Scopes</span><input id="oauth-scopes" placeholder="crm.mcp"><small>向上游申请的权限，与客户端访问权限分别配置。</small></label>
+          </div></div>
+          <p class="field-note">凭证加密保存；编辑时留空保留原值。</p>
         </section>
-
-        <details class="form-section advanced">
-          <summary><span>高级设置</span><small>Tool 级 Scope 规则</small></summary>
-          <label class="field full"><span>Tool Rules（JSON）</span><textarea id="field-rules" rows="5" spellcheck="false" placeholder='[{"match":"admin.*","required_scopes":["mcp:admin"]}]'></textarea></label>
-        </details>
-
-        <div class="probe-result" id="probe-result" role="status" aria-live="polite" hidden></div>
-        <div class="form-error" id="form-error" role="alert" hidden></div>
+        <section class="form-section">
+          <div class="section-heading"><span>03</span><div><h3>客户端访问权限</h3><p>控制哪些客户端可以通过 MCPHub 调用此后端。</p></div></div>
+          <label class="field full"><span>所需 Scope</span><textarea id="field-scopes" rows="2" placeholder="mcp:primary.read, mcp:primary.write"></textarea><small>使用逗号、空格或换行分隔</small></label>
+          <p class="field-note">留空允许所有已认证客户端访问；填写多个时必须全部满足。</p>
+          <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">按工具名称匹配，为敏感操作追加所需 Scope。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="field-rules" rows="5" spellcheck="false" placeholder='[{"match":"admin.*","required_scopes":["mcp:admin"]}]'></textarea></label></details>
+        </section>
+        <details class="advanced"><summary><span>高级连接设置</span><small>超时、关键后端、本地 HTTP</small></summary><div class="field-grid">
+          <label class="field"><span>请求超时</span><input id="field-timeout" name="request_timeout" value="60s" placeholder="60s"></label>
+          <label class="switch-row"><input id="field-required" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>设为关键后端</strong><small>连接失败会使网关未就绪；普通后端会在后台重连。</small></span></label>
+          <label class="switch-row"><input id="field-insecure" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>允许本地 HTTP</strong><small>仅限 localhost 或回环 IP 的开发服务。</small></span></label>
+        </div></details>
+        <p class="form-hint">新接入的服务请先测试连接，再保存配置。</p>
+        <div class="probe-result" id="probe-result" role="status" aria-live="polite" hidden></div><div class="form-error" id="form-error" role="alert" hidden></div>
       </div>
-      <footer class="form-actions glass">
-        <button class="danger text-button" id="delete-button" type="button" hidden>删除</button>
-        <button class="text-button pressable" id="copy-button" type="button" hidden>复制配置</button>
-        <span class="action-spacer"></span>
-        <button class="secondary pressable" id="probe-button" type="button">测试连接</button>
-        <button class="primary pressable" id="save-button" type="submit">注册并启用</button>
-      </footer>
+      <footer class="form-actions"><button class="danger text-button" id="delete-button" type="button" hidden>删除</button><button class="text-button" id="copy-button" type="button" hidden>复制配置</button><span class="action-spacer"></span><button class="secondary" id="probe-button" type="button">测试连接</button><button class="primary" id="save-button" type="submit">保存后端</button></footer>
     </form>
   </section>
 
@@ -162,45 +136,54 @@
 
   <dialog class="editor-dialog" id="group-dialog" aria-labelledby="group-dialog-title">
     <form id="group-form" method="dialog" novalidate>
-      <header><div><p class="eyebrow">HTTP API Tools</p><h2 id="group-dialog-title">新建工具组</h2></div><button class="icon-button pressable dialog-close" type="button" aria-label="关闭">×</button></header>
+      <header><div><h2 id="group-dialog-title">新建工具组</h2><p>组内工具共享 API 地址、上游凭证和访问权限。</p></div><button class="icon-button dialog-close" type="button" aria-label="关闭">×</button></header>
       <div class="dialog-scroll">
-        <div class="field-grid">
-          <label class="field"><span>Group ID</span><input id="group-id" required pattern="[A-Za-z0-9_-]{1,32}" placeholder="crm"><small>公开工具前缀，创建后不可修改</small></label>
-          <label class="field"><span>请求超时</span><input id="group-timeout" value="60s"></label>
-          <label class="field full"><span>HTTPS Base URL</span><input id="group-base-url" type="url" required placeholder="https://api.example.com/v1"></label>
-          <label class="field"><span>最大响应字节</span><input id="group-response-limit" type="number" min="65536" max="16777216" value="1048576"></label>
-          <label class="switch-row"><input id="group-enabled" type="checkbox" checked><span class="switch" aria-hidden="true"></span><span><strong>启用工具组</strong><small>关闭后整组 tools 从目录移除</small></span></label>
-          <label class="field full"><span>Required Scopes</span><input id="group-scopes" placeholder="crm.read, crm.write"></label>
-          <label class="field full"><span>静态 Headers（JSON）</span><textarea id="group-headers" rows="3" spellcheck="false" placeholder='[{"name":"X-API-Key","value":"secret"}]'></textarea><small>编辑时省略 value 会保留原 Secret</small></label>
-          <label class="field full"><span>Tool Rules（JSON）</span><textarea id="group-rules" rows="3" spellcheck="false" placeholder='[{"match":"delete_*","required_scopes":["crm.write"]}]'></textarea></label>
-        </div>
-        <details class="form-section advanced"><summary><span>OAuth client_credentials</span><small>可选</small></summary>
-          <div class="field-grid">
-            <label class="field full"><span>Issuer</span><input id="group-oauth-issuer" type="url"></label>
-            <label class="field"><span>Client ID</span><input id="group-oauth-client-id"></label>
-            <label class="field"><span>Client Secret</span><input id="group-oauth-secret" type="password" autocomplete="new-password" placeholder="留空保留"></label>
-            <label class="field full"><span>OAuth Scopes</span><input id="group-oauth-scopes"></label>
-          </div>
-        </details>
         <div id="group-detail" hidden>
-          <div class="subpanel-header"><div><h3>组内 Tools</h3><p id="group-public-prefix"></p></div><div><button class="secondary pressable" id="add-http-tool" type="button">＋ HTTP API</button><button class="secondary pressable" id="add-openapi-import" type="button">导入 OpenAPI</button></div></div>
+          <div class="subpanel-header"><div><h3>组内工具</h3><p id="group-public-prefix"></p></div><div><button class="secondary" id="add-http-tool" type="button">＋ 添加接口</button><button class="primary" id="add-openapi-import" type="button">导入 OpenAPI</button></div></div>
           <div class="mini-list" id="group-tool-list"></div>
-          <div class="subpanel-header"><div><h3>OpenAPI 来源</h3></div></div>
-          <div class="mini-list" id="group-import-list"></div>
+          <div class="subpanel-header"><h3>OpenAPI 来源</h3></div><div class="mini-list" id="group-import-list"></div>
         </div>
+        <details class="group-configuration" id="group-config" open><summary><strong>连接与权限</strong><span>编辑工具组的共享配置</span></summary>
+          <section class="form-section">
+            <div class="section-heading"><span>01</span><div><h3>连接信息</h3><p>填写 API 基础地址；每个工具只需补充相对路径。</p></div></div>
+            <div class="field-grid">
+              <label class="field full"><span>工具组标识</span><input id="group-id" required pattern="[A-Za-z0-9_-]{1,32}" placeholder="crm" autocomplete="off"><small>例如 crm.search；创建后不可修改。</small></label>
+              <label class="field full"><span>API 基础地址</span><input id="group-base-url" type="url" required placeholder="https://api.example.com/v1"><small>仅支持 HTTPS；不要包含查询参数或凭证。</small></label>
+              <label class="switch-row"><input id="group-enabled" type="checkbox" checked><span class="switch" aria-hidden="true"></span><span><strong>启用工具组</strong><small>停用后整组工具不可见，配置仍会保留</small></span></label>
+            </div>
+          </section>
+          <section class="form-section">
+            <div class="section-heading"><span>02</span><div><h3>上游认证</h3><p>连接 API 服务的共享凭证，不需要认证时可留空。</p></div></div>
+            <div class="header-labels" aria-hidden="true"><span>Header 名称</span><span>凭证值</span></div><div class="repeat-list" id="group-headers-list"></div><button class="text-button" id="add-group-header" type="button">＋ 添加 Header</button>
+            <p class="field-note">凭证加密保存；编辑时留空保留原值。</p>
+            <details class="advanced" id="group-oauth-config"><summary><span>OAuth client_credentials</span><small>可选</small></summary><div class="field-grid">
+              <label class="field full"><span>Issuer</span><input id="group-oauth-issuer" type="url" placeholder="https://idp.example.com"></label>
+              <label class="field"><span>Client ID</span><input id="group-oauth-client-id" autocomplete="off"></label>
+              <label class="field"><span>Client Secret</span><input id="group-oauth-secret" type="password" autocomplete="new-password" placeholder="留空保留"></label>
+              <label class="field full"><span>OAuth Scopes</span><input id="group-oauth-scopes"></label>
+            </div></details>
+          </section>
+          <section class="form-section">
+            <div class="section-heading"><span>03</span><div><h3>客户端访问权限</h3><p>组内所有工具统一要求这些 Scope。</p></div></div>
+            <label class="field"><span>所需 Scope</span><input id="group-scopes" placeholder="crm.read, crm.write"><small>留空允许所有已认证客户端访问；填写多个时必须全部满足。</small></label>
+            <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">按工具名称匹配，为敏感操作追加所需 Scope。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="group-rules" rows="4" spellcheck="false" placeholder='[{"match":"delete_*","required_scopes":["crm.write"]}]'></textarea></label></details>
+          </section>
+          <details class="advanced"><summary><span>高级连接设置</span><small>超时与响应上限</small></summary><div class="field-grid"><label class="field"><span>请求超时</span><input id="group-timeout" value="60s"></label><label class="field"><span>最大响应字节</span><input id="group-response-limit" type="number" min="65536" max="16777216" value="1048576"><small>默认 1 MiB，可设置 64 KiB 至 16 MiB。</small></label></div></details>
+        </details>
+        <p class="form-hint" id="group-create-help">创建工具组后，继续添加接口或导入 OpenAPI 文档。</p>
         <div class="form-error" id="group-error" role="alert" hidden></div>
       </div>
-      <footer><button class="danger text-button" id="delete-group" type="button" hidden>删除工具组</button><span class="action-spacer"></span><button class="secondary pressable" id="probe-group" type="button" hidden>测试 Base URL</button><button class="primary pressable" id="save-group" type="submit">创建工具组</button></footer>
+      <footer><button class="danger text-button" id="delete-group" type="button" hidden>删除工具组</button><span class="action-spacer"></span><button class="secondary" id="probe-group" type="button" hidden>测试连接</button><button class="primary" id="save-group" type="submit">创建工具组</button></footer>
     </form>
   </dialog>
 
   <dialog class="editor-dialog compact-dialog" id="tool-dialog" aria-labelledby="tool-dialog-title">
     <form id="tool-form" method="dialog" novalidate>
-      <header><div><p class="eyebrow">手工 HTTP API</p><h2 id="tool-dialog-title">添加 Tool</h2></div><button class="icon-button pressable dialog-close" type="button" aria-label="关闭">×</button></header>
+      <header><div><h2 id="tool-dialog-title">添加 HTTP 接口</h2><p>定义一次 HTTP 请求，将它发布为可调用的 MCP 工具。</p></div><button class="icon-button pressable dialog-close" type="button" aria-label="关闭">×</button></header>
       <div class="dialog-scroll">
         <div class="field-grid">
-          <label class="field"><span>Tool name</span><input id="tool-name" required pattern="[A-Za-z0-9_.-]{1,95}"></label>
-          <label class="field"><span>Method</span><select id="tool-method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option></select></label>
+          <label class="field"><span>工具名称</span><input id="tool-name" required pattern="[A-Za-z0-9_.-]{1,95}"></label>
+          <label class="field"><span>请求方法</span><select id="tool-method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option></select></label>
           <label class="field full"><span>相对路径</span><input id="tool-path" required placeholder="/users/{id}"></label>
           <label class="field full"><span>描述</span><input id="tool-description"></label>
           <label class="switch-row"><input id="tool-enabled" type="checkbox" checked><span class="switch" aria-hidden="true"></span><span><strong>启用 Tool</strong></span></label>
@@ -219,12 +202,12 @@
 
   <dialog class="editor-dialog compact-dialog" id="import-dialog" aria-labelledby="import-dialog-title">
     <form id="import-form" method="dialog" novalidate>
-      <header><div><p class="eyebrow">OpenAPI 3.0 / 3.1</p><h2 id="import-dialog-title">导入 OpenAPI</h2></div><button class="icon-button pressable dialog-close" type="button" aria-label="关闭">×</button></header>
+      <header><div><h2 id="import-dialog-title">导入 OpenAPI</h2><p>支持 OpenAPI 3.0 / 3.1。先解析文档，再选择要发布的接口。</p></div><button class="icon-button pressable dialog-close" type="button" aria-label="关闭">×</button></header>
       <div class="dialog-scroll">
         <div class="field-grid">
-          <label class="field"><span>Import ID</span><input id="import-id" required pattern="[A-Za-z0-9_-]{1,32}"></label>
+          <label class="field"><span>导入标识</span><input id="import-id" required pattern="[A-Za-z0-9_-]{1,32}"></label>
           <label class="field"><span>来源</span><select id="import-origin"><option value="url">HTTPS URL</option><option value="upload">上传 JSON/YAML</option></select></label>
-          <label class="field full" id="import-url-field"><span>Spec URL</span><input id="import-url" type="url" placeholder="https://api.example.com/openapi.yaml"></label>
+          <label class="field full" id="import-url-field"><span>OpenAPI 文档地址</span><input id="import-url" type="url" placeholder="https://api.example.com/openapi.yaml"></label>
           <label class="field full" id="import-file-field" hidden><span>规格文件</span><input id="import-file" type="file" accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml"></label>
           <label class="field"><span>刷新周期</span><input id="import-interval" value="15m"></label>
         </div>

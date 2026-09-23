@@ -3,5 +3,6 @@
 .env.*
 config.yaml
 mcphub
+mcphub-cli
 coverage.out
 dist

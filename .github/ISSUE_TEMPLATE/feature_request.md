@@ -26,7 +26,7 @@ assignees: ""
 ### Scope check
 
 - [ ] I checked README's capabilities and known limits.
-- [ ] This request does not assume stdio, standalone legacy SSE, native TLS, a database, dynamic tenants/per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions.
+- [ ] This request does not assume stdio backends, standalone legacy SSE, native TLS, dynamic tenants/per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions.
 - [ ] I have included a narrow first slice and acceptance evidence.
 
 ## 中文
@@ -49,5 +49,5 @@ assignees: ""
 ### 范围确认
 
 - [ ] 我已检查 README 的能力与已知限制。
-- [ ] 该请求不依赖 stdio、独立旧 SSE、原生 TLS、数据库、动态租户/按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。
+- [ ] 该请求不依赖 stdio 后端接入、独立旧 SSE、原生 TLS、动态租户/按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。
 - [ ] 我提供了范围窄的第一步实现和验收证据。

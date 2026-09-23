@@ -33,7 +33,7 @@ result:
 - [ ] I added or updated a behavior-boundary test when the change warrants one.
 - [ ] I updated both `README.md` and `README.zh-CN.md` when user-facing semantics changed.
 - [ ] I removed secrets, tokens, private keys, and production personal data.
-- [ ] I did not add a promise for stdio, standalone legacy SSE, native TLS, Tasks, MCP Apps, or custom MCP extensions.
+- [ ] I did not add a promise for stdio backends, standalone legacy SSE, native TLS, Tasks, MCP Apps, or custom MCP extensions.
 
 ## 中文
 
@@ -70,4 +70,4 @@ result:
 - [ ] 需要时，我添加或更新了行为边界测试。
 - [ ] 用户可见语义变化时，我同时更新了 `README.md` 和 `README.zh-CN.md`。
 - [ ] 我已删除 secret、token、私钥和生产个人数据。
-- [ ] 我没有为 stdio、独立旧 SSE、原生 TLS、Tasks、MCP Apps 或自定义 MCP 扩展增加承诺。
+- [ ] 我没有为 stdio 后端接入、独立旧 SSE、原生 TLS、Tasks、MCP Apps 或自定义 MCP 扩展增加承诺。

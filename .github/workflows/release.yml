@@ -51,6 +51,12 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Check admin JavaScript syntax
+        run: |
+          for script in internal/app/adminui/*.js; do
+            node --input-type=module --check < "$script"
+          done
+
       - name: Build container
         run: docker build --tag "mcphub:${GITHUB_REF_NAME}" .
 
@@ -64,23 +70,31 @@ jobs:
           for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
             os="${target%/*}"
             arch="${target#*/}"
-            archive="mcphub_${GITHUB_REF_NAME}_${os}_${arch}.tar.gz"
-            stage="$(mktemp -d)"
-            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build \
-              -trimpath \
-              -ldflags="-s -w" \
-              -o "$stage/mcphub" \
-              ./cmd/mcphub
-            cp LICENSE README.md README.zh-CN.md config.example.yaml "$stage/"
-            tar \
-              --sort=name \
-              --mtime="@$source_date_epoch" \
-              --owner=0 \
-              --group=0 \
-              --numeric-owner \
-              -C "$stage" \
-              -czf "dist/$archive" \
-              LICENSE README.md README.zh-CN.md config.example.yaml mcphub
+            for binary in mcphub mcphub-cli; do
+              archive="${binary}_${GITHUB_REF_NAME}_${os}_${arch}.tar.gz"
+              stage="$(mktemp -d)"
+              CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build \
+                -trimpath \
+                -ldflags="-s -w" \
+                -o "$stage/$binary" \
+                "./cmd/$binary"
+              cp LICENSE README.md README.zh-CN.md "$stage/"
+              files=(LICENSE README.md README.zh-CN.md "$binary")
+              if [ "$binary" = mcphub ]; then
+                cp config.example.yaml "$stage/"
+                files+=(config.example.yaml)
+              fi
+              tar \
+                --sort=name \
+                --mtime="@$source_date_epoch" \
+                --owner=0 \
+                --group=0 \
+                --numeric-owner \
+                -C "$stage" \
+                -czf "dist/$archive" \
+                "${files[@]}"
+              rm -rf "$stage"
+            done
           done
           (
             cd dist
@@ -91,12 +105,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(find dist -maxdepth 1 -name 'mcphub_*.tar.gz' -type f | wc -l)" -eq 4
+          for binary in mcphub mcphub-cli; do
+            test "$(find dist -maxdepth 1 -name "${binary}_*.tar.gz" -type f | wc -l)" -eq 4
+          done
           (
             cd dist
             sha256sum --check SHA256SUMS
-            for archive in mcphub_*.tar.gz; do
-              test "$(tar -tzf "$archive" | sort | tr '\n' ' ')" = "LICENSE README.md README.zh-CN.md config.example.yaml mcphub "
+            for archive in *.tar.gz; do
+              case "$archive" in
+                mcphub-cli_*) expected="LICENSE README.md README.zh-CN.md mcphub-cli " ;;
+                mcphub_*) expected="LICENSE README.md README.zh-CN.md config.example.yaml mcphub " ;;
+                *) exit 1 ;;
+              esac
+              test "$(tar -tzf "$archive" | sort | tr '\n' ' ')" = "$expected"
             done
           )
 

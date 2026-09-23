@@ -1,9 +1,11 @@
 import { apiErrorMessage, getLocale, setLocale, t, translateDOM } from "./i18n.js";
+import { initShell, renderPage, renderSummary, renderRefreshState, updateRefreshState } from "./shell.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const state = {
+  overview: null,
   backends: [],
   groups: [],
   events: [],
@@ -60,27 +62,28 @@ async function api(path, options = {}) {
 async function refresh() {
   try {
     const [overview, backendData, groupData, eventData] = await Promise.all([
-      api("/overview"), api("/backends"), api("/tool-groups"), api("/events?limit=12"),
+      api("/overview"), api("/backends"), api("/tool-groups"), api("/events?limit=50"),
     ]);
     state.backends = backendData.backends || [];
     state.groups = groupData.tool_groups || [];
     state.events = eventData.events || [];
-    $("#metric-total").textContent = overview.total;
-    $("#metric-ready").textContent = overview.ready;
-    $("#metric-required").textContent = overview.required;
-    $("#metric-optional").textContent = overview.optional;
-    $("#metric-unavailable").textContent = overview.unavailable;
+    state.overview = overview;
+    renderSummary(overview);
+    updateRefreshState();
     renderBackends();
     renderToolGroups();
     renderEvents(state.events);
   } catch (error) {
-    announce(`${t("刷新失败")}：${error.message}`);
+    updateRefreshState(error);
   }
 }
 
 function renderBackends() {
   const query = $("#search").value.trim().toLowerCase();
-  const filtered = state.backends.filter((item) => `${item.id} ${item.url}`.toLowerCase().includes(query));
+  const status = $("#backend-filter").value;
+  const filtered = state.backends.filter((item) => `${item.id} ${item.url}`.toLowerCase().includes(query) && (status === "all" || item.runtime.state === status));
+  $("#backend-no-results").hidden = !state.backends.length || Boolean(filtered.length);
+  $("#backend-count").textContent = t("{count} 个后端", { count: filtered.length });
   elements.list.replaceChildren();
   elements.empty.hidden = state.backends.length !== 0;
   for (const backend of filtered) {
@@ -106,7 +109,7 @@ function renderBackends() {
     const capabilities = document.createElement("div");
     capabilities.className = "backend-meta";
     const capTitle = document.createElement("strong");
-    capTitle.textContent = `${backend.runtime.tools} tools · ${backend.runtime.resources} resources`;
+    capTitle.textContent = t("{tools} 工具 · {resources} 资源", backend.runtime);
     const capLabel = document.createElement("small");
     capLabel.textContent = backend.oauth ? "OAuth client_credentials" : backend.headers?.length ? t("静态 Headers") : t("无需后端认证");
     capabilities.append(capTitle, capLabel);
@@ -114,9 +117,10 @@ function renderBackends() {
     const policy = document.createElement("div");
     policy.className = "backend-meta";
     const policyTitle = document.createElement("strong");
-    policyTitle.textContent = backend.required ? "Required" : "Optional";
+    policyTitle.textContent = backend.required_scopes?.join(", ") || t("所有已认证客户端");
+    policyTitle.title = policyTitle.textContent;
     const policyLabel = document.createElement("small");
-    policyLabel.textContent = backend.required_scopes?.length ? `${backend.required_scopes.length} ${getLocale() === "en" ? "scopes" : "个 Scope"}` : t("无 Scope 限制");
+    policyLabel.textContent = backend.required ? t("关键后端") : t("普通后端");
     policy.append(policyTitle, policyLabel);
 
     const pill = document.createElement("span");
@@ -142,7 +146,7 @@ function renderBackends() {
     row.append(identity, capabilities, policy, actions);
     row.addEventListener("click", () => openInspector(backend));
     row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
+      if (event.target === row && (event.key === "Enter" || event.key === " ")) {
         event.preventDefault();
         openInspector(backend);
       }
@@ -154,10 +158,14 @@ function renderBackends() {
 
 function renderEvents(events) {
   elements.events.replaceChildren();
+  const recent = $("#recent-event-list");
+  recent.replaceChildren();
   if (!events.length) {
     const item = document.createElement("li");
-    item.textContent = t("还没有配置变更");
+    item.className = "event-empty";
+    item.textContent = t("暂无配置变更");
     elements.events.append(item);
+    recent.append(item.cloneNode(true));
     return;
   }
   for (const event of events) {
@@ -172,15 +180,17 @@ function renderEvents(events) {
     item.append(dot, copy, time);
     elements.events.append(item);
   }
+  for (const item of [...elements.events.children].slice(0, 3)) recent.append(item.cloneNode(true));
   translateDOM(elements.events);
+  translateDOM(recent);
 }
 
 function stateLabel(value) {
-  return t({ ready: "运行中", unavailable: "重连中", disabled: "已停用" }[value] || value);
+  return t({ ready: "已连接", unavailable: "连接异常", disabled: "已停用" }[value] || value);
 }
 
 function eventCopy(event) {
-  const actions = { bootstrap: "已从 YAML 导入", create: "已注册", update: "已更新", delete: "已删除" };
+  const actions = { bootstrap: "已从 YAML 导入", create: "已创建", update: "已更新", delete: "已删除", probe: "连接测试", refresh: "刷新来源" };
   return `${event.source_id || event.backend_id || t("系统")} · ${t(actions[event.action] || event.action)}${event.success ? "" : t("失败")}`;
 }
 
@@ -205,11 +215,11 @@ function openInspector(backend = null) {
   if (backend) fillForm(backend);
   $("#field-id").disabled = Boolean(backend);
   $("#inspector-kicker").textContent = backend ? t("编辑配置") : t("新建配置");
-  $("#inspector-title").textContent = backend ? backend.id : t("注册 MCP 后端");
+  $("#inspector-title").textContent = backend ? backend.id : t("添加 MCP 后端");
   $("#revision-label").textContent = backend ? `Revision ${backend.revision}` : "";
   elements.remove.hidden = !backend;
   elements.copy.hidden = !backend;
-  elements.save.textContent = backend ? t("保存并应用") : t("注册并启用");
+  elements.save.textContent = backend ? t("保存并应用") : t("保存后端");
   elements.inspector.hidden = false;
   elements.scrim.hidden = false;
   $(".app-shell").inert = true;
@@ -217,7 +227,7 @@ function openInspector(backend = null) {
   requestAnimationFrame(() => {
     setSheetPosition(sheetDimension());
     elements.scrim.style.opacity = "0";
-    animateSheet(0, 0, () => $("#field-id").focus());
+    animateSheet(0, 0, () => $(backend ? "#field-url" : "#field-id").focus());
   });
 }
 
@@ -233,7 +243,7 @@ function copyCurrent() {
   $("#revision-label").textContent = t("Secret 需重新填写");
   elements.remove.hidden = true;
   elements.copy.hidden = true;
-  elements.save.textContent = t("注册并启用");
+  elements.save.textContent = t("保存后端");
   for (const row of $$(".header-row", $("#headers-list"))) {
     row.dataset.configured = "false";
     const value = $(".header-value", row);
@@ -297,17 +307,24 @@ function fillForm(backend) {
 
 function setAuthMode(mode) {
   state.authMode = mode;
-  for (const button of $$(".segmented button")) button.classList.toggle("active", button.dataset.auth === mode);
+  for (const button of $$("[data-auth]")) {
+    button.classList.toggle("active", button.dataset.auth === mode);
+    button.setAttribute("aria-pressed", String(button.dataset.auth === mode));
+  }
   $("#headers-panel").hidden = mode !== "headers" && mode !== "both";
   $("#oauth-panel").hidden = mode !== "oauth" && mode !== "both";
+  for (const panel of [$("#headers-panel"), $("#oauth-panel")]) {
+    for (const input of $$("input", panel)) input.disabled = panel.hidden;
+  }
 }
 
-function addHeaderRow(name = "", value = "", configured = false) {
+function addHeaderRow(name = "", value = "", configured = false, list = $("#headers-list")) {
   const row = document.createElement("div");
   row.className = "header-row";
   row.dataset.configured = configured ? "true" : "false";
   const nameInput = document.createElement("input");
   nameInput.className = "header-name";
+  nameInput.autocomplete = "off";
   nameInput.value = name;
   nameInput.placeholder = t("Header 名称");
   nameInput.setAttribute("aria-label", t("Header 名称"));
@@ -325,7 +342,7 @@ function addHeaderRow(name = "", value = "", configured = false) {
   remove.textContent = "−";
   remove.addEventListener("click", () => row.remove());
   row.append(nameInput, valueInput, remove);
-  $("#headers-list").append(row);
+  list.append(row);
 }
 
 function collectInput() {
@@ -510,14 +527,17 @@ function setBusy(value, operation = "") {
   if (value && operation === "save") elements.save.textContent = t("正在应用…");
   else if (value && operation === "probe") elements.probe.textContent = t("正在测试…");
   else {
-    elements.save.textContent = state.editing ? t("保存并应用") : t("注册并启用");
+    elements.save.textContent = state.editing ? t("保存并应用") : t("保存后端");
     elements.probe.textContent = t("测试连接");
   }
 }
 
+let toastTimer;
 function announce(message) {
-  elements.live.textContent = "";
-  requestAnimationFrame(() => { elements.live.textContent = message; });
+  clearTimeout(toastTimer);
+  elements.live.textContent = message;
+  elements.live.classList.add("visible");
+  toastTimer = setTimeout(() => elements.live.classList.remove("visible"), 6000);
 }
 
 const motion = { value: 0, target: 0, velocity: 0, frame: 0, last: 0, completion: null };
@@ -708,13 +728,18 @@ function endDialogDrag(event) {
 }
 
 function renderToolGroups() {
+  const query = $("#group-search").value.trim().toLowerCase();
+  const filtered = state.groups.filter((group) => `${group.id} ${group.base_url}`.toLowerCase().includes(query));
+  $("#group-no-results").hidden = !state.groups.length || Boolean(filtered.length);
+  $("#group-count").textContent = t("{count} 个工具组", { count: filtered.length });
   elements.groupList.replaceChildren();
   elements.groupEmpty.hidden = state.groups.length !== 0;
-  for (const group of state.groups) {
+  for (const group of filtered) {
     const row = document.createElement("article");
     row.className = "backend-row";
     row.tabIndex = 0;
     row.setAttribute("role", "button");
+    row.setAttribute("aria-label", `${t("编辑")} ${group.id}`);
     const identity = document.createElement("div");
     identity.className = "backend-identity";
     const icon = document.createElement("div");
@@ -729,7 +754,12 @@ function renderToolGroups() {
     const capabilities = document.createElement("div"); capabilities.className = "backend-meta";
     capabilities.innerHTML = `<strong>${group.runtime.tools} HTTP tools</strong><small>${group.oauth ? "OAuth client_credentials" : group.headers?.length ? t("静态 Headers") : t("无需上游认证")}</small>`;
     const policy = document.createElement("div"); policy.className = "backend-meta";
-    policy.innerHTML = `<strong>${group.required_scopes?.length ? `${group.required_scopes.length} ${getLocale() === "en" ? "scopes" : "个 Scope"}` : t("无 Scope 限制")}</strong><small>${group.max_response_body_bytes} bytes ${t("响应上限")}</small>`;
+    const scopes = document.createElement("strong");
+    scopes.textContent = group.required_scopes?.join(", ") || t("所有已认证客户端");
+    scopes.title = scopes.textContent;
+    const limit = document.createElement("small");
+    limit.textContent = `${group.max_response_body_bytes / 1024} KiB ${t("响应上限")}`;
+    policy.append(scopes, limit);
     const actions = document.createElement("div"); actions.className = "row-actions";
     const pill = document.createElement("span"); pill.className = "state-pill";
     const dot = document.createElement("i"); dot.className = `status-dot ${group.enabled ? "ready" : "disabled"}`;
@@ -748,6 +778,10 @@ async function openGroupDialog(group = null) {
   const dialog = $("#group-dialog");
   $("#group-form").reset();
   $("#group-error").hidden = true;
+  $("#group-headers-list").replaceChildren();
+  $("#group-config").open = !group;
+  $("#group-oauth-config").open = Boolean(group?.oauth);
+  $("#group-create-help").hidden = Boolean(group);
   $("#group-id").disabled = Boolean(group);
   $("#group-response-limit").value = "1048576";
   $("#group-timeout").value = "60s";
@@ -765,7 +799,7 @@ async function openGroupDialog(group = null) {
     $("#group-enabled").checked = group.enabled;
     $("#group-scopes").value = (group.required_scopes || []).join(", ");
     $("#group-rules").value = group.tool_rules?.length ? JSON.stringify(group.tool_rules, null, 2) : "";
-    $("#group-headers").value = group.headers?.length ? JSON.stringify(group.headers.map((header) => ({ name: header.name })), null, 2) : "";
+    for (const header of group.headers || []) addHeaderRow(header.name, "", true, $("#group-headers-list"));
     if (group.oauth) {
       $("#group-oauth-issuer").value = group.oauth.issuer;
       $("#group-oauth-client-id").value = group.oauth.client_id;
@@ -773,10 +807,14 @@ async function openGroupDialog(group = null) {
       $("#group-oauth-secret").placeholder = t("已安全保存，留空保持");
     }
     $("#group-public-prefix").textContent = `${t("公开命名空间：")}${group.id}.*`;
-    await refreshGroupChildren(group.id);
   }
   showEditorDialog(dialog);
-  requestAnimationFrame(() => $(group ? "#group-base-url" : "#group-id").focus());
+  requestAnimationFrame(() => $(group ? "#add-http-tool" : "#group-id").focus());
+  if (group) {
+    $("#group-tool-list").textContent = t("正在读取配置…");
+    $("#group-import-list").replaceChildren();
+    try { await refreshGroupChildren(group.id); } catch (error) { showDialogError("group", error.message); }
+  }
 }
 
 async function refreshGroupChildren(groupID) {
@@ -817,9 +855,14 @@ async function refreshGroupChildren(groupID) {
 
 function collectGroupInput() {
   let headers = [], rules = [];
-  if ($("#group-headers").value.trim()) headers = JSON.parse($("#group-headers").value);
+  headers = $$(".header-row", $("#group-headers-list")).filter((row) => $(".header-name", row).value.trim()).map((row) => {
+    const header = { name: $(".header-name", row).value.trim() };
+    const value = $(".header-value", row).value;
+    if (value !== "") header.value = value;
+    return header;
+  });
   if ($("#group-rules").value.trim()) rules = JSON.parse($("#group-rules").value);
-  if (!Array.isArray(headers) || !Array.isArray(rules)) throw new Error(t("Headers 与 Tool Rules 必须是 JSON 数组"));
+  if (!Array.isArray(rules)) throw new Error(t("Tool Rules 必须是 JSON 数组"));
   const input = { id: $("#group-id").value.trim(), base_url: $("#group-base-url").value.trim(), enabled: $("#group-enabled").checked, required_scopes: splitValues($("#group-scopes").value), tool_rules: rules, request_timeout: $("#group-timeout").value.trim(), max_response_body_bytes: Number($("#group-response-limit").value), headers };
   if ($("#group-oauth-issuer").value.trim() || $("#group-oauth-client-id").value.trim()) {
     input.oauth = { type: "client_credentials", issuer: $("#group-oauth-issuer").value.trim(), client_id: $("#group-oauth-client-id").value.trim(), scopes: splitValues($("#group-oauth-scopes").value) };
@@ -830,14 +873,23 @@ function collectGroupInput() {
 
 async function saveGroup(event) {
   event.preventDefault();
+  if ($("#save-group").disabled) return;
   if (!event.currentTarget.reportValidity()) return;
   let input; try { input = collectGroupInput(); } catch (error) { showDialogError("group", error.message); return; }
   const editing = state.groupEditing;
+  $("#save-group").disabled = true;
   try {
     const saved = await api(editing ? `/tool-groups/${encodeURIComponent(editing.id)}` : "/tool-groups", { method: editing ? "PUT" : "POST", headers: editing ? { "If-Match": `"${editing.revision}"` } : {}, body: JSON.stringify(input) });
     state.groupEditing = saved;
-    closeEditorDialog($("#group-dialog")); announce(`${saved.id} ${editing ? t("已更新") : t("已创建")}`); await refresh();
-  } catch (error) { showDialogError("group", error.message); }
+    if (editing) closeEditorDialog($("#group-dialog"));
+    announce(`${saved.id} ${editing ? t("已更新") : t("已创建")}`);
+    await refresh();
+    if (!editing) { location.hash = "tool-groups"; await openGroupDialog(saved); }
+  } catch (error) {
+    showDialogError("group", error.message);
+  } finally {
+    $("#save-group").disabled = false;
+  }
 }
 
 function addParameterRow(parameter = {}) {
@@ -869,8 +921,8 @@ function addParameterRow(parameter = {}) {
 
 function openToolDialog(tool = null) {
 	  state.toolEditing = tool; $("#tool-form").reset(); $("#parameter-list").replaceChildren(); $("#tool-error").hidden = true;
-  $("#tool-name").disabled = Boolean(tool); $("#delete-tool").hidden = !tool; $("#save-tool").textContent = tool ? t("保存并应用") : t("添加 Tool");
-  $("#tool-dialog-title").textContent = tool ? `${t("编辑")} ${tool.name}` : t("添加 Tool");
+  $("#tool-name").disabled = Boolean(tool); $("#delete-tool").hidden = !tool; $("#save-tool").textContent = tool ? t("保存并应用") : t("添加 HTTP 接口");
+  $("#tool-dialog-title").textContent = tool ? `${t("编辑")} ${tool.name}` : t("添加 HTTP 接口");
 	  if (tool) { $("#tool-name").value = tool.name; $("#tool-method").value = tool.method; $("#tool-path").value = tool.path; $("#tool-description").value = tool.description; $("#tool-enabled").checked = tool.enabled; $("#tool-body-required").checked = tool.body_required; $("#tool-body-schema").value = tool.body_schema ? JSON.stringify(tool.body_schema, null, 2) : ""; $("#tool-output-schema").value = tool.output_schema ? JSON.stringify(tool.output_schema, null, 2) : ""; for (const parameter of tool.parameters || []) addParameterRow(parameter); if ([tool.body_schema, tool.output_schema, ...(tool.parameters || []).map((item) => item.schema)].some(hasUnsafeJSONNumber)) showDialogError("tool", t("Schema 含超出浏览器安全整数范围的数值；请使用管理 API 编辑，页面不会覆盖该配置。")); }
 	  renderToolRequestPreview();
 	  showEditorDialog($("#tool-dialog"));
@@ -950,7 +1002,12 @@ async function saveImport(event) {
   try { await api(`/tool-groups/${encodeURIComponent(state.groupEditing.id)}/imports`, { method: "POST", body: JSON.stringify(input) }); closeEditorDialog($("#import-dialog")); await refreshGroupChildren(state.groupEditing.id); await refresh(); announce(`${input.id} ${t("已导入")}`); } catch (error) { showDialogError("import", error.message); }
 }
 
-function showDialogError(kind, message) { const element = $(`#${kind}-error`); element.textContent = message; element.hidden = false; }
+function showDialogError(kind, message) {
+  const element = $(`#${kind}-error`);
+  element.textContent = message;
+  element.hidden = false;
+  element.scrollIntoView({ block: "nearest" });
+}
 
 $("#register-button").addEventListener("click", () => openInspector());
 $("#empty-register").addEventListener("click", () => openInspector());
@@ -960,6 +1017,11 @@ elements.form.addEventListener("submit", saveForm);
 elements.probe.addEventListener("click", probeForm);
 $("#add-header").addEventListener("click", () => addHeaderRow());
 $("#search").addEventListener("input", renderBackends);
+$("#backend-filter").addEventListener("change", renderBackends);
+$("#clear-backend-filter").addEventListener("click", () => { $("#search").value = ""; $("#backend-filter").value = "all"; renderBackends(); });
+$("#group-search").addEventListener("input", renderToolGroups);
+$("#clear-group-search").addEventListener("click", () => { $("#group-search").value = ""; renderToolGroups(); });
+$("#add-group-header").addEventListener("click", () => addHeaderRow("", "", false, $("#group-headers-list")));
 for (const button of $$(".segmented button")) button.addEventListener("click", () => setAuthMode(button.dataset.auth));
 
 elements.remove.addEventListener("click", () => {
@@ -1029,8 +1091,8 @@ function updateLanguageControl() {
 function updateOpenEditorsForLocale() {
   if (!elements.inspector.hidden) {
     $("#inspector-kicker").textContent = state.editing ? t("编辑配置") : t("新建配置");
-    $("#inspector-title").textContent = state.editing?.id || t("注册 MCP 后端");
-    elements.save.textContent = state.editing ? t("保存并应用") : t("注册并启用");
+    $("#inspector-title").textContent = state.editing?.id || t("添加 MCP 后端");
+    elements.save.textContent = state.editing ? t("保存并应用") : t("保存后端");
     elements.probe.textContent = t("测试连接");
   }
   if ($("#group-dialog").open) {
@@ -1039,8 +1101,8 @@ function updateOpenEditorsForLocale() {
     if (state.groupEditing) $("#group-public-prefix").textContent = `${t("公开命名空间：")}${state.groupEditing.id}.*`;
   }
   if ($("#tool-dialog").open) {
-    $("#tool-dialog-title").textContent = state.toolEditing ? `${t("编辑")} ${state.toolEditing.name}` : t("添加 Tool");
-    $("#save-tool").textContent = state.toolEditing ? t("保存并应用") : t("添加 Tool");
+    $("#tool-dialog-title").textContent = state.toolEditing ? `${t("编辑")} ${state.toolEditing.name}` : t("添加 HTTP 接口");
+    $("#save-tool").textContent = state.toolEditing ? t("保存并应用") : t("添加 HTTP 接口");
   }
 }
 
@@ -1049,6 +1111,9 @@ async function changeLanguage() {
   translateDOM(document);
   updateLanguageControl();
   updateOpenEditorsForLocale();
+  renderPage();
+  renderRefreshState();
+  if (state.overview) renderSummary(state.overview);
   renderBackends();
   renderToolGroups();
   renderEvents(state.events);
@@ -1060,5 +1125,6 @@ setLocale(getLocale());
 translateDOM(document);
 updateLanguageControl();
 $("#language-toggle").addEventListener("click", changeLanguage);
+initShell({ refresh, addBackend: () => openInspector(), addGroup: () => openGroupDialog() });
 refresh();
 setInterval(() => { if (!state.busy) refresh(); }, 5000);

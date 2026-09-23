@@ -36,8 +36,16 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Build binary
-        run: go build -trimpath ./cmd/mcphub
+      - name: Check admin JavaScript syntax
+        run: |
+          for script in internal/app/adminui/*.js; do
+            node --input-type=module --check < "$script"
+          done
+
+      - name: Build binaries
+        run: |
+          go build -trimpath -o ./mcphub ./cmd/mcphub
+          go build -trimpath -o ./mcphub-cli ./cmd/mcphub-cli
 
       - name: Build container
         run: docker build --tag mcphub:ci .

@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.2.0)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,28 +9,32 @@
 
 MCPHub 是一个面向远端 MCP Server 的聚合网关。它用一个 Streamable HTTP 入口连接多个后端，按 JWT 权限为每个请求生成可见的后端视图，并把工具、提示、资源和资源模板路由回正确的后端。
 
-MCPHub v1.2.0 仍是单进程 HTTP 聚合层，并新增了可选的仅回环地址管理平台、加密 SQLite 配置、托管 HTTP tools 和 OpenAPI 导入。当前仍没有指标端点、持久化远程 MCP 目录或集群协调。
+MCPHub v1.3.0 带来重新布局的本地管理 UI，以及独立的浏览器登录 CLI 和 stdio 到 HTTP 连接器。可选管理平台用于管理加密 SQLite 配置、HTTP tools 和 OpenAPI 导入。网关仍采用单进程架构，不提供指标端点、持久化远程 MCP 目录或集群协调。
 
 ## 架构
 
 ```mermaid
 flowchart LR
-    C[MCP client] -->|POST /mcp + Bearer JWT| H[MCPHub]
-    H -->|OIDC discovery + JWKS| I[OIDC issuer]
-    H -->|MCP Streamable HTTP| B1[Backend MCP server]
-    H -->|MCP Streamable HTTP| B2[Backend MCP server]
-    H -->|token-scoped catalog and calls| C
+    C[MCP HTTP 客户端] -->|POST /mcp + Bearer JWT| H[MCPHub]
+    S[本地 stdio MCP 客户端] --> CLI[mcphub-cli connect]
+    CLI -->|HTTPS + 用户 JWT| H
+    L[mcphub-cli login] -->|浏览器登录 + PKCE| I[OIDC 身份服务]
+    H -->|OIDC discovery + JWKS| I
+    H -->|MCP Streamable HTTP| B[MCP 后端服务]
+    H -->|托管 HTTP tools| A[REST APIs]
+    U[本地管理 UI] -->|仅回环访问| H
 ```
 
 ## 项目链接
 
 - [GitHub 仓库](https://github.com/SamuelSupe/mcphub)
+- [本地管理 UI 指南](#本地管理-ui)
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [Apache License 2.0](LICENSE)（Copyright 2026 SamuelSupe）
-- [v1.2.0 发行说明](RELEASE_NOTES_v1.2.0.md)、[v1.1.0 历史发行说明](RELEASE_NOTES_v1.1.0.md)、[v1.2.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.2.0)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.3.0 发行说明](RELEASE_NOTES_v1.3.0.md)、[v1.2.0 历史发行说明](RELEASE_NOTES_v1.2.0.md)、[v1.3.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.0)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-MCPHub v1.2.0 是当前最新版本；v1.1.0 和 v1.0.0 仍作为历史版本保留。
+MCPHub v1.3.0 是当前最新版本；v1.2.0 及更早版本仍作为历史版本保留。
 
 ## 能力与边界
 
@@ -40,19 +44,21 @@ MCPHub v1.2.0 是当前最新版本；v1.1.0 和 v1.0.0 仍作为历史版本保
 - 针对官方 Go MCP SDK v1.7.0 客户端的 `notifications/cancelled` 消息缺少 2026-07-28 metadata，Hub 入站和后端出站都会做兼容规范化，使取消或取消订阅后的同一逻辑 MCP session 仍可复用；这是互操作性 shim，不是自定义扩展。
 - 以 `backend.id` 为命名空间，改写资源 URI，避免不同后端的同名能力和 URI 冲突。
 - 使用 OIDC discovery 和 JWKS 验证 Bearer JWT；按后端 `required_scopes` 过滤目录和调用。
+- 提供独立的 `mcphub-cli` 程序，提供外部 OIDC 浏览器登录及本地 stdio 到 HTTP 的连接器，并自动刷新凭证。
 - 对原始后端 tool name 应用后端本地 `tool_rules` 和 Go `path.Match`；匹配规则的 scope 会合并去重，按 all-of 授权，并从 `tools/list` 隐藏未授权 tool。
 - 支持后端静态请求头，或 OAuth 2.0 `client_credentials`；两者不能同时提供 `Authorization`。
-- v1.2.0 管理平台默认使用中文并可持久切换到 English。工具组可以把手工 HTTP tool 和多个 OpenAPI 3.0/3.1 import 通过 `/mcp` 发布；组内共享 Base URL、Header、OAuth、scope 和 timeout，且不会暴露 raw HTTP proxy。
+- 本地管理 UI 分为概览、MCP 后端、HTTP 工具组和变更记录，默认使用中文并可持久切换到 English。工具组可以把手工 HTTP tool 和多个 OpenAPI 3.0/3.1 import 通过 `/mcp` 发布；组内共享 Base URL、Header、OAuth、scope 和 timeout，且不会暴露 raw HTTP proxy。
 - 提供健康、就绪和 RFC 9728 Protected Resource Metadata 端点；配置支持 SIGHUP 热重载。
 
 后端连接失败时，MCPHub 会重试并保留已知的后端目录；目录可能仍可列出，但具体调用会在连接恢复前失败。启动时不会因为 required 后端暂时不可用而退出，`/readyz` 会保持 503；SIGHUP 创建新运行时则要求 candidate 中的 required 后端首次连接成功。后端产生的 JSON-RPC error 原样返回。网络或 transport 失败对外只返回 `backend <id> unavailable`，不会泄露内部 backend URL、query 或 credential。后端重连时，所有 tracked resource subscription 必须全部恢复成功后才会标记 ready；任一恢复失败都会保持 unavailable 并触发后续重连。
 
 ## 快速开始
 
-要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装带版本标签的 v1.2.0 命令：
+要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装 v1.3.0 服务端和可选 CLI：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.2.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.3.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub-cli@v1.3.0
 ```
 
 如果从源码构建，请先复制示例并设置其中的环境变量：
@@ -85,19 +91,95 @@ go run ./cmd/mcphub validate --config ./config.yaml
 go run ./cmd/mcphub serve --config ./config.yaml
 ```
 
-### v1.2.0 预构建下载
+### 浏览器登录与本地连接器
 
-[v1.2.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.2.0) 提供以下归档文件和校验文件：
+`mcphub-cli` 在用户的 macOS 或 Linux 电脑上运行，提供 `login`、`connect`、`status`、`logout`。服务端程序 `mcphub` 提供 `serve`、`validate`。可下载下方对应平台的 CLI 包、使用上文 Go 命令安装，或从当前源码构建后将它放入 PATH：
 
-| 平台 | 下载 |
+```bash
+go build -trimpath -o ./mcphub-cli ./cmd/mcphub-cli
+```
+
+发布工作流分别生成服务端的 `mcphub_<version>_<os>_<arch>.tar.gz` 和客户端的 `mcphub-cli_<version>_<os>_<arch>.tar.gz`，用户电脑只需安装 CLI 包。服务端继续使用现有 `auth.issuer` 和 JWT scope 策略完成认证与授权。
+
+先在该身份服务注册一个 **公开原生 OAuth 客户端**，启用授权码、refresh token、PKCE S256，以及 token endpoint 的 `none` 认证方式。允许回调 `http://127.0.0.1:<port>/oauth/callback`；支持原生客户端的服务可允许随机回环端口，否则注册固定端口并传入 `--callback-port 8765`。Discovery 必须声明支持 S256。身份服务签发的 JWT **access token** 必须包含完整 MCPHub 公开 URL（含 `/mcp`）作为 audience，并携带 `sub`、`exp` 和所需 scope。本机无需保存 client secret。
+
+```bash
+mcphub-cli login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+mcphub-cli status --profile work
+```
+
+`login` 打开系统浏览器，最多等待 5 分钟接收本机回调。打开失败时，会打印可在同一台电脑浏览器中访问的授权链接。它校验 state/issuer，并完成一次已认证的 MCP 握手，成功后才替换原有凭证；失败或取消会保留原有登录。重复传入 `--scope` 可指定申请的权限，未指定时使用认证 challenge 或资源 metadata 的默认值；身份服务声明支持时会追加 `offline_access`。若未签发 refresh token，仍可登录，但会明确提示到期后需要重新登录。
+
+在支持 stdio 的 MCP 客户端中配置以下启动命令，将路径替换为已安装二进制的绝对路径：
+
+```json
+{
+  "mcpServers": {
+    "mcphub": {
+      "command": "/absolute/path/to/mcphub-cli",
+      "args": ["connect", "--profile", "work"]
+    }
+  }
+}
+```
+
+`connect` 读取 profile，仅向保存的 MCPHub 地址附加 Bearer token，在到期前自动刷新凭证。工具、提示词、资源、分页、进度与订阅均通过连接器转发，公开名称和 URI 保持一致；取消 stdio 调用会关闭对应 HTTP 响应流。stdout 只输出 MCP 消息，诊断写入 stderr。连接器不会弹出浏览器；401 最多刷新重试一次，403 提示缺失的 scope，网络失败不会自动重放操作。
+
+```bash
+# 复用已保存的服务地址和 client ID；覆盖 scope 时列出所有需要的权限。
+mcphub-cli login --profile work --scope mcp:primary.read
+mcphub-cli logout --profile work
+```
+
+默认 profile 为 `default`，数据保存在 `~/.mcphub/`，目录权限 `0700`、文件权限 `0600`。已有 profile 可直接由 `mcphub-cli` 使用，无需迁移。Token 以本地 JSON 保存，**不做加密**；不要放入共享目录或其他用户可读取的备份。原子写入与按 profile 的进程间锁保证多个连接器能够安全轮换 refresh token。`status` 仅显示本地缓存状态、到期时间和能否续期，不输出 Token。`logout` 清除本地 Token、保留非敏感连接设置，使连接器后续请求停止并要求登录；已经接受的请求可能继续完成。它不会吊销身份服务中的 Token 或退出浏览器会话。重新登录后，需要重启该 profile 的已有连接器。
+
+stdio 仅用于**本地连接器**，MCPHub 服务端和后端连接仍使用 HTTP。首版不包含 SSH/device-code 登录、动态客户端注册、Token 导出、内置用户账号、管理平台登录或第三方后端交互授权。
+
+### v1.3.0 预构建下载
+
+[v1.3.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.0) 分别提供服务端和客户端归档。运行网关的机器安装 `mcphub`，用户电脑安装 `mcphub-cli`。
+
+| 平台 | 服务端 | 登录 CLI 与本地连接器 |
+| --- | --- | --- |
+| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_linux_arm64.tar.gz) |
+
+下载后先与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/SHA256SUMS) 中对应条目核对 SHA-256，再解压并将可执行文件放入 PATH。每个包包含许可证和中英文 README；服务端包另附 `config.example.yaml`。
+
+## 本地管理 UI
+
+启用内嵌管理 UI 后，可直接配置连接，无需修改 backend YAML。新部署可将以下内容保存为 `config.yaml`，把 `MCPHUB_PUBLIC_URL`、`MCPHUB_AUTH_ISSUER` 设置为真实的 HTTPS 网关与身份服务地址，并通过 secret store 提供 Base64 编码的 32 字节 `MCPHUB_CONFIG_KEY`。密钥只生成一次（例如使用 `openssl rand -base64 32`），重启和升级时保留并安全保存。数据库目录需要可写。
+
+```yaml
+server:
+  listen: "127.0.0.1:8080"
+  public_url: ${MCPHUB_PUBLIC_URL}
+auth:
+  issuer: ${MCPHUB_AUTH_ISSUER}
+admin:
+  enabled: true
+  listen: "127.0.0.1:8081"
+  database_path: ./data/mcphub.db
+  encryption_key_env: MCPHUB_CONFIG_KEY
+backends: []
+```
+
+先运行 `mcphub validate --config config.yaml`，再运行 `mcphub serve --config config.yaml`，在网关所在机器打开[本地控制台](http://127.0.0.1:8081/)。管理端没有登录机制，必须保持仅回环访问。网关仍需可用的 OIDC 身份服务才能就绪并认证 MCP 客户端。
+
+| 页面 | 主要用途 |
 | --- | --- |
-| macOS amd64 | [mcphub_v1.2.0_darwin_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_darwin_amd64.tar.gz) |
-| macOS arm64 | [mcphub_v1.2.0_darwin_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub_v1.2.0_linux_amd64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub_v1.2.0_linux_arm64.tar.gz](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/mcphub_v1.2.0_linux_arm64.tar.gz) |
-| 校验和 | [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.2.0/SHA256SUMS) |
+| 概览 | 查看后端就绪状态、工具组与工具数量、最近变更，并选择服务接入方式。 |
+| MCP 后端 | 连接已有的 Streamable HTTP MCP 服务；按标识或地址搜索、按状态筛选、测试连接和管理配置。 |
+| HTTP 工具组 | 将 REST API 转成 MCP 工具；创建组后添加 HTTP 接口，或解析 OpenAPI 文档并选择要发布的接口。 |
+| 变更记录 | 查看最近 50 条配置变更，敏感值经过脱敏。 |
 
-上一版 v1.0.0 请参见其[发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v1.0.0)和[历史发行说明](RELEASE_NOTES_v1.0.0.md)。
+两类编辑器都按 **连接信息 → 上游认证 → 客户端访问权限** 配置。上游 Header/OAuth 是 MCPHub 调用服务的凭证；所需 Scope 决定客户端能否使用后端或工具组：留空允许所有已认证客户端，填写多个时必须**全部满足**。工具级规则可为选定操作追加 Scope；高级连接配置按需展开。编辑已有凭证时，值留空会保留原值；删除 Header 行会移除对应凭证。
+
+多个 MCP endpoint 如需共享访问策略，可配置相同的所需 Scope，再由身份服务将该 Scope 授予对应用户。HTTP 工具组用于同一 REST API 内共享连接与权限，不用于组合多个 MCP 后端。MCPHub 不提供独立的 endpoint 分组、角色或用户目录，也不解析 JWT 的 `roles`/`groups` claim。
+
+语言控件可切换中文与 English。刷新会重新读取当前配置并显示最近成功更新时间；失败时保留错误提示与重试入口。
 
 ## 配置
 
@@ -133,7 +215,7 @@ scope 取自 JWT 的 `scope` 和 `scp` 两个 claim：`scope` 只接受空格分
 
 ### `admin`
 
-尚未发布的 v1.2.0 管理平台默认关闭。启用后，它通过独立、无认证的回环监听器提供嵌入式 UI 和 JSON API，管理 backend 和工具组配置；`server`、`auth` 和 `admin` 仍由 YAML 管理并需要重启才能修改。
+本地管理平台默认关闭。启用后，它通过独立、无认证的回环监听器提供嵌入式 UI 和 JSON API，管理 backend 和工具组配置；`server`、`auth` 和 `admin` 仍由 YAML 管理并需要重启才能修改。
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -148,7 +230,7 @@ scope 取自 JWT 的 `scope` 和 `scp` 两个 claim：`scope` 只接受空格分
 
 JSON API 位于 `/api/v1`。单项 backend 响应携带 `ETag`；更新和删除必须通过 `If-Match` 提交该 revision，过期写入返回 `409 revision_conflict`。Secret 字段只返回是否已配置；编辑时省略 Secret 值表示保留，省略对应 Header 或 OAuth 配置表示删除。审计事件的 actor 固定为 `local`，只记录脱敏结果。
 
-#### 工具组与托管 HTTP API tool（v1.2.0）
+#### 工具组与托管 HTTP API tool
 
 工具组是管理 API 中的对象，不是 YAML 配置。每个组统一持有其 tool 使用的 HTTPS Base URL、静态 Header 或 OAuth 2.0 `client_credentials`、JWT required scope 和请求 timeout；不要在每个 tool 中重复配置凭证。Header 值和 OAuth client secret 加密存储在 SQLite，API 只返回“已配置/未配置”标记。工具组 scope 仍采用 backend 相同的 all-of 语义；可选的组内 tool 规则可以为选定 tool 追加 scope。
 
@@ -168,9 +250,11 @@ JSON API 位于 `/api/v1`。单项 backend 响应携带 `ETag`；更新和删除
 
 工具组 Base URL 和 OpenAPI source URL 必须使用 HTTPS；工具组 HTTP 请求和 source 抓取都不跟随重定向。若 source 与工具组是不同 origin，抓取时绝不会发送该组的静态 Header 或 OAuth secret。OpenAPI 文档上限为 5 MiB，携带文档的请求 body 上限为 6 MiB，HTTP tool 响应默认上限为 1 MiB；响应上限可配置为 64 KiB 至 16 MiB。URL-backed import 默认每 15 分钟自动刷新（可设为 1 分钟至 24 小时）；刷新失败时保留 last-known-good 文档和 tools，并采用退避重试。
 
-#### v1.2.0 升级说明
+#### v1.3.0 升级说明
 
-`admin.enabled` 为 `false` 时，现有 v1.1.0 YAML-only 部署不变。要采用 v1.2.0 管理平台，请配置回环 `admin` listener，提供 Base64 编码的 32 字节 `MCPHUB_CONFIG_KEY`，并为 SQLite 路径准备可写卷。首次启动会在一个事务中导入已有 YAML backends；bootstrap 标记写入后 SQLite 成为唯一 backend 来源，之后修改 YAML backend 不再生效。工具组、手工 HTTP tool 和 OpenAPI import 请通过 `/api/v1/tool-groups` 创建；由于这些对象没有 YAML 表示，不提供 YAML migration。
+从 v1.2.0 升级不需要迁移配置或数据库 schema。保留现有 SQLite 数据库和相同的 `MCPHUB_CONFIG_KEY`，替换二进制前备份数据库并单独安全保管密钥；重启服务并刷新浏览器即可加载新版 UI。客户端机器需单独安装 `mcphub-cli`，并在身份服务中注册公开 OAuth 客户端。
+
+`admin.enabled` 为 `false` 时，现有 YAML-only 部署不变。首次启用本地管理时，请配置回环 `admin` listener，提供 Base64 编码的 32 字节 `MCPHUB_CONFIG_KEY`，并为 SQLite 路径准备可写卷。首次启动会在一个事务中导入已有 YAML backends；bootstrap 标记写入后 SQLite 成为唯一 backend 来源，之后修改 YAML backend 不再生效。工具组、手工 HTTP tool 和 OpenAPI import 请通过 `/api/v1/tool-groups` 创建；由于这些对象没有 YAML 表示，不提供 YAML migration。
 
 ### `backends`
 
@@ -289,13 +373,13 @@ docker run --rm \
 - 所有 HTTP 路由在 request body 被消费或关闭前都保持 `request_timeout` 读取 deadline，因此未认证或被拒绝请求的慢 body 也有界。`subscriptions/listen` POST 只有在 body 读完后才不受普通 response 写入和 request context timeout 限制。
 - 后端 SSE 响应保持 streaming passthrough。progress 检查每个 event 最多缓存 1 MiB；超大 event 原样转发但跳过 progress 检查。
 - 已确认的 2026 resource subscription ID 会把更新映射回原订阅 URI，包括 update event URI 不同的情况；timeout、取消订阅和 session/重连清理会删除映射。
-- 当前开发版的管理 API 没有登录机制。配置校验强制它使用数字回环地址，并拒绝跨域和意外 Host 请求，同时设置严格 CSP；不要通过公网反向代理暴露。
+- 管理 API 没有登录机制。配置校验强制它使用数字回环地址，并拒绝跨域和意外 Host 请求，同时设置严格 CSP；不要通过公网反向代理暴露。
 - `MCPHUB_CONFIG_KEY` 应放在 YAML 和数据库备份之外安全保存。SQLite 文件权限为 `0600`，但恢复其中 Secret 必须保留完全相同的 32 字节密钥。
 
 ## 已知限制与排障提示
 
 - 本地管理平台只持久化 backend 和工具组配置；当前仍没有指标、持久化 MCP 目录、跨实例共享订阅或高可用协调，每个进程维护自己的后端连接、目录和 token view。
-- 当前开发版不提供管理用户/远程管理认证、stdio、独立旧式 GET SSE 端点、原生 TLS、动态租户/按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展；TLS 和外部限流由反向代理负责。
+- 当前版本不提供管理用户/远程管理认证、stdio 后端接入、独立旧式 GET SSE 端点、原生 TLS、动态租户/按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本地 `connect` 命令提供到 HTTP 网关的 stdio 连接；TLS 和外部限流由反向代理负责。
 - 聚合器只声明并实现 tools、prompts、resources（含订阅）和 completions 能力；后端声明的其他能力不会自动变成网关能力。非法名称、非法 URI 模板和 SDK 拒绝的元数据会被省略。
 - 后端断线时保留 last-known-good 目录，但调用需要实时连接；required 后端会使 `/readyz` 变为 503，optional 后端不会阻塞整体就绪。
 - `server.refresh_interval` 是最大刷新周期，后端返回更短 TTL 时会更快刷新；不会提供强制即时刷新 API。

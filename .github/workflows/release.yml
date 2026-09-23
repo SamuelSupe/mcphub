@@ -13,8 +13,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  windows-cli:
+    uses: ./.github/workflows/windows-cli.yml
+    permissions:
+      contents: read
+
   release:
     if: github.repository == 'SamuelSupe/mcphub'
+    needs: windows-cli
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -96,9 +102,23 @@ jobs:
               rm -rf "$stage"
             done
           done
+          for arch in amd64 arm64; do
+            archive="mcphub-cli_${GITHUB_REF_NAME}_windows_${arch}.zip"
+            stage="$(mktemp -d)"
+            CGO_ENABLED=0 GOOS=windows GOARCH="$arch" go build \
+              -trimpath -ldflags="-s -w" \
+              -o "$stage/mcphub-cli.exe" ./cmd/mcphub-cli
+            cp LICENSE README.md README.zh-CN.md "$stage/"
+            touch -d "@$source_date_epoch" "$stage/"*
+            (
+              cd "$stage"
+              TZ=UTC zip -X -q "$GITHUB_WORKSPACE/dist/$archive" LICENSE README.md README.zh-CN.md mcphub-cli.exe
+            )
+            rm -rf "$stage"
+          done
           (
             cd dist
-            sha256sum *.tar.gz > SHA256SUMS
+            sha256sum *.tar.gz *.zip > SHA256SUMS
           )
 
       - name: Verify release archives
@@ -108,6 +128,7 @@ jobs:
           for binary in mcphub mcphub-cli; do
             test "$(find dist -maxdepth 1 -name "${binary}_*.tar.gz" -type f | wc -l)" -eq 4
           done
+          test "$(find dist -maxdepth 1 -name 'mcphub-cli_*_windows_*.zip' -type f | wc -l)" -eq 2
           (
             cd dist
             sha256sum --check SHA256SUMS
@@ -119,6 +140,9 @@ jobs:
               esac
               test "$(tar -tzf "$archive" | sort | tr '\n' ' ')" = "$expected"
             done
+            for archive in *.zip; do
+              test "$(unzip -Z1 "$archive" | sort | tr '\n' ' ')" = "LICENSE README.md README.zh-CN.md mcphub-cli.exe "
+            done
           )
 
       - name: Publish GitHub Release
@@ -127,6 +151,7 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             dist/*.tar.gz \
+            dist/*.zip \
             dist/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \

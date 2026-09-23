@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -93,17 +91,10 @@ func (s *Store) locked(ctx context.Context, name string, fn func() error) error 
 	if !profileName.MatchString(name) {
 		return errors.New("profile must contain 1-64 letters, digits, underscores or hyphens, starting with a letter or digit")
 	}
-	if err := os.MkdirAll(s.Dir, 0700); err != nil {
+	if err := prepareCredentialDir(s.Dir); err != nil {
 		return err
 	}
-	info, err := os.Lstat(s.Dir)
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
-		return errors.New("credential directory must be a real directory accessible only by its owner (0700)")
-	}
-	lock, err := privateFile(filepath.Join(s.Dir, name+".lock"), unix.O_RDWR|unix.O_CREAT)
+	lock, err := privateFile(filepath.Join(s.Dir, name+".lock"), os.O_RDWR|os.O_CREATE)
 	if err != nil {
 		return err
 	}
@@ -111,12 +102,12 @@ func (s *Store) locked(ctx context.Context, name string, fn func() error) error 
 	ctx, cancel := context.WithTimeout(ctx, 35*time.Second)
 	defer cancel()
 	for {
-		err = unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB)
-		if err == nil {
-			break
-		}
-		if err != unix.EWOULDBLOCK && err != unix.EAGAIN {
+		acquired, err := tryCredentialLock(lock)
+		if err != nil {
 			return err
+		}
+		if acquired {
+			break
 		}
 		select {
 		case <-ctx.Done():
@@ -124,35 +115,15 @@ func (s *Store) locked(ctx context.Context, name string, fn func() error) error 
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
-	defer unix.Flock(int(lock.Fd()), unix.LOCK_UN)
+	defer unlockCredentialFile(lock)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return fn()
 }
 
-func privateFile(path string, flags int) (*os.File, error) {
-	fd, err := unix.Open(path, flags|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
-	if err != nil {
-		return nil, err
-	}
-	f := os.NewFile(uintptr(fd), path)
-	info, err := f.Stat()
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-	var stat unix.Stat_t
-	err = unix.Fstat(fd, &stat)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || stat.Uid != uint32(os.Geteuid()) {
-		f.Close()
-		return nil, errors.New("credential files must be regular files owned by the current user with permissions 0600")
-	}
-	return f, nil
-}
-
 func (s *Store) load(name string) (*profile, error) {
-	f, err := privateFile(filepath.Join(s.Dir, name+".json"), unix.O_RDONLY)
+	f, err := privateFile(filepath.Join(s.Dir, name+".json"), os.O_RDONLY)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +150,7 @@ func (s *Store) save(name string, p *profile) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(s.Dir, ".credentials-*")
+	f, err := privateFile(filepath.Join(s.Dir, ".credentials-"+rand.Text()), os.O_RDWR|os.O_CREATE|os.O_EXCL)
 	if err != nil {
 		return err
 	}
@@ -194,16 +165,5 @@ func (s *Store) save(name string, p *profile) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(f.Name(), filepath.Join(s.Dir, name+".json")); err != nil {
-		return err
-	}
-	dir, err := os.Open(s.Dir)
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	if err := dir.Sync(); err != nil {
-		return fmt.Errorf("sync credential directory: %w", err)
-	}
-	return nil
+	return replaceCredentialFile(f.Name(), filepath.Join(s.Dir, name+".json"))
 }

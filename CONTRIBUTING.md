@@ -6,7 +6,7 @@
 
 Thank you for contributing to MCPHub. Please keep changes small, observable, and aligned with the current HTTP aggregation boundary.
 
-This public repository is [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub), documenting v1.3.0 with module path `github.com/SamuelSupe/mcphub`. The project is released under the [Apache License 2.0](LICENSE); see the [v1.3.0 release notes](RELEASE_NOTES_v1.3.0.md) for the shipped scope. Earlier releases remain available as historical references.
+This public repository is [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub), documenting v1.3.1 with module path `github.com/SamuelSupe/mcphub`. The project is released under the [Apache License 2.0](LICENSE); see the [v1.3.1 release notes](RELEASE_NOTES_v1.3.1.md) for the shipped scope. Earlier releases remain available as historical references.
 
 ### Before you start
 
@@ -49,6 +49,8 @@ CGO_ENABLED=0 MCPHUB_BROWSER_QA=1 go test ./internal/client -run '^TestNativeBro
 
 For admin UI changes, validate the served pages in local Chrome: navigation, search/filter, editors, error/empty states, language switching, and a narrow viewport. The UI is embedded by Go and has no frontend build step; rebuilding the server is required to serve changed assets. Check JavaScript syntax with `node --check` for `app.js`, `shell.js`, and `i18n.js`.
 
+Windows CLI checks run on native x64 and ARM64 GitHub runners through `.github/workflows/windows-cli.yml`, reused by CI and release gates. They exercise login/refresh/connector flows, cross-process locks, DACL rejection, file replacement, and executable commands. Cross-compiling alone does not validate Windows filesystem behavior.
+
 ### Pull requests
 
 - Use a focused title that states the user-visible or operational change.
@@ -65,7 +67,7 @@ Documentation must reflect the current code, not a planned design. Keep `README.
 
 感谢你为 MCPHub 贡献代码。请让改动保持聚焦、可观察，并符合当前的 HTTP 聚合边界。
 
-本公开仓库是 [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub)，当前文档对应 v1.3.0，module path 为 `github.com/SamuelSupe/mcphub`。项目采用 [Apache License 2.0](LICENSE)；已发布范围见 [v1.3.0 发行说明](RELEASE_NOTES_v1.3.0.md)。更早版本仍作为历史参考保留。
+本公开仓库是 [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub)，当前文档对应 v1.3.1，module path 为 `github.com/SamuelSupe/mcphub`。项目采用 [Apache License 2.0](LICENSE)；已发布范围见 [v1.3.1 发行说明](RELEASE_NOTES_v1.3.1.md)。更早版本仍作为历史参考保留。
 
 ### 开始前
 
@@ -107,6 +109,8 @@ CGO_ENABLED=0 MCPHUB_BROWSER_QA=1 go test ./internal/client -run '^TestNativeBro
 ```
 
 管理 UI 变更应在本机 Chrome 验证实际页面：导航、搜索/筛选、编辑器、错误/空状态、语言切换及窄屏布局。UI 由 Go 内嵌，无需前端构建步骤；修改静态资源后需要重新构建服务端。对 `app.js`、`shell.js` 和 `i18n.js` 使用 `node --check` 做语法检查。
+
+Windows CLI 通过 `.github/workflows/windows-cli.yml` 在原生 x64、ARM64 GitHub runner 上验证，CI 与发布共用此流程。检查覆盖登录/刷新/连接器、进程间锁、DACL 拒绝策略、文件替换与可执行程序命令。仅交叉编译不能验证 Windows 文件系统行为。
 
 ### Pull Request
 

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -52,11 +53,12 @@ type loginFixture struct {
 	rejectAccess              atomic.Bool
 	slowStarted, slowCanceled chan struct{}
 	subscribed, unsubscribed  chan string
+	subscriptionReady         chan struct{}
 }
 
 func newLoginFixture(t *testing.T) *loginFixture {
 	t.Helper()
-	f := &loginFixture{t: t, store: &Store{Dir: filepath.Join(t.TempDir(), "credentials")}, codes: make(map[string]authCode), refresh: make(map[string]string), slowStarted: make(chan struct{}, 8), slowCanceled: make(chan struct{}, 8), subscribed: make(chan string, 8), unsubscribed: make(chan string, 8)}
+	f := &loginFixture{t: t, store: &Store{Dir: filepath.Join(t.TempDir(), "credentials")}, codes: make(map[string]authCode), refresh: make(map[string]string), slowStarted: make(chan struct{}, 8), slowCanceled: make(chan struct{}, 8), subscribed: make(chan string, 8), unsubscribed: make(chan string, 8), subscriptionReady: make(chan struct{}, 8)}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -303,6 +305,19 @@ func (f *loginFixture) connect(ctx context.Context, options *mcp.ClientOptions) 
 		done <- Connect(ctx, f.store, "work", ConnectOptions{Input: process, Output: process, HTTPClient: f.client})
 	}()
 	client := mcp.NewClient(&mcp.Implementation{Name: "connector-test", Version: "1"}, options)
+	if options != nil && options.ResourceUpdatedHandler != nil {
+		client.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+			return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+				if method == "notifications/subscriptions/acknowledged" {
+					select {
+					case f.subscriptionReady <- struct{}{}:
+					default:
+					}
+				}
+				return next(ctx, method, req)
+			}
+		})
+	}
 	session, err := client.Connect(ctx, &mcp.IOTransport{Reader: local, Writer: local}, nil)
 	if err != nil {
 		f.t.Fatal(err)
@@ -324,7 +339,7 @@ func TestBrowserLoginThroughMCPHubAndConnector(t *testing.T) {
 	}
 	for _, path := range []string{f.store.Dir, filepath.Join(f.store.Dir, "work.json")} {
 		info, err := os.Stat(path)
-		if err != nil || info.Mode().Perm()&0077 != 0 {
+		if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0) {
 			t.Fatalf("unsafe permissions for %s: %v", path, err)
 		}
 	}
@@ -375,6 +390,13 @@ func TestBrowserLoginThroughMCPHubAndConnector(t *testing.T) {
 	case <-f.subscribed:
 	case <-ctx.Done():
 		t.Fatal("subscription did not reach backend")
+	}
+	// Subscribe starts the notification stream asynchronously; the backend hook
+	// alone does not establish that its acknowledgment has reached this client.
+	select {
+	case <-f.subscriptionReady:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for subscription acknowledgment")
 	}
 	if err := f.backend.ResourceUpdated(ctx, &mcp.ResourceUpdatedNotificationParams{URI: "memory://sample"}); err != nil {
 		t.Fatal(err)

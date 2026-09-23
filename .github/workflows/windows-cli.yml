@@ -1,0 +1,55 @@
+name: Windows CLI
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Windows CLI (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: amd64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test CLI on Windows
+        run: go test -v ./internal/client ./cmd/mcphub-cli
+
+      - name: Vet CLI
+        run: go vet ./internal/client ./cmd/mcphub-cli
+
+      - name: Build Windows CLI
+        run: go build -trimpath -o mcphub-cli.exe ./cmd/mcphub-cli
+
+      - name: Smoke test Windows executable
+        shell: pwsh
+        run: |
+          foreach ($command in @("login", "connect", "status", "logout")) {
+            & .\mcphub-cli.exe $command --help
+            if ($LASTEXITCODE -ne 0) { throw "$command failed" }
+          }
+          & .\mcphub-cli.exe status --profile release-smoke
+          if ($LASTEXITCODE -ne 0) { throw "status failed" }
+          & .\mcphub-cli.exe logout --profile release-smoke
+          if ($LASTEXITCODE -ne 0) { throw "logout failed" }

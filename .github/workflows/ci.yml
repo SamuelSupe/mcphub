@@ -12,6 +12,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-cli:
+    uses: ./.github/workflows/windows-cli.yml
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20

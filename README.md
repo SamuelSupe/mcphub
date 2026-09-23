@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.0)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.1)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,7 +9,7 @@
 
 MCPHub is an aggregation gateway for remote MCP Servers. It exposes one Streamable HTTP entry point, connects to multiple backends, builds a per-request backend view from JWT permissions, and routes tools, prompts, resources, and resource templates to the correct backend.
 
-MCPHub v1.3.0 adds a redesigned local management UI and a separate browser-login CLI with a stdio-to-HTTP connector. The optional admin console manages encrypted SQLite configuration, HTTP tools, and OpenAPI imports. The gateway remains a single process, with no metrics endpoint, persistent remote MCP catalog, or cluster coordination.
+MCPHub v1.3.1 brings the browser-login CLI and stdio-to-HTTP connector to Windows x64 and ARM64, alongside macOS and Linux. It includes the redesigned local management UI introduced in v1.3.0. The optional admin console manages encrypted SQLite configuration, HTTP tools, and OpenAPI imports. The gateway remains a single process, with no metrics endpoint, persistent remote MCP catalog, or cluster coordination.
 
 ## Architecture
 
@@ -32,9 +32,9 @@ flowchart LR
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Apache License 2.0](LICENSE) (copyright 2026 SamuelSupe)
-- [v1.3.0 release notes](RELEASE_NOTES_v1.3.0.md), [v1.2.0 historical release notes](RELEASE_NOTES_v1.2.0.md), [v1.3.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.0), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.3.1 release notes](RELEASE_NOTES_v1.3.1.md), [v1.3.0 historical release notes](RELEASE_NOTES_v1.3.0.md), [v1.3.1 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.1), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-MCPHub v1.3.0 is the latest release. v1.2.0 and earlier versions remain available as historical references.
+MCPHub v1.3.1 is the latest release. v1.3.0 and earlier versions remain available as historical references.
 
 ## Capabilities and boundaries
 
@@ -54,11 +54,11 @@ When a backend connection fails, MCPHub retries and retains its last-known catal
 
 ## Quick start
 
-Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the v1.3.0 server and optional CLI with Go:
+Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the v1.3.1 server and optional CLI with Go:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.3.0
-go install github.com/SamuelSupe/mcphub/cmd/mcphub-cli@v1.3.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.3.1
+go install github.com/SamuelSupe/mcphub/cmd/mcphub-cli@v1.3.1
 ```
 
 For a source build, copy the example and set its environment variables:
@@ -93,7 +93,7 @@ go run ./cmd/mcphub serve --config ./config.yaml
 
 ### Browser login and local connector
 
-`mcphub-cli` runs on the user's macOS or Linux computer and provides `login`, `connect`, `status`, and `logout`. The server executable `mcphub` provides `serve` and `validate`. Download the CLI archive for your platform below, install it with Go as shown above, or build it from this checkout and place it on your PATH:
+`mcphub-cli` runs on the user's Windows, macOS, or Linux computer and provides `login`, `connect`, `status`, and `logout`. The server executable `mcphub` provides `serve` and `validate`. Download the CLI archive for your platform below, install it with Go as shown above, or build it from this checkout and place it on your PATH:
 
 ```bash
 go build -trimpath -o ./mcphub-cli ./cmd/mcphub-cli
@@ -131,22 +131,50 @@ mcphub-cli login --profile work --scope mcp:primary.read
 mcphub-cli logout --profile work
 ```
 
-Profiles default to `default` and are stored in `~/.mcphub/` (directory `0700`, files `0600`). Existing profiles work with `mcphub-cli` without migration. Tokens are stored as local JSON, **not encrypted**; keep this directory outside shared folders and backups accessible to other users. Atomic writes and per-profile process locks protect refresh-token rotation across multiple connectors. `status` reports only local cache state, expiry, and refresh capability, never token values. `logout` clears local tokens while keeping non-secret endpoint settings; subsequent connector requests fail and require login. Already accepted requests may finish. It does not revoke issuer tokens or sign out the browser. Logging in again requires restarting existing connectors for that profile.
+Profiles default to `default` and are stored in `~/.mcphub/` on macOS/Linux (directory `0700`, files `0600`), or `%USERPROFILE%\.mcphub\` on Windows with a DACL granting access only to the current user. Windows credential storage requires a local filesystem supporting Windows access controls, such as NTFS. Existing profiles work with `mcphub-cli` without migration. Tokens are stored as local JSON, **not encrypted**; keep this directory outside shared folders and backups accessible to other users. Temporary-file replacement and per-profile process locks protect refresh-token rotation across multiple connectors. `status` reports only local cache state, expiry, and refresh capability, never token values. `logout` clears local tokens while keeping non-secret endpoint settings; subsequent connector requests fail and require login. Already accepted requests may finish. It does not revoke issuer tokens or sign out the browser. Logging in again requires restarting existing connectors for that profile.
 
 Only the **local connector** uses stdio. MCPHub's server and backend connections remain HTTP. This first version does not add SSH/device-code login, dynamic client registration, token export, built-in user accounts, admin login, or interactive authorization to third-party backends.
 
-### Prebuilt v1.3.0 downloads
+### Prebuilt v1.3.1 downloads
 
-The [v1.3.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.0) provides separate server and client archives. Install `mcphub` on the gateway host and `mcphub-cli` on the user’s computer.
+The [v1.3.1 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.1) provides separate server and client archives. Install `mcphub` on the gateway host and `mcphub-cli` on the user’s computer.
 
 | Platform | Server | Login CLI and local connector |
 | --- | --- | --- |
-| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_linux_arm64.tar.gz) |
+| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_linux_arm64.tar.gz) |
+| Windows x64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_windows_amd64.zip) |
+| Windows ARM64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_windows_arm64.zip) |
 
-Before extracting, compare the archive’s SHA-256 with its entry in [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/SHA256SUMS), then place the executable on your PATH. Both packages contain the license and English/Chinese READMEs; the server package also includes `config.example.yaml`.
+Before extracting, compare the archive’s SHA-256 with its entry in [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/SHA256SUMS), then place the executable on your PATH. Both packages contain the license and English/Chinese READMEs; the server package also includes `config.example.yaml`.
+
+### Windows CLI quick start
+
+Choose the x64 ZIP for Intel/AMD PCs or the ARM64 ZIP for Windows on Arm. The CLI follows [Go’s Windows requirements](https://go.dev/wiki/MinimumRequirements#windows) (Windows 10 or later); server downloads remain macOS/Linux. After comparing the archive hash with `SHA256SUMS`, extract it and run it from PowerShell:
+
+```powershell
+Get-FileHash .\mcphub-cli_v1.3.1_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcphub-cli_v1.3.1_windows_amd64.zip -DestinationPath .\mcphub-cli
+.\mcphub-cli\mcphub-cli.exe login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+.\mcphub-cli\mcphub-cli.exe status --profile work
+```
+
+Use the issuer registration described above. Login opens the default Windows browser; if it cannot, open the printed URL on the same computer. In your MCP client configuration, use the installed executable’s absolute Windows path (JSON requires escaped backslashes), for example:
+
+```json
+{
+  "mcpServers": {
+    "mcphub": {
+      "command": "C:\\Tools\\mcphub-cli\\mcphub-cli.exe",
+      "args": ["connect", "--profile", "work"]
+    }
+  }
+}
+```
+
+The Windows CLI can connect to an existing v1.3.0 gateway; a server upgrade is not required for this client platform.
 
 ## Local management UI
 
@@ -250,9 +278,9 @@ Group, manual-tool, and import resources return an `ETag`. Updates and deletes r
 
 Group base URLs and OpenAPI source URLs must use HTTPS; group HTTP requests and source fetches do not follow redirects. A source fetched from another origin never receives the group's static headers or OAuth secret. OpenAPI documents are capped at 5 MiB, requests carrying a document at 6 MiB, and HTTP-tool responses at 1 MiB by default; the response limit is configurable from 64 KiB through 16 MiB. A URL-backed import refreshes automatically every 15 minutes by default (allowed range 1 minute to 24 hours); a failed refresh keeps the last-known-good document/tools and retries with backoff.
 
-#### Upgrade notes for v1.3.0
+#### Upgrade notes for v1.3.1
 
-Upgrading from v1.2.0 requires no configuration or database schema migration. Keep the existing SQLite database and the same `MCPHUB_CONFIG_KEY`; back up the database and retain the key separately before replacing the binary. Restart the process and reload the browser to load the new UI. Install `mcphub-cli` separately on client machines and register its public OAuth client with your issuer.
+Upgrading from v1.3.0 or v1.2.0 requires no configuration or database schema migration. Keep the existing SQLite database and the same `MCPHUB_CONFIG_KEY`; back up the database and retain the key separately before replacing the binary. If replacing the server binary, restart the process and reload the browser. Install `mcphub-cli` separately on client machines and register its public OAuth client with your issuer.
 
 Existing YAML-only deployments remain unchanged while `admin.enabled` is `false`. To enable local administration for the first time, set the loopback `admin` listener, provide the Base64-encoded 32-byte `MCPHUB_CONFIG_KEY`, and provision a writable SQLite path. The first start imports the existing YAML backends in one transaction; after the bootstrap marker is written, SQLite is the sole backend source and later YAML backend edits are ignored. Create tool groups, manual HTTP tools, and OpenAPI imports through `/api/v1/tool-groups`; no YAML migration is expected because these objects have no YAML representation.
 

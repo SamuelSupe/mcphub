@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.0)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.1)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,7 +9,7 @@
 
 MCPHub 是一个面向远端 MCP Server 的聚合网关。它用一个 Streamable HTTP 入口连接多个后端，按 JWT 权限为每个请求生成可见的后端视图，并把工具、提示、资源和资源模板路由回正确的后端。
 
-MCPHub v1.3.0 带来重新布局的本地管理 UI，以及独立的浏览器登录 CLI 和 stdio 到 HTTP 连接器。可选管理平台用于管理加密 SQLite 配置、HTTP tools 和 OpenAPI 导入。网关仍采用单进程架构，不提供指标端点、持久化远程 MCP 目录或集群协调。
+MCPHub v1.3.1 为浏览器登录 CLI 和 stdio 到 HTTP 连接器增加 Windows x64、ARM64 支持，与 macOS、Linux 一同提供下载，并保留 v1.3.0 重新布局的本地管理 UI。可选管理平台用于管理加密 SQLite 配置、HTTP tools 和 OpenAPI 导入。网关仍采用单进程架构，不提供指标端点、持久化远程 MCP 目录或集群协调。
 
 ## 架构
 
@@ -32,9 +32,9 @@ flowchart LR
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [Apache License 2.0](LICENSE)（Copyright 2026 SamuelSupe）
-- [v1.3.0 发行说明](RELEASE_NOTES_v1.3.0.md)、[v1.2.0 历史发行说明](RELEASE_NOTES_v1.2.0.md)、[v1.3.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.0)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.3.1 发行说明](RELEASE_NOTES_v1.3.1.md)、[v1.3.0 历史发行说明](RELEASE_NOTES_v1.3.0.md)、[v1.3.1 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.1)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-MCPHub v1.3.0 是当前最新版本；v1.2.0 及更早版本仍作为历史版本保留。
+MCPHub v1.3.1 是当前最新版本；v1.3.0 及更早版本仍作为历史版本保留。
 
 ## 能力与边界
 
@@ -54,11 +54,11 @@ MCPHub v1.3.0 是当前最新版本；v1.2.0 及更早版本仍作为历史版�
 
 ## 快速开始
 
-要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装 v1.3.0 服务端和可选 CLI：
+要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装 v1.3.1 服务端和可选 CLI：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.3.0
-go install github.com/SamuelSupe/mcphub/cmd/mcphub-cli@v1.3.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.3.1
+go install github.com/SamuelSupe/mcphub/cmd/mcphub-cli@v1.3.1
 ```
 
 如果从源码构建，请先复制示例并设置其中的环境变量：
@@ -93,7 +93,7 @@ go run ./cmd/mcphub serve --config ./config.yaml
 
 ### 浏览器登录与本地连接器
 
-`mcphub-cli` 在用户的 macOS 或 Linux 电脑上运行，提供 `login`、`connect`、`status`、`logout`。服务端程序 `mcphub` 提供 `serve`、`validate`。可下载下方对应平台的 CLI 包、使用上文 Go 命令安装，或从当前源码构建后将它放入 PATH：
+`mcphub-cli` 在用户的 Windows、macOS 或 Linux 电脑上运行，提供 `login`、`connect`、`status`、`logout`。服务端程序 `mcphub` 提供 `serve`、`validate`。可下载下方对应平台的 CLI 包、使用上文 Go 命令安装，或从当前源码构建后将它放入 PATH：
 
 ```bash
 go build -trimpath -o ./mcphub-cli ./cmd/mcphub-cli
@@ -131,22 +131,50 @@ mcphub-cli login --profile work --scope mcp:primary.read
 mcphub-cli logout --profile work
 ```
 
-默认 profile 为 `default`，数据保存在 `~/.mcphub/`，目录权限 `0700`、文件权限 `0600`。已有 profile 可直接由 `mcphub-cli` 使用，无需迁移。Token 以本地 JSON 保存，**不做加密**；不要放入共享目录或其他用户可读取的备份。原子写入与按 profile 的进程间锁保证多个连接器能够安全轮换 refresh token。`status` 仅显示本地缓存状态、到期时间和能否续期，不输出 Token。`logout` 清除本地 Token、保留非敏感连接设置，使连接器后续请求停止并要求登录；已经接受的请求可能继续完成。它不会吊销身份服务中的 Token 或退出浏览器会话。重新登录后，需要重启该 profile 的已有连接器。
+默认 profile 为 `default`。macOS/Linux 数据保存在 `~/.mcphub/`，目录权限 `0700`、文件权限 `0600`；Windows 保存在 `%USERPROFILE%\.mcphub\`，通过仅授权当前用户的 DACL 保护。Windows 凭证目录需位于支持 Windows 访问控制的本地文件系统（如 NTFS）。已有 profile 可直接由 `mcphub-cli` 使用，无需迁移。Token 以本地 JSON 保存，**不做加密**；不要放入共享目录或其他用户可读取的备份。临时文件替换与按 profile 的进程间锁保证多个连接器能够安全轮换 refresh token。`status` 仅显示本地缓存状态、到期时间和能否续期，不输出 Token。`logout` 清除本地 Token、保留非敏感连接设置，使连接器后续请求停止并要求登录；已经接受的请求可能继续完成。它不会吊销身份服务中的 Token 或退出浏览器会话。重新登录后，需要重启该 profile 的已有连接器。
 
 stdio 仅用于**本地连接器**，MCPHub 服务端和后端连接仍使用 HTTP。首版不包含 SSH/device-code 登录、动态客户端注册、Token 导出、内置用户账号、管理平台登录或第三方后端交互授权。
 
-### v1.3.0 预构建下载
+### v1.3.1 预构建下载
 
-[v1.3.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.0) 分别提供服务端和客户端归档。运行网关的机器安装 `mcphub`，用户电脑安装 `mcphub-cli`。
+[v1.3.1 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.1) 分别提供服务端和客户端归档。运行网关的机器安装 `mcphub`，用户电脑安装 `mcphub-cli`。
 
 | 平台 | 服务端 | 登录 CLI 与本地连接器 |
 | --- | --- | --- |
-| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub_v1.3.0_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/mcphub-cli_v1.3.0_linux_arm64.tar.gz) |
+| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_linux_arm64.tar.gz) |
+| Windows x64 | — | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_windows_amd64.zip) |
+| Windows ARM64 | — | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_windows_arm64.zip) |
 
-下载后先与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.0/SHA256SUMS) 中对应条目核对 SHA-256，再解压并将可执行文件放入 PATH。每个包包含许可证和中英文 README；服务端包另附 `config.example.yaml`。
+下载后先与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/SHA256SUMS) 中对应条目核对 SHA-256，再解压并将可执行文件放入 PATH。每个包包含许可证和中英文 README；服务端包另附 `config.example.yaml`。
+
+### Windows CLI 快速开始
+
+Intel/AMD 电脑选择 x64 ZIP，Windows on Arm 电脑选择 ARM64 ZIP。CLI 遵循 [Go 的 Windows 运行要求](https://go.dev/wiki/MinimumRequirements#windows)（Windows 10 及以上）；服务端下载仍提供 macOS/Linux。与 `SHA256SUMS` 核对归档哈希后，在 PowerShell 中解压并运行：
+
+```powershell
+Get-FileHash .\mcphub-cli_v1.3.1_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcphub-cli_v1.3.1_windows_amd64.zip -DestinationPath .\mcphub-cli
+.\mcphub-cli\mcphub-cli.exe login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+.\mcphub-cli\mcphub-cli.exe status --profile work
+```
+
+身份服务注册方式见上文。登录会打开 Windows 默认浏览器；若无法自动打开，请在同一台电脑打开终端输出的 URL。MCP 客户端配置应填写安装后的 Windows 绝对路径，JSON 中需转义反斜杠，例如：
+
+```json
+{
+  "mcpServers": {
+    "mcphub": {
+      "command": "C:\\Tools\\mcphub-cli\\mcphub-cli.exe",
+      "args": ["connect", "--profile", "work"]
+    }
+  }
+}
+```
+
+Windows CLI 可以连接已有的 v1.3.0 网关，无需为了新增客户端平台升级服务端。
 
 ## 本地管理 UI
 
@@ -250,9 +278,9 @@ JSON API 位于 `/api/v1`。单项 backend 响应携带 `ETag`；更新和删除
 
 工具组 Base URL 和 OpenAPI source URL 必须使用 HTTPS；工具组 HTTP 请求和 source 抓取都不跟随重定向。若 source 与工具组是不同 origin，抓取时绝不会发送该组的静态 Header 或 OAuth secret。OpenAPI 文档上限为 5 MiB，携带文档的请求 body 上限为 6 MiB，HTTP tool 响应默认上限为 1 MiB；响应上限可配置为 64 KiB 至 16 MiB。URL-backed import 默认每 15 分钟自动刷新（可设为 1 分钟至 24 小时）；刷新失败时保留 last-known-good 文档和 tools，并采用退避重试。
 
-#### v1.3.0 升级说明
+#### v1.3.1 升级说明
 
-从 v1.2.0 升级不需要迁移配置或数据库 schema。保留现有 SQLite 数据库和相同的 `MCPHUB_CONFIG_KEY`，替换二进制前备份数据库并单独安全保管密钥；重启服务并刷新浏览器即可加载新版 UI。客户端机器需单独安装 `mcphub-cli`，并在身份服务中注册公开 OAuth 客户端。
+从 v1.3.0 或 v1.2.0 升级不需要迁移配置或数据库 schema。保留现有 SQLite 数据库和相同的 `MCPHUB_CONFIG_KEY`，替换二进制前备份数据库并单独安全保管密钥；若替换服务端二进制，需重启服务并刷新浏览器。客户端机器需单独安装 `mcphub-cli`，并在身份服务中注册公开 OAuth 客户端。
 
 `admin.enabled` 为 `false` 时，现有 YAML-only 部署不变。首次启用本地管理时，请配置回环 `admin` listener，提供 Base64 编码的 32 字节 `MCPHUB_CONFIG_KEY`，并为 SQLite 路径准备可写卷。首次启动会在一个事务中导入已有 YAML backends；bootstrap 标记写入后 SQLite 成为唯一 backend 来源，之后修改 YAML backend 不再生效。工具组、手工 HTTP tool 和 OpenAPI import 请通过 `/api/v1/tool-groups` 创建；由于这些对象没有 YAML 表示，不提供 YAML migration。
 

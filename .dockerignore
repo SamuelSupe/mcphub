@@ -4,5 +4,6 @@
 config.yaml
 mcphub
 mcphub-cli
+mcphub-cli.exe
 coverage.out
 dist

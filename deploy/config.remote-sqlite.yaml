@@ -1,0 +1,16 @@
+server:
+  listen: "127.0.0.1:8080"
+  public_url: ${MCPHUB_PUBLIC_URL}
+auth:
+  issuer: ${MCPHUB_AUTH_ISSUER}
+admin:
+  enabled: true
+  mode: remote
+  listen: "127.0.0.1:8081"
+  public_url: ${MCPHUB_ADMIN_PUBLIC_URL}
+  client_id: ${MCPHUB_ADMIN_CLIENT_ID}
+  required_scopes: [mcphub:admin]
+  database_driver: sqlite
+  database_path: ./data/mcphub.db
+  encryption_key_env: MCPHUB_CONFIG_KEY
+backends: []

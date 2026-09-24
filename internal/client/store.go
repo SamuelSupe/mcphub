@@ -23,6 +23,7 @@ var (
 type Store struct{ Dir string }
 
 type profile struct {
+	Kind      string        `json:"kind,omitempty"`
 	Version   int           `json:"version"`
 	Session   string        `json:"session"`
 	ServerURL string        `json:"server_url"`
@@ -35,6 +36,7 @@ type profile struct {
 
 // Status describes cached credentials, without checking their validity at the issuer.
 type Status struct {
+	Admin      bool
 	ServerURL  string
 	ClientID   string
 	Scopes     []string
@@ -61,7 +63,7 @@ func (s *Store) Status(ctx context.Context, name string) (Status, error) {
 		if err != nil {
 			return err
 		}
-		status = Status{ServerURL: p.ServerURL, ClientID: p.ClientID, Scopes: p.Scopes}
+		status = Status{Admin: p.Kind == "admin", ServerURL: p.ServerURL, ClientID: p.ClientID, Scopes: p.Scopes}
 		if p.Token != nil {
 			status.LoggedIn = true
 			status.ExpiresAt = p.Token.Expiry
@@ -133,7 +135,7 @@ func (s *Store) load(name string) (*profile, error) {
 		return nil, err
 	}
 	var p profile
-	if len(data) > 1<<20 || json.Unmarshal(data, &p) != nil || p.Version != 1 || p.Session == "" || p.ClientID == "" {
+	if len(data) > 1<<20 || json.Unmarshal(data, &p) != nil || p.Version != 1 || p.Session == "" || p.ClientID == "" || (p.Kind != "" && p.Kind != "admin") {
 		return nil, errors.New("invalid credential file; log in again with --server and --client-id")
 	}
 	for _, raw := range []string{p.ServerURL, p.Issuer, p.TokenURL} {

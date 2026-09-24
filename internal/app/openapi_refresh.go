@@ -68,7 +68,7 @@ func (a *App) refreshOpenAPIImport(record configstore.OpenAPIImportRecord) error
 	}
 	sum := sha256.Sum256(document)
 	if hex.EncodeToString(sum[:]) == record.SHA256 {
-		if err := a.store.MarkOpenAPIRefreshSuccess(a.ctx, record.GroupID, record.Config.ID, record.Revision); errors.Is(err, configstore.ErrConflict) || errors.Is(err, configstore.ErrNotFound) {
+		if err := a.store.MarkOpenAPIRefreshSuccess(configstore.WithActor(a.ctx, "system"), record.GroupID, record.Config.ID, record.Revision); errors.Is(err, configstore.ErrConflict) || errors.Is(err, configstore.ErrNotFound) {
 			return nil
 		} else {
 			return err
@@ -124,7 +124,7 @@ func (a *App) refreshOpenAPIImport(record configstore.OpenAPIImportRecord) error
 		return err
 	}
 	return a.commitHTTPToolCandidate(candidate, previous, func() error {
-		_, _, commitErr := a.store.ReplaceOpenAPIImport(a.ctx, next, record.Revision, tools, "refresh")
+		_, _, commitErr := a.store.ReplaceOpenAPIImport(configstore.WithActor(a.ctx, "system"), next, record.Revision, tools, "refresh")
 		return commitErr
 	})
 }
@@ -148,7 +148,7 @@ func (a *App) openAPIRefreshDelay(record configstore.OpenAPIImportRecord) time.D
 }
 
 func (a *App) noteOpenAPIRefreshFailure(record configstore.OpenAPIImportRecord, err error) {
-	if markErr := a.store.MarkOpenAPIRefreshFailure(a.ctx, record.GroupID, record.Config.ID, record.Revision, "refresh_failed"); markErr != nil {
+	if markErr := a.store.MarkOpenAPIRefreshFailure(configstore.WithActor(a.ctx, "system"), record.GroupID, record.Config.ID, record.Revision, "refresh_failed"); markErr != nil {
 		return
 	}
 	key := strings.ToLower(record.GroupID + "/" + record.Config.ID)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
@@ -16,6 +17,15 @@ type requestMetadata struct{ version, method, name string }
 type requestMetadataKey struct{}
 
 type permissionError struct{ scopes string }
+
+type rateLimitError struct{ retryAfter int }
+
+func (e *rateLimitError) Error() string {
+	if e.retryAfter > 0 {
+		return fmt.Sprintf("MCPHub endpoint rate limit exceeded (HTTP 429); retry after %d seconds", e.retryAfter)
+	}
+	return "MCPHub endpoint rate limit exceeded (HTTP 429); retry later"
+}
 
 func (e *permissionError) Error() string {
 	if e.scopes == "" {
@@ -30,7 +40,7 @@ type authenticatedTransport struct {
 }
 
 func (t *authenticatedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.URL.String() != t.credentials.endpoint {
+	if !t.credentials.allows(req.URL) {
 		return nil, errors.New("refusing to forward credentials to another endpoint")
 	}
 	token, err := t.credentials.token(req.Context(), "")
@@ -60,6 +70,9 @@ func (t *authenticatedTransport) RoundTrip(req *http.Request) (*http.Response, e
 			if meta.name != "" {
 				copy.Header.Set("Mcp-Name", meta.name)
 			}
+		}
+		if t.credentials.kind == "admin" {
+			return t.base.RoundTrip(copy)
 		}
 		return (&mcpcompat.RoundTripper{Base: t.base}).RoundTrip(copy)
 	}
@@ -97,6 +110,11 @@ func (t *authenticatedTransport) RoundTrip(req *http.Request) (*http.Response, e
 		}
 		return nil, &permissionError{scopes: scopes}
 	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		resp.Body.Close()
+		retryAfter, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
+		return nil, &rateLimitError{retryAfter: retryAfter}
+	}
 	return resp, nil
 }
 
@@ -105,6 +123,10 @@ func credentialError(err error) bool {
 }
 
 func publicError(err error) error {
+	var limited *rateLimitError
+	if errors.As(err, &limited) {
+		return limited
+	}
 	if errors.Is(err, ErrLoginRequired) {
 		return ErrLoginRequired
 	}
@@ -118,5 +140,5 @@ func publicError(err error) error {
 	if errors.Is(err, context.Canceled) {
 		return context.Canceled
 	}
-	return errors.New("MCPHub request failed; the connector did not replay the operation")
+	return errors.New("MCPHub request failed; the operation was not replayed")
 }

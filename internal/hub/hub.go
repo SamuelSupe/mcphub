@@ -15,6 +15,7 @@ import (
 	"github.com/SamuelSupe/mcphub/internal/backend"
 	"github.com/SamuelSupe/mcphub/internal/config"
 	"github.com/SamuelSupe/mcphub/internal/httptool"
+	"github.com/SamuelSupe/mcphub/internal/ratelimit"
 )
 
 type Hub struct {
@@ -187,6 +188,10 @@ func (h *Hub) MissingScopes(backendID string, scopes []string) ([]string, bool) 
 		return missing, true
 	}
 	return h.currentHTTPTools().MissingScopes(backendID, scopes)
+}
+
+func (h *Hub) HTTPToolRateLimits() map[string]ratelimit.Config {
+	return h.currentHTTPTools().RateLimits()
 }
 
 func viewCacheKey(ids, toolScopes []string) string {

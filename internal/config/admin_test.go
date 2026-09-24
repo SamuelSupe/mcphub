@@ -97,3 +97,34 @@ backends:
 		t.Fatalf("Load() error = %v, want missing bootstrap environment", err)
 	}
 }
+
+func TestRemoteAdminRequiresExplicitIdentityAndDatabaseSettings(t *testing.T) {
+	t.Setenv("MCPHUB_REMOTE_TEST_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	t.Setenv("MCPHUB_REMOTE_TEST_DSN", "postgres://mcphub:placeholder@db.example.com/mcphub?sslmode=verify-full")
+	base := AdminConfig{Enabled: true, Mode: "remote", Listen: "0.0.0.0:8081", PublicURL: "https://admin.example.com", ClientID: "admin-web", RequiredScopes: []string{"mcphub:admin"}, DatabaseDriver: "postgres", DatabaseDSNEnv: "MCPHUB_REMOTE_TEST_DSN", EncryptionKeyEnv: "MCPHUB_REMOTE_TEST_KEY"}
+	if err := validateAdmin(base); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*AdminConfig)
+	}{
+		{"plaintext origin", func(c *AdminConfig) { c.PublicURL = "http://admin.example.com" }},
+		{"path origin", func(c *AdminConfig) { c.PublicURL = "https://admin.example.com/ui" }},
+		{"no client", func(c *AdminConfig) { c.ClientID = "" }},
+		{"no authorization scope", func(c *AdminConfig) { c.RequiredScopes = nil }},
+		{"remote listener in local mode", func(c *AdminConfig) { c.Mode = "local" }},
+		{"unknown mode", func(c *AdminConfig) { c.Mode = "auto" }},
+		{"missing database secret", func(c *AdminConfig) { c.DatabaseDSNEnv = "MCPHUB_UNSET_REMOTE_DSN" }},
+		{"ambiguous storage", func(c *AdminConfig) { c.DatabasePath = "config.db" }},
+		{"unknown database", func(c *AdminConfig) { c.DatabaseDriver = "mysql" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := base
+			tc.change(&candidate)
+			if err := validateAdmin(candidate); err == nil {
+				t.Fatal("unsafe or ambiguous configuration accepted")
+			}
+		})
+	}
+}

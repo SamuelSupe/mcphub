@@ -260,7 +260,7 @@ func (s *Store) MarkOpenAPIRefreshSuccess(ctx context.Context, groupID, id strin
 	return tx.Commit()
 }
 
-func deleteImportedToolsTx(ctx context.Context, tx *sql.Tx, groupID, importID string) error {
+func deleteImportedToolsTx(ctx context.Context, tx *transaction, groupID, importID string) error {
 	rows, err := tx.QueryContext(ctx, `SELECT name, config_json FROM http_tools WHERE group_id=? COLLATE NOCASE`, groupID)
 	if err != nil {
 		return fmt.Errorf("list imported HTTP tools: %w", err)
@@ -295,7 +295,7 @@ func deleteImportedToolsTx(ctx context.Context, tx *sql.Tx, groupID, importID st
 	return nil
 }
 
-func importedToolsTx(ctx context.Context, tx *sql.Tx, groupID, importID string) (map[string]HTTPToolRecord, error) {
+func importedToolsTx(ctx context.Context, tx *transaction, groupID, importID string) (map[string]HTTPToolRecord, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT group_id, name, config_json, revision, created_at, updated_at
 FROM http_tools WHERE group_id=? COLLATE NOCASE`, groupID)
 	if err != nil {

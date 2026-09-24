@@ -18,6 +18,19 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: mcphub_test
+          POSTGRES_PASSWORD: ci_test_only
+          POSTGRES_DB: mcphub_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mcphub_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MCPHUB_TEST_POSTGRES_DSN: postgres://mcphub_test:ci_test_only@localhost:5432/mcphub_test?sslmode=disable
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

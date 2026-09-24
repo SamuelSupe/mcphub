@@ -23,7 +23,10 @@
     <symbol id="i-network" viewBox="0 0 24 24"><circle cx="12" cy="4" r="2.5"/><circle cx="5" cy="20" r="2.5"/><circle cx="19" cy="20" r="2.5"/><path d="M12 6.5v5M5 17.5V14a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3.5"/></symbol>
   </svg>
   <a class="skip-link" href="#main-content">跳转到内容</a>
-  <div class="app-shell">
+  <section id="auth-panel" class="auth-panel" aria-labelledby="auth-title">
+    <div class="auth-card"><div class="auth-brand">MCPHub<button class="language-button" id="auth-language-toggle" type="button" aria-label="Switch to English">EN</button></div><h1 id="auth-title">管理员登录</h1><p id="auth-message" role="status">正在检查登录状态…</p><div class="auth-actions"><a id="admin-login" class="primary" href="/auth/login" hidden>使用身份服务登录</a><button id="auth-retry" class="secondary" type="button">重试</button></div><p class="auth-boundary">管理权限由身份服务授权，普通 MCP 用户登录不会获得管理权限。</p></div>
+  </section>
+  <div class="app-shell" hidden>
     <aside class="sidebar">
       <a class="brand" href="#overview" aria-label="MCPHub">
         <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
@@ -37,12 +40,12 @@
         <p class="nav-section-label nav-divider">管理</p>
         <a class="nav-item" href="#activity"><svg class="icon"><use href="#i-clock"/></svg><span>变更记录</span></a>
       </nav>
-      <div class="sidebar-note"><svg class="icon"><use href="#i-monitor"/></svg><div><strong>本地管理</strong><small>仅在本机访问</small></div></div>
+      <div class="sidebar-note"><svg class="icon"><use href="#i-monitor"/></svg><div><strong id="management-mode">本地管理</strong><small id="management-boundary">仅在本机访问</small></div></div>
     </aside>
     <main id="main-content" tabindex="-1">
       <header class="topbar">
         <div class="breadcrumb"><span>工作空间</span><span aria-hidden="true">/</span><strong id="breadcrumb-page">概览</strong></div>
-        <div class="topbar-actions"><span class="sync-status" id="sync-status" role="status">正在读取配置…</span><button class="language-button" id="language-toggle" type="button" aria-label="Switch to English">EN</button></div>
+        <div class="topbar-actions"><span id="admin-identity" class="admin-identity" hidden><span id="admin-subject"></span><button class="text-button" id="admin-logout" type="button">退出登录</button></span><span class="sync-status" id="sync-status" role="status">正在读取配置…</span><button class="language-button" id="language-toggle" type="button" aria-label="Switch to English">EN</button></div>
       </header>
       <div class="content">
         <div class="page-heading"><div><h1 id="page-title">概览</h1><p id="page-description">将分散的服务与 API，统一为可供 AI 调用的工具。</p></div><div class="page-actions"><button class="secondary" id="refresh-button" type="button"><svg class="icon"><use href="#i-refresh"/></svg><span>刷新</span></button><button class="primary" id="register-button" type="button" hidden>＋ 添加 MCP 后端</button><button class="primary" id="new-group-button" type="button" hidden>＋ 创建工具组</button></div></div>
@@ -57,7 +60,7 @@
           </div>
           <ol class="setup-steps"><li><span>01</span><div><strong>接入服务</strong><p>填写地址与上游凭证</p></div></li><li><span>02</span><div><strong>设置访问权限</strong><p>用 Scope 控制哪些客户端可以调用</p></div></li><li><span>03</span><div><strong>测试并启用</strong><p>验证连接后向客户端提供工具</p></div></li></ol>
           <div class="overview-bottom"><section class="recent-panel"><div class="section-inline"><h2>最近变更</h2><a href="#activity">查看全部<svg class="icon"><use href="#i-arrow"/></svg></a></div><ol class="event-list compact-events" id="recent-event-list"><li class="event-empty">正在读取配置…</li></ol></section><aside class="permission-note"><svg class="icon"><use href="#i-info"/></svg><div><h3>理解两种权限</h3><p><strong>上游认证</strong><span>：MCPHub 如何连接你的服务。</span></p><p><strong>访问权限</strong><span>：哪些客户端可以通过 MCPHub 调用工具。</span></p></div></aside></div>
-          <p class="page-footnote"><svg class="icon"><use href="#i-info"/></svg><span>管理界面仅在本机开放。客户端身份认证由 OIDC 服务提供。</span></p>
+          <p class="page-footnote"><svg class="icon"><use href="#i-info"/></svg><span>客户端身份与远程管理权限由 OIDC 服务提供。</span></p>
         </section>
 
         <section data-page="backends" aria-label="MCP 后端" hidden>
@@ -115,6 +118,14 @@
           <p class="field-note">留空允许所有已认证客户端访问；填写多个时必须全部满足。</p>
           <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">按工具名称匹配，为敏感操作追加所需 Scope。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="field-rules" rows="5" spellcheck="false" placeholder='[{"match":"admin.*","required_scopes":["mcp:admin"]}]'></textarea></label></details>
         </section>
+        <details class="advanced"><summary><span>限流策略</span><small>默认不限流</small></summary>
+          <p class="field-note">所有用户共享此 endpoint 的额度；HTTP 工具组内的工具共用额度。超限请求立即拒绝，不排队。</p>
+          <div class="field-grid">
+            <label class="field"><span>每秒请求数</span><input id="field-requests_per_second" type="number" min="0" step="any" value="0"><small>0 表示不限速率，可填写小数。</small></label>
+            <label class="field"><span>突发容量</span><input id="field-burst" type="number" min="0" step="1" value="0"><small>启用速率限制后生效，0 使用容量 1。</small></label>
+            <label class="field"><span>最大并发请求</span><input id="field-max_concurrent" type="number" min="0" step="1" value="0"><small>0 表示不限并发；订阅流持续占用并发名额。</small></label>
+          </div>
+        </details>
         <details class="advanced"><summary><span>高级连接设置</span><small>超时、关键后端、本地 HTTP</small></summary><div class="field-grid">
           <label class="field"><span>请求超时</span><input id="field-timeout" name="request_timeout" value="60s" placeholder="60s"></label>
           <label class="switch-row"><input id="field-required" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>设为关键后端</strong><small>连接失败会使网关未就绪；普通后端会在后台重连。</small></span></label>
@@ -168,7 +179,15 @@
             <label class="field"><span>所需 Scope</span><input id="group-scopes" placeholder="crm.read, crm.write"><small>留空允许所有已认证客户端访问；填写多个时必须全部满足。</small></label>
             <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">按工具名称匹配，为敏感操作追加所需 Scope。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="group-rules" rows="4" spellcheck="false" placeholder='[{"match":"delete_*","required_scopes":["crm.write"]}]'></textarea></label></details>
           </section>
-          <details class="advanced"><summary><span>高级连接设置</span><small>超时与响应上限</small></summary><div class="field-grid"><label class="field"><span>请求超时</span><input id="group-timeout" value="60s"></label><label class="field"><span>最大响应字节</span><input id="group-response-limit" type="number" min="65536" max="16777216" value="1048576"><small>默认 1 MiB，可设置 64 KiB 至 16 MiB。</small></label></div></details>
+          <details class="advanced"><summary><span>限流策略</span><small>默认不限流</small></summary>
+          <p class="field-note">所有用户共享此 endpoint 的额度；HTTP 工具组内的工具共用额度。超限请求立即拒绝，不排队。</p>
+          <div class="field-grid">
+            <label class="field"><span>每秒请求数</span><input id="group-requests_per_second" type="number" min="0" step="any" value="0"><small>0 表示不限速率，可填写小数。</small></label>
+            <label class="field"><span>突发容量</span><input id="group-burst" type="number" min="0" step="1" value="0"><small>启用速率限制后生效，0 使用容量 1。</small></label>
+            <label class="field"><span>最大并发请求</span><input id="group-max_concurrent" type="number" min="0" step="1" value="0"><small>0 表示不限并发；订阅流持续占用并发名额。</small></label>
+          </div>
+        </details>
+        <details class="advanced"><summary><span>高级连接设置</span><small>超时与响应上限</small></summary><div class="field-grid"><label class="field"><span>请求超时</span><input id="group-timeout" value="60s"></label><label class="field"><span>最大响应字节</span><input id="group-response-limit" type="number" min="65536" max="16777216" value="1048576"><small>默认 1 MiB，可设置 64 KiB 至 16 MiB。</small></label></div></details>
         </details>
         <p class="form-hint" id="group-create-help">创建工具组后，继续添加接口或导入 OpenAPI 文档。</p>
         <div class="form-error" id="group-error" role="alert" hidden></div>

@@ -26,9 +26,12 @@ func main() {
 
 func run(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: mcphub-cli <login|connect|status|logout> [flags]")
+		return fmt.Errorf("usage: mcphub-cli <login|connect|status|logout|admin> [flags]")
 	}
 	command := args[1]
+	if command == "admin" {
+		return runAdmin(args[2:])
+	}
 	switch command {
 	case "login", "connect", "status", "logout":
 	default:
@@ -38,9 +41,11 @@ func run(args []string) error {
 	profile := flags.String("profile", "default", "local credential profile")
 	var server, clientID *string
 	var callbackPort *int
+	var admin *bool
 	var scopes scopeFlags
 	if command == "login" {
-		server = flags.String("server", "", "HTTPS MCP endpoint (reuses this profile when omitted)")
+		admin = flags.Bool("admin", false, "log in to the remote administration origin")
+		server = flags.String("server", "", "HTTPS MCP endpoint or admin origin with --admin (reuses this profile when omitted)")
 		clientID = flags.String("client-id", "", "preregistered public OAuth client ID")
 		callbackPort = flags.Int("callback-port", 0, "loopback callback port (0 chooses an available port)")
 		flags.Var(&scopes, "scope", "OAuth scope to request (repeatable)")
@@ -67,6 +72,9 @@ func run(args []string) error {
 			if err != nil {
 				return err
 			}
+			if status.Admin {
+				*admin = true
+			}
 			if *server == "" {
 				*server = status.ServerURL
 			}
@@ -74,7 +82,7 @@ func run(args []string) error {
 				*clientID = status.ClientID
 			}
 		}
-		return client.Login(ctx, store, client.LoginOptions{ServerURL: *server, ClientID: *clientID, Profile: *profile, Scopes: scopes, CallbackPort: *callbackPort, Output: os.Stderr})
+		return client.Login(ctx, store, client.LoginOptions{Admin: *admin, ServerURL: *server, ClientID: *clientID, Profile: *profile, Scopes: scopes, CallbackPort: *callbackPort, Output: os.Stderr})
 	case "connect":
 		return client.Connect(ctx, store, *profile, client.ConnectOptions{})
 	case "logout":
@@ -91,6 +99,11 @@ func run(args []string) error {
 			fmt.Printf("Profile %q: not logged in\n", *profile)
 			return nil
 		}
+		kind := "MCP connector"
+		if status.Admin {
+			kind = "administrator"
+		}
+		fmt.Printf("Purpose: %s\n", kind)
 		state := "unexpired"
 		if !time.Now().Before(status.ExpiresAt) {
 			state = "expired"

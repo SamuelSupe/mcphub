@@ -19,6 +19,7 @@ import (
 )
 
 type LoginOptions struct {
+	Admin        bool
 	ServerURL    string
 	ClientID     string
 	Profile      string
@@ -51,7 +52,7 @@ func Login(ctx context.Context, store *Store, opts LoginOptions) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	c := httpClient(opts.HTTPClient, 30*time.Second)
-	meta, scopes, err := discover(ctx, opts.ServerURL, opts.Scopes, c)
+	meta, scopes, err := discover(ctx, opts.ServerURL, opts.Scopes, c, opts.Admin)
 	if err != nil {
 		return err
 	}
@@ -79,17 +80,28 @@ func Login(ctx context.Context, store *Store, opts LoginOptions) error {
 	if err := prepareToken(token); err != nil {
 		return err
 	}
-	if err := verifyHub(ctx, opts.ServerURL, token.AccessToken, opts.HTTPClient); err != nil {
+	verify := verifyHub
+	if opts.Admin {
+		verify = verifyAdmin
+	}
+	if err := verify(ctx, opts.ServerURL, token.AccessToken, opts.HTTPClient); err != nil {
 		return err
 	}
 	if granted, ok := token.Extra("scope").(string); ok {
 		scopes = strings.Fields(granted)
 	}
 	p := &profile{Version: 1, Session: rand.Text(), ServerURL: opts.ServerURL, Issuer: meta.Issuer, ClientID: opts.ClientID, TokenURL: meta.TokenEndpoint, Scopes: scopes, Token: token}
+	if opts.Admin {
+		p.Kind = "admin"
+	}
 	if err := store.locked(ctx, opts.Profile, func() error { return store.save(opts.Profile, p) }); err != nil {
 		return err
 	}
-	fmt.Fprintf(opts.Output, "Logged in to profile %q. Configure your MCP client to run: mcphub-cli connect --profile %s\n", opts.Profile, opts.Profile)
+	if opts.Admin {
+		fmt.Fprintf(opts.Output, "Logged in as administrator to profile %q. Use: mcphub-cli admin --profile %s get /overview\n", opts.Profile, opts.Profile)
+	} else {
+		fmt.Fprintf(opts.Output, "Logged in to profile %q. Configure your MCP client to run: mcphub-cli connect --profile %s\n", opts.Profile, opts.Profile)
+	}
 	if token.RefreshToken == "" {
 		fmt.Fprintln(opts.Output, "No refresh token was issued; run login again when this access token expires.")
 	}

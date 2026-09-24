@@ -1,0 +1,38 @@
+name: mcphub
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: mcphub
+      POSTGRES_DB: mcphub
+      POSTGRES_PASSWORD: ${MCPHUB_POSTGRES_PASSWORD:?Set a URL-safe database password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcphub -d mcphub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  mcphub:
+    build:
+      context: ..
+    command: ["serve", "--config", "/etc/mcphub/config.yaml"]
+    environment:
+      MCPHUB_PUBLIC_URL: ${MCPHUB_PUBLIC_URL:?Set the HTTPS MCP URL}
+      MCPHUB_AUTH_ISSUER: ${MCPHUB_AUTH_ISSUER:?Set the OIDC issuer}
+      MCPHUB_ADMIN_PUBLIC_URL: ${MCPHUB_ADMIN_PUBLIC_URL:?Set the HTTPS admin origin}
+      MCPHUB_ADMIN_CLIENT_ID: ${MCPHUB_ADMIN_CLIENT_ID:?Set the browser OAuth client ID}
+      MCPHUB_CONFIG_KEY: ${MCPHUB_CONFIG_KEY:?Set and retain a base64 32-byte encryption key}
+      MCPHUB_DATABASE_URL: postgres://mcphub:${MCPHUB_POSTGRES_PASSWORD:?Set a URL-safe database password}@postgres:5432/mcphub?sslmode=disable
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - ./config.remote-postgres.yaml:/etc/mcphub/config.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  postgres-data:

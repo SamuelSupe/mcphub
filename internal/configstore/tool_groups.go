@@ -15,6 +15,7 @@ import (
 
 	"github.com/SamuelSupe/mcphub/internal/config"
 	"github.com/SamuelSupe/mcphub/internal/httptool"
+	"github.com/SamuelSupe/mcphub/internal/ratelimit"
 )
 
 type ToolGroupRecord struct {
@@ -36,6 +37,7 @@ type HTTPToolRecord struct {
 }
 
 type storedToolGroup struct {
+	RateLimit            ratelimit.Config   `json:"rate_limit"`
 	ID                   string             `json:"id"`
 	BaseURL              string             `json:"base_url"`
 	RequiredScopes       []string           `json:"required_scopes,omitempty"`
@@ -348,7 +350,8 @@ func (s *Store) encodeToolGroup(group httptool.GroupConfig) ([]byte, []byte, err
 	}
 	slices.Sort(names)
 	public := storedToolGroup{
-		ID: group.ID, BaseURL: group.BaseURL, RequiredScopes: group.RequiredScopes, ToolRules: group.ToolRules,
+		RateLimit: group.RateLimit,
+		ID:        group.ID, BaseURL: group.BaseURL, RequiredScopes: group.RequiredScopes, ToolRules: group.ToolRules,
 		RequestTimeoutNS: int64(group.RequestTimeout), MaxResponseBodyBytes: group.MaxResponseBodyBytes, HeaderNames: names,
 	}
 	secrets := storedSecrets{Headers: group.Headers}
@@ -391,7 +394,8 @@ func (s *Store) scanToolGroup(row rowScanner) (ToolGroupRecord, error) {
 		return ToolGroupRecord{}, fmt.Errorf("decode tool group %q secrets: %w", id, err)
 	}
 	record.Config = httptool.GroupConfig{
-		ID: public.ID, BaseURL: public.BaseURL, Enabled: enabled != 0, RequiredScopes: slices.Clone(public.RequiredScopes),
+		RateLimit: public.RateLimit,
+		ID:        public.ID, BaseURL: public.BaseURL, Enabled: enabled != 0, RequiredScopes: slices.Clone(public.RequiredScopes),
 		ToolRules: slices.Clone(public.ToolRules), RequestTimeout: time.Duration(public.RequestTimeoutNS),
 		MaxResponseBodyBytes: public.MaxResponseBodyBytes, Headers: secrets.Headers,
 	}
@@ -451,9 +455,9 @@ func (s *Store) openSource(kind, id string, sealed []byte) ([]byte, error) {
 	return plain, nil
 }
 
-func insertSourceEvent(ctx context.Context, tx *sql.Tx, kind, id, action string, success bool, message string, revision int64, now time.Time) error {
+func insertSourceEvent(ctx context.Context, tx *transaction, kind, id, action string, success bool, message string, revision int64, now time.Time) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO events(source_kind, source_id, actor, action, success, message, revision, created_at)
-VALUES(?, ?, 'local', ?, ?, ?, ?, ?)`, kind, id, action, boolInt(success), message, revision, now.Format(time.RFC3339Nano))
+VALUES(?, ?, ?, ?, ?, ?, ?, ?)`, kind, id, Actor(ctx), action, boolInt(success), message, revision, now.Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("record configuration event: %w", err)
 	}

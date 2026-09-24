@@ -11,6 +11,7 @@ import (
 	"os"
 	pathpkg "path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -18,6 +19,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/SamuelSupe/mcphub/internal/ratelimit"
 )
 
 const (
@@ -76,13 +79,21 @@ type AuthConfig struct {
 }
 
 type AdminConfig struct {
-	Enabled          bool   `yaml:"enabled"`
-	Listen           string `yaml:"listen"`
-	DatabasePath     string `yaml:"database_path"`
-	EncryptionKeyEnv string `yaml:"encryption_key_env"`
+	Enabled          bool     `yaml:"enabled"`
+	Mode             string   `yaml:"mode"`
+	PublicURL        string   `yaml:"public_url"`
+	ClientID         string   `yaml:"client_id"`
+	ClientSecretEnv  string   `yaml:"client_secret_env"`
+	RequiredScopes   []string `yaml:"required_scopes"`
+	DatabaseDriver   string   `yaml:"database_driver"`
+	DatabaseDSNEnv   string   `yaml:"database_dsn_env"`
+	Listen           string   `yaml:"listen"`
+	DatabasePath     string   `yaml:"database_path"`
+	EncryptionKeyEnv string   `yaml:"encryption_key_env"`
 }
 
 type BackendConfig struct {
+	RateLimit         ratelimit.Config  `yaml:"rate_limit"`
 	ID                string            `yaml:"id"`
 	URL               string            `yaml:"url"`
 	Required          bool              `yaml:"required"`
@@ -123,7 +134,7 @@ func Load(path string) (*Config, error) {
 }
 
 // LoadStatic loads server, auth, and admin configuration without expanding or
-// validating YAML backends when the SQLite-backed admin platform is enabled.
+// validating YAML backends when the database-backed admin platform is enabled.
 // This lets an initialized database remain the sole backend source even after
 // bootstrap-only environment variables have been removed.
 func LoadStatic(path string) (*Config, error) {
@@ -187,6 +198,10 @@ func defaults() *Config {
 		},
 		Admin: AdminConfig{
 			Listen:           "127.0.0.1:8081",
+			Mode:             "local",
+			DatabaseDriver:   "sqlite",
+			DatabaseDSNEnv:   "MCPHUB_DATABASE_URL",
+			RequiredScopes:   []string{"mcphub:admin"},
 			EncryptionKeyEnv: "MCPHUB_CONFIG_KEY",
 		},
 	}
@@ -238,8 +253,17 @@ func expandStaticEnvironment(cfg *Config) error {
 		&cfg.Server.PublicURL,
 		&cfg.Auth.Issuer,
 		&cfg.Admin.Listen,
+		&cfg.Admin.Mode,
+		&cfg.Admin.PublicURL,
+		&cfg.Admin.ClientID,
+		&cfg.Admin.ClientSecretEnv,
+		&cfg.Admin.DatabaseDriver,
+		&cfg.Admin.DatabaseDSNEnv,
 		&cfg.Admin.DatabasePath,
 		&cfg.Admin.EncryptionKeyEnv,
+	}
+	for i := range cfg.Admin.RequiredScopes {
+		fields = append(fields, &cfg.Admin.RequiredScopes[i])
 	}
 	for i := range cfg.Server.AllowedOrigins {
 		fields = append(fields, &cfg.Server.AllowedOrigins[i])
@@ -344,6 +368,9 @@ func (cfg *Config) Validate() error {
 	ids := make(map[string]string, len(cfg.Backends))
 	for i := range cfg.Backends {
 		backend := &cfg.Backends[i]
+		if err := backend.RateLimit.Validate(); err != nil {
+			return fmt.Errorf("backend %q: %w", backend.ID, err)
+		}
 		if !backendIDPattern.MatchString(backend.ID) {
 			return fmt.Errorf("backend %q: id must match %s", backend.ID, backendIDPattern)
 		}
@@ -408,15 +435,51 @@ func validateAdmin(admin AdminConfig) error {
 	if err != nil {
 		return fmt.Errorf("admin.listen must be a host:port address: %w", err)
 	}
-	if host != "127.0.0.1" && host != "::1" {
+	if !admin.Remote() && host != "127.0.0.1" && host != "::1" {
 		return fmt.Errorf("admin.listen must use 127.0.0.1 or [::1]")
 	}
 	portNumber, err := strconv.Atoi(port)
 	if err != nil || portNumber < 1 || portNumber > 65535 {
 		return fmt.Errorf("admin.listen must use a numeric port between 1 and 65535")
 	}
-	if admin.DatabasePath == "" {
-		return fmt.Errorf("admin.database_path is required")
+	switch admin.Mode {
+	case "", "local":
+	case "remote":
+		u, err := url.Parse(admin.PublicURL)
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" {
+			return fmt.Errorf("admin.public_url must be an HTTPS origin without a path or trailing slash")
+		}
+		if admin.ClientID == "" {
+			return fmt.Errorf("admin.client_id is required in remote mode")
+		}
+		if len(admin.RequiredScopes) == 0 {
+			return fmt.Errorf("admin.required_scopes must not be empty in remote mode")
+		}
+		if err := validateScopes("admin.required_scopes", admin.RequiredScopes); err != nil {
+			return err
+		}
+		if admin.ClientSecretEnv != "" {
+			if !envNamePattern.MatchString(admin.ClientSecretEnv) || os.Getenv(admin.ClientSecretEnv) == "" {
+				return fmt.Errorf("admin.client_secret_env must name a nonempty environment variable")
+			}
+		}
+	default:
+		return fmt.Errorf("admin.mode must be local or remote")
+	}
+	switch admin.Driver() {
+	case "sqlite":
+		if admin.DatabasePath == "" {
+			return fmt.Errorf("admin.database_path is required")
+		}
+	case "postgres":
+		if admin.DatabasePath != "" {
+			return fmt.Errorf("admin.database_path is only valid for sqlite")
+		}
+		if !envNamePattern.MatchString(admin.DatabaseDSNEnv) || os.Getenv(admin.DatabaseDSNEnv) == "" {
+			return fmt.Errorf("admin.database_dsn_env must name a nonempty PostgreSQL connection environment variable")
+		}
+	default:
+		return fmt.Errorf("admin.database_driver must be sqlite or postgres")
 	}
 	if !envNamePattern.MatchString(admin.EncryptionKeyEnv) {
 		return fmt.Errorf("admin.encryption_key_env must be an environment variable name")
@@ -425,6 +488,15 @@ func validateAdmin(admin AdminConfig) error {
 		return err
 	}
 	return nil
+}
+
+func (admin AdminConfig) Remote() bool { return admin.Mode == "remote" }
+
+func (admin AdminConfig) Driver() string {
+	if admin.DatabaseDriver == "" {
+		return "sqlite"
+	}
+	return admin.DatabaseDriver
 }
 
 var envNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -659,7 +731,7 @@ func (cfg *Config) ImmutableEqual(other *Config) error {
 	if cfg.Auth.Issuer != other.Auth.Issuer {
 		return fmt.Errorf("auth.issuer requires a restart")
 	}
-	if cfg.Admin != other.Admin {
+	if !reflect.DeepEqual(cfg.Admin, other.Admin) {
 		return fmt.Errorf("admin configuration requires a restart")
 	}
 	return nil

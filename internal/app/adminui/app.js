@@ -1,3 +1,5 @@
+import { fillRateLimit, collectRateLimit } from "./rate-limits.js";
+import { initializeAuth, canManage, authHeaders, requireLogin } from "./auth.js";
 import { apiErrorMessage, getLocale, setLocale, t, translateDOM } from "./i18n.js";
 import { initShell, renderPage, renderSummary, renderRefreshState, updateRefreshState } from "./shell.js";
 
@@ -43,6 +45,7 @@ async function api(path, options = {}) {
   const response = await fetch(`/api/v1${path}`, {
     ...options,
     headers: {
+      ...authHeaders(),
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...(options.headers || {}),
     },
@@ -50,6 +53,7 @@ async function api(path, options = {}) {
   if (response.status === 204) return null;
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 401 || body.error?.code === "insufficient_scope") requireLogin(response.status);
     const error = new Error(apiErrorMessage(body.error, "请求失败"));
     error.code = body.error?.code;
     error.field = body.error?.field;
@@ -60,6 +64,7 @@ async function api(path, options = {}) {
 }
 
 async function refresh() {
+  if (!canManage()) return;
   try {
     const [overview, backendData, groupData, eventData] = await Promise.all([
       api("/overview"), api("/backends"), api("/tool-groups"), api("/events?limit=50"),
@@ -174,6 +179,10 @@ function renderEvents(events) {
     dot.className = `status-dot ${event.success ? "ready" : "unavailable"}`;
     const copy = document.createElement("span");
     copy.textContent = eventCopy(event);
+    const actor = document.createElement("small");
+    actor.className = "event-actor";
+    actor.textContent = t("操作者：{actor}", { actor: event.actor || "local" });
+    copy.append(actor);
     const time = document.createElement("time");
     time.dateTime = event.created_at;
     time.textContent = relativeTime(event.created_at);
@@ -282,6 +291,7 @@ function resetForm() {
 }
 
 function fillForm(backend) {
+  fillRateLimit("field", backend.rate_limit);
   $("#field-id").value = backend.id;
   $("#field-url").value = backend.url;
   $("#field-timeout").value = backend.request_timeout || "60s";
@@ -360,6 +370,7 @@ function collectInput() {
     required_scopes: splitValues($("#field-scopes").value),
     tool_rules: rules,
     request_timeout: $("#field-timeout").value.trim(),
+    rate_limit: collectRateLimit("field"),
     allow_insecure_http: $("#field-insecure").checked,
     headers: [],
   };
@@ -393,6 +404,7 @@ function inputFromBackend(backend, enabled) {
     required_scopes: backend.required_scopes,
     tool_rules: backend.tool_rules,
     request_timeout: backend.request_timeout,
+    rate_limit: backend.rate_limit,
     allow_insecure_http: backend.allow_insecure_http,
     headers: backend.headers.map((header) => ({ name: header.name })),
   };
@@ -791,6 +803,7 @@ async function openGroupDialog(group = null) {
   $("#probe-group").hidden = !group;
   $("#save-group").textContent = group ? t("保存并应用") : t("创建工具组");
   $("#group-dialog-title").textContent = group ? group.id : t("新建工具组");
+  fillRateLimit("group", group?.rate_limit);
   if (group) {
     $("#group-id").value = group.id;
     $("#group-base-url").value = group.base_url;
@@ -863,7 +876,7 @@ function collectGroupInput() {
   });
   if ($("#group-rules").value.trim()) rules = JSON.parse($("#group-rules").value);
   if (!Array.isArray(rules)) throw new Error(t("Tool Rules 必须是 JSON 数组"));
-  const input = { id: $("#group-id").value.trim(), base_url: $("#group-base-url").value.trim(), enabled: $("#group-enabled").checked, required_scopes: splitValues($("#group-scopes").value), tool_rules: rules, request_timeout: $("#group-timeout").value.trim(), max_response_body_bytes: Number($("#group-response-limit").value), headers };
+  const input = { id: $("#group-id").value.trim(), base_url: $("#group-base-url").value.trim(), enabled: $("#group-enabled").checked, required_scopes: splitValues($("#group-scopes").value), tool_rules: rules, request_timeout: $("#group-timeout").value.trim(), max_response_body_bytes: Number($("#group-response-limit").value), rate_limit: collectRateLimit("group"), headers };
   if ($("#group-oauth-issuer").value.trim() || $("#group-oauth-client-id").value.trim()) {
     input.oauth = { type: "client_credentials", issuer: $("#group-oauth-issuer").value.trim(), client_id: $("#group-oauth-client-id").value.trim(), scopes: splitValues($("#group-oauth-scopes").value) };
     if ($("#group-oauth-secret").value) input.oauth.client_secret = $("#group-oauth-secret").value;
@@ -1082,10 +1095,11 @@ window.addEventListener("resize", () => {
 });
 
 function updateLanguageControl() {
-  const button = $("#language-toggle");
   const english = getLocale() === "en";
-  button.textContent = english ? "中文" : "EN";
-  button.setAttribute("aria-label", english ? "切换到中文" : "Switch to English");
+  for (const button of [$("#language-toggle"), $("#auth-language-toggle")]) {
+    button.textContent = english ? "中文" : "EN";
+    button.setAttribute("aria-label", english ? "切换到中文" : "Switch to English");
+  }
 }
 
 function updateOpenEditorsForLocale() {
@@ -1112,6 +1126,7 @@ async function changeLanguage() {
   updateLanguageControl();
   updateOpenEditorsForLocale();
   renderPage();
+  if (!canManage()) document.title = `${t("管理员登录")} · MCPHub`;
   renderRefreshState();
   if (state.overview) renderSummary(state.overview);
   renderBackends();
@@ -1125,6 +1140,7 @@ setLocale(getLocale());
 translateDOM(document);
 updateLanguageControl();
 $("#language-toggle").addEventListener("click", changeLanguage);
+$("#auth-language-toggle").addEventListener("click", changeLanguage);
 initShell({ refresh, addBackend: () => openInspector(), addGroup: () => openGroupDialog() });
-refresh();
+initializeAuth(refresh);
 setInterval(() => { if (!state.busy) refresh(); }, 5000);

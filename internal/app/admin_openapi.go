@@ -184,7 +184,7 @@ func (a *App) createAdminOpenAPIImport(w http.ResponseWriter, req *http.Request,
 	var savedTools []configstore.HTTPToolRecord
 	err = a.commitHTTPToolCandidate(candidate, previous, func() error {
 		var commitErr error
-		saved, savedTools, commitErr = a.store.CreateOpenAPIImport(a.ctx, record, tools)
+		saved, savedTools, commitErr = a.store.CreateOpenAPIImport(a.adminMutationContext(req), record, tools)
 		return commitErr
 	})
 	_ = savedTools
@@ -272,7 +272,7 @@ func (a *App) refreshAdminOpenAPIImport(w http.ResponseWriter, req *http.Request
 	}
 	document, err := a.openAPIDocument(req.Context(), group.Config, "url", current.Config.SpecURL, "")
 	if err != nil {
-		if writeOpenAPIRefreshStateError(w, a.store.MarkOpenAPIRefreshFailure(a.ctx, groupID, id, current.Revision, "fetch_failed")) {
+		if writeOpenAPIRefreshStateError(w, a.store.MarkOpenAPIRefreshFailure(a.adminMutationContext(req), groupID, id, current.Revision, "fetch_failed")) {
 			return
 		}
 		writeAPIError(w, http.StatusUnprocessableEntity, "openapi_unavailable", "无法刷新 OpenAPI 来源，继续使用 last-known-good", "")
@@ -280,7 +280,7 @@ func (a *App) refreshAdminOpenAPIImport(w http.ResponseWriter, req *http.Request
 	}
 	sum := sha256.Sum256(document)
 	if hex.EncodeToString(sum[:]) == current.SHA256 {
-		if writeOpenAPIRefreshStateError(w, a.store.MarkOpenAPIRefreshSuccess(a.ctx, groupID, id, current.Revision)) {
+		if writeOpenAPIRefreshStateError(w, a.store.MarkOpenAPIRefreshSuccess(a.adminMutationContext(req), groupID, id, current.Revision)) {
 			return
 		}
 		if updated, getErr := a.store.GetOpenAPIImport(req.Context(), groupID, id); getErr == nil {
@@ -292,7 +292,7 @@ func (a *App) refreshAdminOpenAPIImport(w http.ResponseWriter, req *http.Request
 	}
 	preview, err := openapiimport.Parse(document)
 	if err != nil {
-		if writeOpenAPIRefreshStateError(w, a.store.MarkOpenAPIRefreshFailure(a.ctx, groupID, id, current.Revision, "invalid_spec")) {
+		if writeOpenAPIRefreshStateError(w, a.store.MarkOpenAPIRefreshFailure(a.adminMutationContext(req), groupID, id, current.Revision, "invalid_spec")) {
 			return
 		}
 		writeAPIError(w, http.StatusUnprocessableEntity, "openapi_invalid", "新规格无效，继续使用 last-known-good", "")
@@ -300,7 +300,7 @@ func (a *App) refreshAdminOpenAPIImport(w http.ResponseWriter, req *http.Request
 	}
 	tools, err := toolsForSelections(groupID, id, preview, current.Config.Selected, true)
 	if err != nil {
-		if writeOpenAPIRefreshStateError(w, a.store.MarkOpenAPIRefreshFailure(a.ctx, groupID, id, current.Revision, "selected_operation_invalid")) {
+		if writeOpenAPIRefreshStateError(w, a.store.MarkOpenAPIRefreshFailure(a.adminMutationContext(req), groupID, id, current.Revision, "selected_operation_invalid")) {
 			return
 		}
 		writeAPIError(w, http.StatusUnprocessableEntity, "openapi_incompatible", "选中的 operation 已不兼容，继续使用 last-known-good", "")
@@ -341,7 +341,7 @@ func (a *App) deleteAdminOpenAPIImport(w http.ResponseWriter, req *http.Request,
 	if !ok {
 		return
 	}
-	if err := a.commitHTTPToolCandidate(candidate, previous, func() error { return a.store.DeleteOpenAPIImport(a.ctx, groupID, id, expected) }); err != nil {
+	if err := a.commitHTTPToolCandidate(candidate, previous, func() error { return a.store.DeleteOpenAPIImport(a.adminMutationContext(req), groupID, id, expected) }); err != nil {
 		writeAdminCommitError(w, err)
 		return
 	}
@@ -378,7 +378,7 @@ func (a *App) replaceAdminOpenAPIImport(w http.ResponseWriter, req *http.Request
 	var saved configstore.OpenAPIImportRecord
 	err = a.commitHTTPToolCandidate(candidate, previous, func() error {
 		var commitErr error
-		saved, _, commitErr = a.store.ReplaceOpenAPIImport(a.ctx, next, current.Revision, tools, action)
+		saved, _, commitErr = a.store.ReplaceOpenAPIImport(a.adminMutationContext(req), next, current.Revision, tools, action)
 		return commitErr
 	})
 	if err != nil {

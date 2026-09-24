@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,11 +32,21 @@ func (a *App) serveMCP(w http.ResponseWriter, req *http.Request, rt *runtime) {
 			ClockSkew:           30 * time.Second,
 		},
 	)(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		method, ok := a.authorizeMCPRequest(w, req, rt)
+		envelope, ok := a.authorizeMCPRequest(w, req, rt)
 		if !ok {
 			return
 		}
-		if method == "subscriptions/listen" {
+		if envelope.Method != "resources/unsubscribe" {
+			release, rejected := a.limits.Acquire(envelope.backendIDs())
+			if rejected != nil {
+				w.Header().Set("Retry-After", strconv.Itoa(rejected.RetryAfter))
+				w.Header().Set("Cache-Control", "no-store")
+				writeJSON(w, http.StatusTooManyRequests, map[string]any{"jsonrpc": "2.0", "id": envelope.ID, "error": map[string]any{"code": -32000, "message": "Endpoint rate limit exceeded", "data": rejected}})
+				return
+			}
+			defer release()
+		}
+		if envelope.Method == "subscriptions/listen" {
 			serveMCPResponse(w, req, rt.mcpHandler)
 			return
 		}
@@ -68,30 +79,30 @@ func serveMCPResponse(w http.ResponseWriter, req *http.Request, handler http.Han
 	handler.ServeHTTP(w, req)
 }
 
-func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *runtime) (string, bool) {
+func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *runtime) (rpcEnvelope, bool) {
 	if req.Method != http.MethodPost {
-		return "", true
+		return rpcEnvelope{}, true
 	}
 	controller := http.NewResponseController(w)
 	_ = controller.SetReadDeadline(time.Now().Add(rt.cfg.Server.RequestTimeout.Duration))
 	defer controller.SetReadDeadline(time.Time{})
 	if req.ContentLength > rt.cfg.Server.MaxRequestBodyBytes {
 		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
-		return "", false
+		return rpcEnvelope{}, false
 	}
 	body, err := io.ReadAll(io.LimitReader(req.Body, rt.cfg.Server.MaxRequestBodyBytes+1))
 	if err != nil {
 		var networkError net.Error
 		if errors.As(err, &networkError) && networkError.Timeout() {
 			http.Error(w, "request body timeout", http.StatusRequestTimeout)
-			return "", false
+			return rpcEnvelope{}, false
 		}
 		http.Error(w, "read request body", http.StatusBadRequest)
-		return "", false
+		return rpcEnvelope{}, false
 	}
 	if int64(len(body)) > rt.cfg.Server.MaxRequestBodyBytes {
 		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
-		return "", false
+		return rpcEnvelope{}, false
 	}
 	_ = req.Body.Close()
 	if normalized, changed := mcpcompat.NormalizeCancellation(body, req.Header.Get("Mcp-Protocol-Version")); changed {
@@ -102,7 +113,7 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 
 	var envelope rpcEnvelope
 	if err := json.Unmarshal(body, &envelope); err != nil {
-		return "", true
+		return rpcEnvelope{}, true
 	}
 	backendIDs := envelope.backendIDs()
 	token := mcpauth.TokenInfoFromContext(req.Context())
@@ -129,7 +140,7 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 		}
 	}
 	if len(missingSet) == 0 {
-		return envelope.Method, true
+		return envelope, true
 	}
 	missing := make([]string, 0, len(missingSet))
 	for scope := range missingSet {
@@ -143,10 +154,11 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 		strings.Join(missing, " "),
 	))
 	http.Error(w, "insufficient scope", http.StatusForbidden)
-	return envelope.Method, false
+	return envelope, false
 }
 
 type rpcEnvelope struct {
+	ID     json.RawMessage `json:"id"`
 	Method string          `json:"method"`
 	Params json.RawMessage `json:"params"`
 }

@@ -14,9 +14,11 @@ import (
 	"github.com/SamuelSupe/mcphub/internal/config"
 	"github.com/SamuelSupe/mcphub/internal/configstore"
 	"github.com/SamuelSupe/mcphub/internal/httptool"
+	"github.com/SamuelSupe/mcphub/internal/ratelimit"
 )
 
 type toolGroupInput struct {
+	RateLimit            ratelimit.Config  `json:"rate_limit"`
 	ID                   string            `json:"id"`
 	BaseURL              string            `json:"base_url"`
 	Enabled              *bool             `json:"enabled,omitempty"`
@@ -29,6 +31,7 @@ type toolGroupInput struct {
 }
 
 type toolGroupView struct {
+	RateLimit            ratelimit.Config  `json:"rate_limit"`
 	ID                   string            `json:"id"`
 	BaseURL              string            `json:"base_url"`
 	Enabled              bool              `json:"enabled"`
@@ -161,7 +164,7 @@ func (a *App) createAdminToolGroup(w http.ResponseWriter, req *http.Request) {
 	var saved configstore.ToolGroupRecord
 	err = a.commitHTTPToolCandidate(candidate, previous, func() error {
 		var commitErr error
-		saved, commitErr = a.store.CreateToolGroup(a.ctx, configstore.ToolGroupRecord{Config: group})
+		saved, commitErr = a.store.CreateToolGroup(a.adminMutationContext(req), configstore.ToolGroupRecord{Config: group})
 		return commitErr
 	})
 	if err != nil {
@@ -220,7 +223,7 @@ func (a *App) updateAdminToolGroup(w http.ResponseWriter, req *http.Request, id 
 	var saved configstore.ToolGroupRecord
 	err = a.commitHTTPToolCandidate(candidate, previous, func() error {
 		var commitErr error
-		saved, commitErr = a.store.UpdateToolGroup(a.ctx, configstore.ToolGroupRecord{Config: group}, expected)
+		saved, commitErr = a.store.UpdateToolGroup(a.adminMutationContext(req), configstore.ToolGroupRecord{Config: group}, expected)
 		return commitErr
 	})
 	if err != nil {
@@ -264,7 +267,7 @@ func (a *App) deleteAdminToolGroup(w http.ResponseWriter, req *http.Request, id 
 	if !ok {
 		return
 	}
-	if err := a.commitHTTPToolCandidate(candidate, previous, func() error { return a.store.DeleteToolGroup(a.ctx, id, expected) }); err != nil {
+	if err := a.commitHTTPToolCandidate(candidate, previous, func() error { return a.store.DeleteToolGroup(a.adminMutationContext(req), id, expected) }); err != nil {
 		writeAdminCommitError(w, err)
 		return
 	}
@@ -360,7 +363,7 @@ func (a *App) createAdminHTTPTool(w http.ResponseWriter, req *http.Request, grou
 	var saved configstore.HTTPToolRecord
 	err = a.commitHTTPToolCandidate(candidate, previous, func() error {
 		var commitErr error
-		saved, commitErr = a.store.CreateHTTPTool(a.ctx, configstore.HTTPToolRecord{GroupID: canonicalGroupID, Config: tool})
+		saved, commitErr = a.store.CreateHTTPTool(a.adminMutationContext(req), configstore.HTTPToolRecord{GroupID: canonicalGroupID, Config: tool})
 		return commitErr
 	})
 	if err != nil {
@@ -451,7 +454,9 @@ func (a *App) deleteAdminHTTPTool(w http.ResponseWriter, req *http.Request, grou
 	if !ok {
 		return
 	}
-	if err := a.commitHTTPToolCandidate(candidate, previous, func() error { return a.store.DeleteHTTPTool(a.ctx, current.GroupID, current.Config.Name, expected) }); err != nil {
+	if err := a.commitHTTPToolCandidate(candidate, previous, func() error {
+		return a.store.DeleteHTTPTool(a.adminMutationContext(req), current.GroupID, current.Config.Name, expected)
+	}); err != nil {
 		writeAdminCommitError(w, err)
 		return
 	}
@@ -490,7 +495,7 @@ func (a *App) applyHTTPToolUpdate(w http.ResponseWriter, req *http.Request, grou
 	var saved configstore.HTTPToolRecord
 	err = a.commitHTTPToolCandidate(candidate, previous, func() error {
 		var commitErr error
-		saved, commitErr = a.store.UpdateHTTPTool(a.ctx, configstore.HTTPToolRecord{GroupID: groupID, Config: tool}, expected)
+		saved, commitErr = a.store.UpdateHTTPTool(a.adminMutationContext(req), configstore.HTTPToolRecord{GroupID: groupID, Config: tool}, expected)
 		return commitErr
 	})
 	if err != nil {
@@ -531,6 +536,7 @@ func (a *App) commitHTTPToolCandidate(candidate *httptool.Manager, runtime *runt
 		return err
 	}
 	runtime.hub.ReplaceHTTPTools(candidate)
+	a.limits.Configure(runtime.rateLimitPolicies())
 	return nil
 }
 
@@ -548,7 +554,8 @@ func (a *App) toolGroupFromInput(input toolGroupInput, current *httptool.GroupCo
 		timeout = value
 	}
 	value := httptool.GroupConfig{
-		ID: input.ID, BaseURL: input.BaseURL, Enabled: enabled, RequiredScopes: input.RequiredScopes,
+		RateLimit: input.RateLimit,
+		ID:        input.ID, BaseURL: input.BaseURL, Enabled: enabled, RequiredScopes: input.RequiredScopes,
 		ToolRules: input.ToolRules, RequestTimeout: timeout, MaxResponseBodyBytes: input.MaxResponseBodyBytes,
 		Headers: make(map[string]string, len(input.Headers)),
 	}
@@ -615,18 +622,19 @@ func (a *App) probeAdminToolGroup(w http.ResponseWriter, req *http.Request, id s
 	result := map[string]any{"ok": err == nil, "duration_ms": time.Since(started).Milliseconds()}
 	if err != nil {
 		payload, _ := json.Marshal(result)
-		_ = a.store.UpdateToolGroupProbe(a.ctx, id, false, payload)
+		_ = a.store.UpdateToolGroupProbe(a.adminMutationContext(req), id, false, payload)
 		writeAPIError(w, http.StatusUnprocessableEntity, "upstream_unavailable", "工具组 Base URL 或认证不可用", "")
 		return
 	}
 	payload, _ := json.Marshal(result)
-	_ = a.store.UpdateToolGroupProbe(a.ctx, id, true, payload)
+	_ = a.store.UpdateToolGroupProbe(a.adminMutationContext(req), id, true, payload)
 	writeJSON(w, http.StatusOK, result)
 }
 
 func (a *App) makeToolGroupView(record configstore.ToolGroupRecord) toolGroupView {
 	view := toolGroupView{
-		ID: record.Config.ID, BaseURL: record.Config.BaseURL, Enabled: record.Config.Enabled,
+		RateLimit: record.Config.RateLimit,
+		ID:        record.Config.ID, BaseURL: record.Config.BaseURL, Enabled: record.Config.Enabled,
 		RequiredScopes: slices.Clone(record.Config.RequiredScopes), ToolRules: slices.Clone(record.Config.ToolRules),
 		RequestTimeout: record.Config.RequestTimeout.String(), MaxResponseBodyBytes: record.Config.MaxResponseBodyBytes,
 		Revision: record.Revision, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,

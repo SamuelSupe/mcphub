@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.1)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v1.4.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,7 +9,7 @@
 
 MCPHub is an aggregation gateway for remote MCP Servers. It exposes one Streamable HTTP entry point, connects to multiple backends, builds a per-request backend view from JWT permissions, and routes tools, prompts, resources, and resource templates to the correct backend.
 
-MCPHub v1.3.1 brings the browser-login CLI and stdio-to-HTTP connector to Windows x64 and ARM64, alongside macOS and Linux. It includes the redesigned local management UI introduced in v1.3.0. The optional admin console manages encrypted SQLite configuration, HTTP tools, and OpenAPI imports. The gateway remains a single process, with no metrics endpoint, persistent remote MCP catalog, or cluster coordination.
+MCPHub v1.4.0 adds remote OIDC administration, SQLite or PostgreSQL configuration storage, and configurable endpoint rate and concurrency limits that are off by default. Administrators can manage backends, HTTP tools and OpenAPI imports through the browser or `mcphub-cli admin`. The user login CLI and local stdio connector remain available for Windows, macOS and Linux. Deploy one gateway instance; PostgreSQL does not add cluster coordination.
 
 ## Architecture
 
@@ -23,6 +23,8 @@ flowchart LR
     H -->|MCP Streamable HTTP| B[Backend MCP servers]
     H -->|Managed HTTP tools| A[REST APIs]
     U[Local management UI] -->|Loopback only| H
+    R[Remote admin UI or CLI] -->|HTTPS + admin authorization| H
+    H --> D[(SQLite or PostgreSQL)]
 ```
 
 ## Project links
@@ -32,9 +34,9 @@ flowchart LR
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Apache License 2.0](LICENSE) (copyright 2026 SamuelSupe)
-- [v1.3.1 release notes](RELEASE_NOTES_v1.3.1.md), [v1.3.0 historical release notes](RELEASE_NOTES_v1.3.0.md), [v1.3.1 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.1), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v1.4.0 release notes](RELEASE_NOTES_v1.4.0.md), [v1.3.1 historical release notes](RELEASE_NOTES_v1.3.1.md), [v1.4.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.4.0), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-MCPHub v1.3.1 is the latest release. v1.3.0 and earlier versions remain available as historical references.
+MCPHub v1.4.0 is the latest release. v1.3.1 and earlier versions remain available as historical references.
 
 ## Capabilities and boundaries
 
@@ -48,17 +50,19 @@ MCPHub v1.3.1 is the latest release. v1.3.0 and earlier versions remain availabl
 - Applies backend-local `tool_rules` to original tool names with Go `path.Match`; matching rules union and deduplicate required scopes, use all-of authorization, and hide unauthorized tools from `tools/list`.
 - Supports static backend request headers or OAuth 2.0 `client_credentials`; neither mode may provide a static `Authorization` header together with OAuth.
 - The local admin UI separates overview, MCP backends, HTTP tool groups, and change history. It defaults to Chinese and can persistently switch to English. Groups can publish hand-authored HTTP tools and multiple OpenAPI 3.0/3.1 imports through `/mcp`; group Base URL, headers, OAuth, scopes, and timeout are shared, and no raw HTTP proxy is exposed.
+- Supports OIDC-authenticated remote browser/CLI administration and encrypted SQLite or PostgreSQL configuration storage for one gateway instance.
+- Configures per-endpoint request rates, burst capacity and concurrency through the UI/API; limits are disabled by default and shared by callers.
 - Provides health, readiness, and RFC 9728 Protected Resource Metadata endpoints, plus SIGHUP configuration reload.
 
 When a backend connection fails, MCPHub retries and retains its last-known catalog. The catalog may remain listable while calls fail until the connection recovers. Startup does not exit just because a required backend is temporarily unavailable, so `/readyz` remains 503; a runtime created by SIGHUP requires its required backends to connect successfully on the initial attempt. Backend-authored JSON-RPC errors are returned unchanged. Network or transport failures are exposed only as `backend <id> unavailable`, so internal backend URLs, query strings, and credentials do not cross the Hub boundary. On reconnect, every tracked resource subscription must be restored successfully before the backend is marked ready; a restore failure keeps it unavailable and triggers another reconnect attempt.
 
 ## Quick start
 
-Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the v1.3.1 server and optional CLI with Go:
+Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the v1.4.0 server and optional CLI with Go:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.3.1
-go install github.com/SamuelSupe/mcphub/cmd/mcphub-cli@v1.3.1
+go install github.com/SamuelSupe/mcphub/cmd/mcphub@v1.4.0
+go install github.com/SamuelSupe/mcphub/cmd/mcphub-cli@v1.4.0
 ```
 
 For a source build, copy the example and set its environment variables:
@@ -82,7 +86,7 @@ go build -trimpath -o ./mcphub ./cmd/mcphub
 ./mcphub serve --config ./config.yaml
 ```
 
-`validate` performs read-only validation and prints `configuration valid` on success. In admin mode it reads an existing SQLite database without changing it, or validates YAML bootstrap backends when the database does not yet exist. `serve` writes structured JSON logs to stderr. Both subcommands require `--config PATH`.
+`validate` performs read-only validation and prints `configuration valid` on success. In admin mode it reads the selected existing database without changing it, or validates YAML bootstrap backends when the database does not yet exist. `serve` writes structured JSON logs to stderr. Both subcommands require `--config PATH`.
 
 You can also run without producing a binary:
 
@@ -133,30 +137,30 @@ mcphub-cli logout --profile work
 
 Profiles default to `default` and are stored in `~/.mcphub/` on macOS/Linux (directory `0700`, files `0600`), or `%USERPROFILE%\.mcphub\` on Windows with a DACL granting access only to the current user. Windows credential storage requires a local filesystem supporting Windows access controls, such as NTFS. Existing profiles work with `mcphub-cli` without migration. Tokens are stored as local JSON, **not encrypted**; keep this directory outside shared folders and backups accessible to other users. Temporary-file replacement and per-profile process locks protect refresh-token rotation across multiple connectors. `status` reports only local cache state, expiry, and refresh capability, never token values. `logout` clears local tokens while keeping non-secret endpoint settings; subsequent connector requests fail and require login. Already accepted requests may finish. It does not revoke issuer tokens or sign out the browser. Logging in again requires restarting existing connectors for that profile.
 
-Only the **local connector** uses stdio. MCPHub's server and backend connections remain HTTP. This first version does not add SSH/device-code login, dynamic client registration, token export, built-in user accounts, admin login, or interactive authorization to third-party backends.
+Only the **local connector** uses stdio. MCPHub's server and backend connections remain HTTP. This first version does not add SSH/device-code login, dynamic client registration, token export, built-in user accounts, or interactive authorization to third-party backends.
 
-### Prebuilt v1.3.1 downloads
+### Prebuilt v1.4.0 downloads
 
-The [v1.3.1 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.3.1) provides separate server and client archives. Install `mcphub` on the gateway host and `mcphub-cli` on the user’s computer.
+The [v1.4.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v1.4.0) provides separate server and client archives. Install `mcphub` on the gateway host and `mcphub-cli` on the user’s computer.
 
 | Platform | Server | Login CLI and local connector |
 | --- | --- | --- |
-| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub_v1.3.1_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_linux_arm64.tar.gz) |
-| Windows x64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_windows_amd64.zip) |
-| Windows ARM64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/mcphub-cli_v1.3.1_windows_arm64.zip) |
+| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub_v1.4.0_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub-cli_v1.4.0_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub_v1.4.0_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub-cli_v1.4.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub_v1.4.0_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub-cli_v1.4.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub_v1.4.0_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub-cli_v1.4.0_linux_arm64.tar.gz) |
+| Windows x64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub-cli_v1.4.0_windows_amd64.zip) |
+| Windows ARM64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/mcphub-cli_v1.4.0_windows_arm64.zip) |
 
-Before extracting, compare the archive’s SHA-256 with its entry in [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.3.1/SHA256SUMS), then place the executable on your PATH. Both packages contain the license and English/Chinese READMEs; the server package also includes `config.example.yaml`.
+Before extracting, compare the archive’s SHA-256 with its entry in [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v1.4.0/SHA256SUMS), then place the executable on your PATH. All archives contain the license, English/Chinese READMEs, security policy and release notes. Server archives also include `config.example.yaml` and the `deploy/` guides, configuration and proxy examples. The Compose example builds from source: use a checkout of the v1.4.0 tag for that workflow.
 
 ### Windows CLI quick start
 
 Choose the x64 ZIP for Intel/AMD PCs or the ARM64 ZIP for Windows on Arm. The CLI follows [Go’s Windows requirements](https://go.dev/wiki/MinimumRequirements#windows) (Windows 10 or later); server downloads remain macOS/Linux. After comparing the archive hash with `SHA256SUMS`, extract it and run it from PowerShell:
 
 ```powershell
-Get-FileHash .\mcphub-cli_v1.3.1_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcphub-cli_v1.3.1_windows_amd64.zip -DestinationPath .\mcphub-cli
+Get-FileHash .\mcphub-cli_v1.4.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcphub-cli_v1.4.0_windows_amd64.zip -DestinationPath .\mcphub-cli
 .\mcphub-cli\mcphub-cli.exe login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
 .\mcphub-cli\mcphub-cli.exe status --profile work
 ```
@@ -209,6 +213,20 @@ For several MCP endpoints to share an access policy, assign them the same requir
 
 Use the language control to switch between Chinese and English. Refresh reloads the current configuration and shows the last successful update time; a failed refresh keeps a visible error and retry action.
 
+## Remote administrators and PostgreSQL
+
+Remote management adds OIDC administrator login, browser sessions, `mcphub-cli admin` and configuration audit attribution. Admin tokens must include `admin.public_url` in their audience and all `admin.required_scopes` (default `mcphub:admin`). Ordinary MCP login does not grant management access.
+
+```bash
+mcphub-cli login --admin --server https://admin.example.com --client-id mcphub-admin-cli --profile ops
+mcphub-cli admin --profile ops get /overview
+mcphub-cli admin --profile ops get /backends
+mcphub-cli admin --profile ops get /tool-groups
+mcphub-cli admin --profile ops get /events
+```
+
+Choose SQLite (default; existing `database_path` remains compatible) or PostgreSQL (`database_driver: postgres` and `database_dsn_env`). This supports one gateway instance, without multi-instance runtime synchronization. See the [deployment guide](deploy/README.md) for OIDC setup, browser login, API writes, databases and HTTPS proxies.
+
 ## Configuration
 
 Configuration is one YAML document decoded with strict field checking. Unknown fields, multiple YAML documents, and missing environment variables are rejected. `${NAME}` placeholders in string configuration fields are expanded from the current process environment; `NAME` must match `[A-Za-z_][A-Za-z0-9_]*`, and there is no default-value syntax. Duration, integer, and boolean fields do not accept placeholders. Loading and SIGHUP reload both expand the environment again. After the admin database has been initialized, YAML backends and their environment placeholders are ignored.
@@ -220,7 +238,7 @@ Configuration is one YAML document decoded with strict field checking. Unknown f
 | `listen` | `:8080` | HTTP listen address. It cannot be changed by SIGHUP; restart to change it. |
 | `public_url` | none | Required absolute HTTPS URL with an MCP path (for example, `https://hub.example.com/mcp`), with no query or fragment. The path may not contain percent-encoded characters and may not be `/healthz`, `/readyz`, or `/.well-known/oauth-protected-resource`. It is both the MCP URL and the JWT audience. It cannot be changed by SIGHUP. |
 | `page_size` | `1000` | Aggregated MCP catalog page size; must be positive. |
-| `request_timeout` | `60s` | Default timeout for ordinary MCP requests and backend calls; must be positive. Every HTTP route keeps a request-body read deadline from this value until the body is consumed or closed, including unauthenticated and rejected requests. Once MCP handling proceeds, ordinary MCP POSTs also apply it to response-write deadlines and the request context; the newer `subscriptions/listen` POST keeps long-lived connection semantics after its body is read and is not given those ordinary response-write or context timeouts. Runtime or client context cancellation still expires its underlying write deadline, so a slow subscription write is interrupted when its generation drains or the client disconnects. |
+| `request_timeout` | `60s` | Default timeout for ordinary MCP requests and backend calls; must be positive. Every MCP-listener HTTP route keeps a request-body read deadline from this value until the body is consumed or closed, including unauthenticated and rejected requests. Once MCP handling proceeds, ordinary MCP POSTs also apply it to response-write deadlines and the request context; the newer `subscriptions/listen` POST keeps long-lived connection semantics after its body is read and is not given those ordinary response-write or context timeouts. Runtime or client context cancellation still expires its underlying write deadline, so a slow subscription write is interrupted when its generation drains or the client disconnects. |
 | `drain_timeout` | `15s` | Maximum wait for active requests during SIGTERM/SIGINT shutdown and while replacing the old runtime after SIGHUP; must be positive. |
 | `refresh_interval` | `5m` | Maximum backend catalog refresh interval. A shorter backend TTL causes an earlier refresh, with an effective interval no shorter than 5 seconds. Must be positive. |
 | `catalog_ttl` | `30s` | Private TTL advertised for MCP catalog/discovery results; may be zero but not negative. |
@@ -243,24 +261,31 @@ Scopes are read from both JWT `scope` and `scp` claims. `scope` accepts only a s
 
 ### `admin`
 
-The local administration platform is opt-in. When enabled it serves an embedded UI and JSON API from a separate, unauthenticated loopback listener. It manages backend and tool-group configuration; `server`, `auth`, and `admin` remain YAML/restart settings.
+The administration platform is opt-in. It serves an embedded UI and JSON API from a separate listener. Local mode is loopback-only; remote mode requires OIDC administrator authentication. It manages backend and tool-group configuration; `server`, `auth`, and `admin` remain YAML/restart settings.
 
 | Field | Default | Description |
 | --- | --- | --- |
-| `enabled` | `false` | Enables the local administration platform and SQLite backend source of truth. |
-| `listen` | `127.0.0.1:8081` | Must use numeric IPv4 or IPv6 loopback. It cannot be changed with SIGHUP. |
-| `database_path` | none | Required when enabled. Relative paths resolve from the YAML file's directory. |
+| `enabled` | `false` | Enables management with the selected database as configuration source of truth. |
+| `mode` | `local` | `local` has no login and is loopback-only; `remote` enables OIDC administrator authentication. |
+| `listen` | `127.0.0.1:8081` | Numeric loopback in local mode; remote mode may bind a private address behind an HTTPS proxy. |
+| `public_url` | none | Required HTTPS admin origin in remote mode, with no path or trailing slash; also the admin JWT audience. |
+| `client_id` | none | Browser OAuth client ID in remote mode. |
+| `client_secret_env` | none | Optional confidential-client secret environment variable; defaults to a public client. |
+| `required_scopes` | `[mcphub:admin]` | All required admin scopes; cannot be empty in remote mode. |
+| `database_driver` | `sqlite` | `sqlite` or `postgres`. |
+| `database_dsn_env` | `MCPHUB_DATABASE_URL` | PostgreSQL DSN environment variable. Do not also set `database_path` for PostgreSQL. |
+| `database_path` | none | Required for SQLite. Relative paths resolve from the YAML directory. |
 | `encryption_key_env` | `MCPHUB_CONFIG_KEY` | Environment variable containing a Base64-encoded 32-byte AES key. Losing or changing this key makes stored secrets unreadable. |
 
-On the first start with an empty database, expanded YAML backends are imported in one transaction. SQLite becomes the sole backend source after the bootstrap marker is written; later YAML backend edits have no effect. Header values and OAuth client secrets are encrypted with AES-256-GCM and are never returned by the management API.
+On the first start with an empty database, expanded YAML backends are imported in one transaction. The selected database becomes the sole backend source after the bootstrap marker is written; later YAML backend edits have no effect. Header values and OAuth client secrets are encrypted with AES-256-GCM and are never returned by the management API.
 
 The UI is available at `http://127.0.0.1:8081/` by default. It can register, probe, edit, enable, disable, and delete backends without restarting the process. Required backend failures reject a change without replacing the current runtime; an unavailable optional backend is saved and continues reconnecting in the background.
 
-The JSON API is rooted at `/api/v1`. Individual backend responses include an `ETag`; update and delete requests must send that revision in `If-Match`, and stale writes fail with `409 revision_conflict`. Secret fields are returned only as configured markers. Omitting a secret value during an edit preserves it, while omitting the Header or OAuth configuration removes it. Audit events identify the actor as `local` and contain only redacted outcomes.
+The JSON API is rooted at `/api/v1`. Individual backend responses include an `ETag`; update and delete requests must send that revision in `If-Match`, and stale writes fail with `409 revision_conflict`. Secret fields are returned only as configured markers. Omitting a secret value during an edit preserves it, while omitting the Header or OAuth configuration removes it. Audit actors are the remote JWT subject, `local` for local management or `system` for background refreshes; outcomes are redacted.
 
 #### Tool groups and managed HTTP API tools
 
-Tool groups are managed objects in the administration API, not YAML configuration. A group owns the shared HTTPS base URL, static headers or OAuth 2.0 `client_credentials`, JWT required scopes, and request timeout for its tools. Header values and OAuth client secrets are encrypted in SQLite; the API exposes only configured/not-configured markers. Group scope checks retain the same all-of semantics as backend scopes; optional group-local tool rules can add scopes to selected tools.
+Tool groups are managed objects in the administration API, not YAML configuration. A group owns the shared HTTPS base URL, static headers or OAuth 2.0 `client_credentials`, JWT required scopes, and request timeout for its tools. Header values and OAuth client secrets are encrypted in the selected database; the API exposes only configured/not-configured markers. Group scope checks retain the same all-of semantics as backend scopes; optional group-local tool rules can add scopes to selected tools.
 
 A group may contain hand-authored HTTP tools and multiple OpenAPI 3.0 or 3.1 imports. OpenAPI imports can be inspected before they are saved. Both kinds are MCP capabilities: they are listed and invoked only through the configured `/mcp` Streamable HTTP endpoint. MCPHub does not expose a raw HTTP proxy or an arbitrary method/path passthrough route.
 
@@ -274,15 +299,17 @@ The stable management paths are:
 | Inspect, list/create, or read/update/delete OpenAPI imports | `POST .../{groupID}/imports/inspect`, `GET/POST .../{groupID}/imports`, `GET/PUT/DELETE .../{groupID}/imports/{importID}` |
 | Refresh an OpenAPI import | `POST .../{groupID}/imports/{importID}/refresh` |
 
-Group, manual-tool, and import resources return an `ETag`. Updates and deletes require the matching `If-Match`; a stale revision returns `409 revision_conflict`. These resources are persisted and changed only through the admin API and SQLite; there is intentionally no `tool_groups` (or equivalent) YAML schema and SIGHUP does not import one.
+Group, manual-tool, and import resources return an `ETag`. Updates and deletes require the matching `If-Match`; a stale revision returns `409 revision_conflict`. These resources are persisted and changed only through the admin API and the selected database; there is intentionally no `tool_groups` (or equivalent) YAML schema and SIGHUP does not import one.
 
 Group base URLs and OpenAPI source URLs must use HTTPS; group HTTP requests and source fetches do not follow redirects. A source fetched from another origin never receives the group's static headers or OAuth secret. OpenAPI documents are capped at 5 MiB, requests carrying a document at 6 MiB, and HTTP-tool responses at 1 MiB by default; the response limit is configurable from 64 KiB through 16 MiB. A URL-backed import refreshes automatically every 15 minutes by default (allowed range 1 minute to 24 hours); a failed refresh keeps the last-known-good document/tools and retries with backoff.
 
-#### Upgrade notes for v1.3.1
+#### Upgrade notes for v1.4.0
 
-Upgrading from v1.3.0 or v1.2.0 requires no configuration or database schema migration. Keep the existing SQLite database and the same `MCPHUB_CONFIG_KEY`; back up the database and retain the key separately before replacing the binary. If replacing the server binary, restart the process and reload the browser. Install `mcphub-cli` separately on client machines and register its public OAuth client with your issuer.
+Upgrading from v1.3.1, v1.3.0 or v1.2.0 requires no manual SQLite schema or configuration migration. Existing deployments retain local administration and unlimited endpoint rates unless those settings are explicitly changed. Keep the existing SQLite database and the same `MCPHUB_CONFIG_KEY`; back up the database and retain the key separately before replacing the binary. If replacing the server binary, restart the process and reload the browser. Install `mcphub-cli` separately on client machines and register its public OAuth client with your issuer.
 
 Existing YAML-only deployments remain unchanged while `admin.enabled` is `false`. To enable local administration for the first time, set the loopback `admin` listener, provide the Base64-encoded 32-byte `MCPHUB_CONFIG_KEY`, and provision a writable SQLite path. The first start imports the existing YAML backends in one transaction; after the bootstrap marker is written, SQLite is the sole backend source and later YAML backend edits are ignored. Create tool groups, manual HTTP tools, and OpenAPI imports through `/api/v1/tool-groups`; no YAML migration is expected because these objects have no YAML representation.
+
+Enabling remote administration requires an HTTPS proxy, a registered browser OAuth client, and an admin audience/scope grant. Use a separate CLI admin profile. Switching `database_driver` does not copy SQLite data into PostgreSQL; use a separate migration procedure before switching an existing deployment. Restarting clears browser sessions and in-memory rate counters. See the [deployment guide](deploy/README.md).
 
 ### `backends`
 
@@ -296,6 +323,7 @@ At least one backend is required in YAML-only mode. Admin mode may start empty s
 | `required_scopes` | `[]` | JWT scopes required for this backend, checked with all-of semantics; scope entries cannot contain whitespace or duplicates. |
 | `tool_rules` | `[]` | Optional backend-local tool policies. Each rule has a `match` glob and `required_scopes`; matching uses Go `path.Match` against the original backend tool name, full-string and case-sensitive. |
 | `request_timeout` | inherits `server.request_timeout` | Timeout for this backend's connection, discovery, refresh, and calls; must be positive. |
+| `rate_limit` | `{}` | Shared endpoint rate, burst and concurrency limits; unlimited by default. |
 | `allow_insecure_http` | `false` | Loopback-only local HTTP switch. It does not relax HTTPS requirements for `server.public_url` or any issuer. |
 | `headers` | `{}` | Static headers added to every backend MCP HTTP request. Values support environment expansion, may not contain CR/LF, and names are case-insensitively unique. `Accept`, `Content-Type`, any `Mcp-*` header, and transport-managed headers such as `Host`, `Content-Length`, `Connection`, `Proxy-Authorization`, and `Proxy-Authenticate` are rejected. |
 | `oauth` | none | Backend OAuth configuration. The only accepted `type` is `client_credentials`, and it cannot be combined with a static `Authorization` header. |
@@ -310,6 +338,26 @@ At least one backend is required in YAML-only mode. Admin mode may start empty s
 | `scopes` | Scopes requested from the backend OAuth token endpoint. These are independent of `required_scopes`, which gate the JWT presented to MCPHub. |
 
 Backend OAuth discovery and token requests do not receive the backend's static headers; data-plane requests do and automatically reuse/refresh the client-credentials token. Discovery probes RFC 8414/OIDC metadata for an exact `issuer` and `token_endpoint` only; it does not require interactive authorization or PKCE metadata. OAuth metadata responses are capped at 1 MiB. Backend and OIDC HTTP clients do not follow redirects.
+
+#### Endpoint rate limits
+
+MCP backends and HTTP tool groups accept `rate_limit`; the default is unlimited. Each configured ID has its own allowance shared by all users. Manual and OpenAPI tools in an HTTP group share that group's allowance. Edit **Rate limits** in the admin UI, or include the object in backend/tool-group management API input.
+
+```yaml
+# Add to a backends entry; configure HTTP groups through the admin UI/API.
+rate_limit:
+  requests_per_second: 20
+  burst: 40
+  max_concurrent: 8
+```
+
+- `requests_per_second`: average admission rate, including fractions; `0` or omission means unlimited.
+- `burst`: token bucket capacity. With a positive rate, `0` or omission uses capacity `1`. A positive burst requires a positive rate.
+- `max_concurrent`: active request cap; `0` or omission means unlimited. Can be used independently of a rate limit.
+
+Limits apply after authentication and scope checks to `tools/call`, `prompts/get`, `resources/read`, `resources/subscribe`, `completion/complete`, and resource-bearing `subscriptions/listen`. Streaming responses hold a concurrency slot until completion or cancellation. A subscription spanning endpoints atomically checks all their budgets and counts once per endpoint. Initialization, catalog reads, health checks, cancellation, unsubscribe, admin probes and background refresh do not consume this allowance.
+
+Rejected requests never reach the backend: HTTP `429`, `Retry-After` seconds and a JSON-RPC error preserve the original request ID. Retry timing for a concurrency cap is only a hint. `mcphub-cli connect` reports the limit and retry hint without replaying calls. Configuration saves, SIGHUP and HTTP tool edits preserve unchanged budgets and active counts; restarting the process resets in-memory counters. Policies persist in SQLite/PostgreSQL; counters do not use the database and are single-instance only. Global ingress, IP and per-user quotas require separate policies; limit unauthenticated traffic at the reverse proxy.
 
 #### Backend-local tool rules
 
@@ -363,7 +411,7 @@ SIGHUP fully loads, expands, and validates the configuration before building a c
 - `auth.issuer`
 - every `admin` field
 
-These values determine bound listeners, storage/encryption identity, RFC 9728/JWT audience, and the OIDC verifier, so they cannot be changed by replacing only the in-memory runtime. In admin mode SIGHUP reloads static YAML fields and composes backends from SQLite; YAML backend changes are ignored after first import.
+These values determine bound listeners, storage/encryption identity, RFC 9728/JWT audience, and the OIDC verifier, so they cannot be changed by replacing only the in-memory runtime. In admin mode SIGHUP reloads static YAML fields and composes backends from the selected database; YAML backend changes are ignored after first import.
 
 SIGHUP candidate startup uses a cancelable context; shutdown cancels a candidate that is still connecting. Candidate required backends must connect successfully before the swap, and each candidate or retired runtime closes its own backend sessions and connections.
 
@@ -387,7 +435,7 @@ docker run --rm \
 
 The container listen address must match the published port (the example uses `:8080`). `--env-file` injects environment variables only; the configuration is mounted read-only. Restrict permissions on the host `config.yaml` and `.env`. The image entrypoint is already `/usr/local/bin/mcphub`, so pass `serve` or `validate` as arguments.
 
-Admin mode additionally requires a writable volume for `database_path` and `MCPHUB_CONFIG_KEY` in the container environment. Because the unauthenticated admin server is deliberately bound to container loopback, ordinary `-p 8081:8081` publishing cannot reach it. Use a host installation or Linux host networking for local administration; do not broaden the listener address to expose it remotely.
+SQLite administration needs a writable database volume; both stores need `MCPHUB_CONFIG_KEY`. Local mode binds container loopback and is not reachable through ordinary port publishing. For remote container management use `mode: remote`, OIDC administrator authorization and an HTTPS proxy; see the [PostgreSQL Compose guide](deploy/README.md).
 
 ## Security notes
 
@@ -398,16 +446,16 @@ Admin mode additionally requires a writable volume for `database_path` and `MCPH
 - Validation rejects line breaks, duplicate headers, and transport-managed headers, including `Proxy-Authorization` and `Proxy-Authenticate`. OAuth rejects a static `Authorization` header to prevent competing authentication sources.
 - Overlong or invalid request IDs are regenerated, logged request/trace values are bounded or hashed, capability and resource-URI fields are validated and sanitized, and request failures record only external error types rather than raw external error text.
 - `/healthz`, `/readyz`, and metadata do not require Bearer authentication; restrict their network visibility as appropriate. The MCP entry accepts Bearer JWTs in the Authorization header.
-- Every HTTP route keeps the `request_timeout` request-body read deadline until the body is consumed or closed, so unauthenticated and rejected requests with slow bodies are bounded. A `subscriptions/listen` POST is exempt from ordinary response-write and request-context timeouts only after its body has been read.
+- Every MCP-listener HTTP route keeps the `request_timeout` request-body read deadline until the body is consumed or closed, so unauthenticated and rejected requests with slow bodies are bounded. A `subscriptions/listen` POST is exempt from ordinary response-write and request-context timeouts only after its body has been read.
 - Backend SSE responses are streaming passthrough. Progress inspection buffers at most 1 MiB per event; an oversized event is forwarded unchanged without progress inspection.
 - Acknowledged 2026 resource subscription IDs map updates back to their original subscription URI(s), including when an update event URI differs; timeout, cancellation, and session/reconnect cleanup remove the mapping.
-- The administration API has no login. Configuration validation forces it onto numeric loopback, rejects cross-origin and unexpected Host requests, and applies a restrictive CSP. Never expose it through a public reverse proxy.
+- Local management has no login and permits only numeric loopback. Remote management requires a separate audience and admin scopes, HTTPS, exact Host/Origin checks, cookie CSRF protection and a restrictive CSP.
 - Keep `MCPHUB_CONFIG_KEY` outside YAML and backups. The SQLite file uses `0600`, but its availability and recoverability depend on retaining the exact 32-byte key.
 
 ## Known limits and troubleshooting
 
 - The local admin platform persists backend and tool-group configuration only. There is still no metrics endpoint, persistent MCP catalog, cross-instance subscription state, or high-availability coordination; each process owns its backend connections, catalogs, and token views.
-- This release does not provide admin users/remote admin authentication, stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The local `connect` command provides stdio access to the HTTP gateway. TLS and external rate limiting belong at the reverse proxy.
+- This release does not provide built-in accounts, stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The local `connect` command provides stdio access to the HTTP gateway. TLS and external rate limiting belong at the reverse proxy.
 - The aggregator advertises and implements only tools, prompts, resources (including subscriptions), and completions. Other backend capabilities do not automatically become gateway capabilities. Invalid names, URI templates, and SDK-rejected metadata are omitted.
 - A disconnected backend keeps its last-known-good catalog, but calls require a live connection. A required backend makes `/readyz` return 503; an optional backend does not block overall readiness.
 - `server.refresh_interval` is the maximum refresh period; a shorter backend TTL refreshes sooner. There is no forced-refresh API.

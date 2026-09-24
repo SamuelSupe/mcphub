@@ -21,7 +21,7 @@ func prepareManagedConfig(ctx context.Context, static *config.Config, configPath
 	if err != nil {
 		return nil, nil, err
 	}
-	store, err := configstore.Open(ctx, static.Admin.DatabasePath, key)
+	store, err := openConfigStore(ctx, static.Admin, key, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -62,17 +62,23 @@ func ValidateConfig(ctx context.Context, configPath string) error {
 	if !static.Admin.Enabled {
 		return nil
 	}
-	if _, err := os.Stat(static.Admin.DatabasePath); errors.Is(err, os.ErrNotExist) {
-		_, err := config.Load(configPath)
-		return err
-	} else if err != nil {
-		return fmt.Errorf("inspect configuration database: %w", err)
+	if static.Admin.Driver() == "sqlite" {
+		if _, err := os.Stat(static.Admin.DatabasePath); errors.Is(err, os.ErrNotExist) {
+			_, err := config.Load(configPath)
+			return err
+		} else if err != nil {
+			return fmt.Errorf("inspect configuration database: %w", err)
+		}
 	}
 	key, err := config.AdminEncryptionKey(static.Admin)
 	if err != nil {
 		return err
 	}
-	store, err := configstore.OpenReadOnly(ctx, static.Admin.DatabasePath, key)
+	store, err := openConfigStore(ctx, static.Admin, key, true)
+	if errors.Is(err, configstore.ErrUninitialized) {
+		_, err := config.Load(configPath)
+		return err
+	}
 	if err != nil {
 		return err
 	}
@@ -131,4 +137,14 @@ func cloneBackendConfig(value config.BackendConfig) config.BackendConfig {
 		result.OAuth = &oauth
 	}
 	return result
+}
+
+func openConfigStore(ctx context.Context, cfg config.AdminConfig, key []byte, readOnly bool) (*configstore.Store, error) {
+	if cfg.Driver() == "postgres" {
+		return configstore.OpenPostgres(ctx, os.Getenv(cfg.DatabaseDSNEnv), key, readOnly)
+	}
+	if readOnly {
+		return configstore.OpenReadOnly(ctx, cfg.DatabasePath, key)
+	}
+	return configstore.Open(ctx, cfg.DatabasePath, key)
 }

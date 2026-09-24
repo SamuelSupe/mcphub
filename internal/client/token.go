@@ -42,6 +42,7 @@ func prepareToken(token *oauth2.Token) error {
 type credentials struct {
 	store                   *Store
 	name, session, endpoint string
+	kind                    string
 	client                  *http.Client
 }
 
@@ -58,7 +59,7 @@ func bindCredentials(ctx context.Context, store *Store, name string, c *http.Cli
 		if p.Token == nil {
 			return ErrLoginRequired
 		}
-		bound.session, bound.endpoint = p.Session, p.ServerURL
+		bound.session, bound.endpoint, bound.kind = p.Session, p.ServerURL, p.Kind
 		return nil
 	})
 	return bound, err
@@ -77,7 +78,7 @@ func (c *credentials) token(ctx context.Context, rejected string) (string, error
 		if p.Token == nil {
 			return ErrLoginRequired
 		}
-		if p.Session != c.session || p.ServerURL != c.endpoint {
+		if p.Session != c.session || p.ServerURL != c.endpoint || p.Kind != c.kind {
 			return ErrProfileChanged
 		}
 		force := rejected != "" && p.Token.AccessToken == rejected

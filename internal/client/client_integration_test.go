@@ -718,6 +718,35 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (fn roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return fn(r) }
 
+func TestConnectorSurfacesRateLimitWithoutReplayOrDisconnect(t *testing.T) {
+	f := newLoginFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if err := f.login(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	base := f.client.Transport
+	var attempts atomic.Int32
+	copy := *f.client
+	copy.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.String() == f.hub.URL+"/mcp" && r.Header.Get("Mcp-Method") == "tools/call" && attempts.Add(1) == 1 {
+			return &http.Response{StatusCode: 429, Header: http.Header{"Retry-After": []string{"3"}}, Body: io.NopCloser(strings.NewReader(`{"error":"rate limited"}`)), Request: r}, nil
+		}
+		return base.RoundTrip(r)
+	})
+	f.client = &copy
+	session, _ := f.connect(ctx, nil)
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "alpha.echo"}); err == nil || !strings.Contains(err.Error(), "HTTP 429") || !strings.Contains(err.Error(), "3 seconds") {
+		t.Fatalf("missing rate-limit diagnostic: %v", err)
+	}
+	if attempts.Load() != 1 {
+		t.Fatalf("rate-limited request replayed: %d", attempts.Load())
+	}
+	if result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "alpha.echo"}); err != nil || result.IsError {
+		t.Fatalf("rate limit broke connector: %+v, %v", result, err)
+	}
+}
+
 func TestConnectorDoesNotReplayNetworkFailure(t *testing.T) {
 	f := newLoginFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

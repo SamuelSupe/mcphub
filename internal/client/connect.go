@@ -40,6 +40,9 @@ func Connect(ctx context.Context, store *Store, name string, opts ConnectOptions
 	if err != nil {
 		return err
 	}
+	if credentials.kind == "admin" {
+		return errors.New("administrator profiles cannot be used for MCP connections; log in to the MCP endpoint with a separate profile")
+	}
 	if _, err := credentials.token(ctx, ""); err != nil {
 		return err
 	}

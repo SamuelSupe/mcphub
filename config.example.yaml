@@ -18,17 +18,15 @@ server:
 auth:
   issuer: ${MCPHUB_AUTH_ISSUER}
 
-# Optional local configuration platform. It is disabled by default so existing
-# YAML-only deployments keep using YAML. When enabled, the listener
-# must use a numeric loopback address and MCPHUB_CONFIG_KEY must contain a
-# base64-encoded 32-byte key. YAML backends are imported only on first start;
-# SQLite is the backend source of truth afterwards.
-# Tool groups, manual HTTP tools, and OpenAPI imports are intentionally not
-# represented in YAML. Manage them through the loopback admin API under
-# /api/v1/tool-groups; SQLite remains their source of truth.
+# Optional configuration database and UI. Existing deployments default to local
+# loopback-only management. See deploy/ for authenticated HTTPS remote mode and
+# PostgreSQL. YAML backends bootstrap an empty database once; tool groups and
+# OpenAPI imports are managed through /api/v1/tool-groups.
 admin:
   enabled: false
+  mode: local
   listen: "127.0.0.1:8081"
+  database_driver: sqlite
   database_path: ./data/mcphub.db
   encryption_key_env: MCPHUB_CONFIG_KEY
 
@@ -37,6 +35,11 @@ backends:
   - id: primary
     url: ${MCPHUB_PRIMARY_BACKEND_URL}
     required: true
+    # Optional; omitted or zero limits leave this endpoint unlimited.
+    # rate_limit:
+    #   requests_per_second: 20
+    #   burst: 40
+    #   max_concurrent: 8
     required_scopes:
       - mcp:primary.read
     # Optional backend-local tool policy. `match` uses the original backend

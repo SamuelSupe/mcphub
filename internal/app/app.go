@@ -20,9 +20,11 @@ import (
 	"github.com/SamuelSupe/mcphub/internal/config"
 	"github.com/SamuelSupe/mcphub/internal/configstore"
 	"github.com/SamuelSupe/mcphub/internal/httptool"
+	"github.com/SamuelSupe/mcphub/internal/ratelimit"
 )
 
 type App struct {
+	limits     ratelimit.Registry
 	ctx        context.Context
 	cancel     context.CancelFunc
 	shutdown   <-chan struct{}
@@ -41,6 +43,7 @@ type App struct {
 
 	server      *http.Server
 	adminServer *http.Server
+	adminAuth   *adminAuthorization
 	store       *configstore.Store
 	closeOnce   sync.Once
 }
@@ -90,6 +93,7 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 		store:           store,
 		refreshFailures: make(map[string]int),
 	}
+	app.limits.Configure(rt.rateLimitPolicies())
 	app.server = &http.Server{
 		Addr:              cfg.Server.Listen,
 		Handler:           app,
@@ -99,10 +103,15 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 		MaxHeaderBytes:    1 << 20,
 	}
 	if cfg.Admin.Enabled {
+		if cfg.Admin.Remote() {
+			adminManager := authn.NewManager(cfg.Auth.Issuer, cfg.Admin.PublicURL, logger)
+			go adminManager.Run(ctx)
+			app.adminAuth = newAdminAuthorization(cfg.Admin, cfg.Auth.Issuer, adminManager)
+		}
 		app.adminServer = &http.Server{
 			Addr: cfg.Admin.Listen, Handler: app.adminHandler(),
 			ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
-			ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 1 << 20,
+			ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 2 * time.Minute, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 1 << 20,
 		}
 	}
 	return app, nil
@@ -303,6 +312,7 @@ func (a *App) activateCandidate(candidate, previous *runtime) error {
 		candidate.close()
 		return fmt.Errorf("runtime changed while reloading configuration")
 	}
+	a.limits.Configure(candidate.rateLimitPolicies())
 	a.runtime = candidate
 	a.runtimeMu.Unlock()
 	go previous.drain(previous.cfg.Server.DrainTimeout.Duration)

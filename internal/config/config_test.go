@@ -76,6 +76,10 @@ backends:
 		content string
 		want    string
 	}{
+		{name: "negative rate", content: valid + "    rate_limit: {requests_per_second: -1}\n", want: "requests_per_second"},
+		{name: "nonfinite rate", content: valid + "    rate_limit: {requests_per_second: .inf}\n", want: "requests_per_second"},
+		{name: "burst without rate", content: valid + "    rate_limit: {burst: 10}\n", want: "requires positive"},
+		{name: "negative concurrency", content: valid + "    rate_limit: {max_concurrent: -1}\n", want: "nonnegative"},
 		{
 			name:    "missing environment variable",
 			content: strings.Replace(valid, "https://alpha.example.com/mcp", "https://${MCPHUB_NOT_SET}/mcp", 1),

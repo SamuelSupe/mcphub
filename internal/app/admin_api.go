@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"mime"
-	"net"
 	"net/http"
 	"slices"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"github.com/SamuelSupe/mcphub/internal/backend"
 	"github.com/SamuelSupe/mcphub/internal/config"
 	"github.com/SamuelSupe/mcphub/internal/configstore"
+	"github.com/SamuelSupe/mcphub/internal/ratelimit"
 	"github.com/SamuelSupe/mcphub/internal/version"
 )
 
@@ -25,6 +25,7 @@ const maximumAdminBodyBytes = 1 << 20
 var errRuntimeApply = errors.New("runtime changed before configuration commit")
 
 type backendInput struct {
+	RateLimit         ratelimit.Config  `json:"rate_limit"`
 	ID                string            `json:"id"`
 	URL               string            `json:"url"`
 	Enabled           *bool             `json:"enabled,omitempty"`
@@ -51,6 +52,7 @@ type oauthInput struct {
 }
 
 type backendView struct {
+	RateLimit         ratelimit.Config   `json:"rate_limit"`
 	ID                string             `json:"id"`
 	URL               string             `json:"url"`
 	Enabled           bool               `json:"enabled"`
@@ -103,27 +105,6 @@ type apiError struct {
 
 func (a *App) adminHandler() http.Handler {
 	return a.secureAdmin(http.HandlerFunc(a.serveAdmin))
-}
-
-func (a *App) secureAdmin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		setAdminSecurityHeaders(w)
-		host, _, err := net.SplitHostPort(req.RemoteAddr)
-		ip := net.ParseIP(host)
-		if err != nil || ip == nil || !ip.IsLoopback() || req.Host != a.currentConfig().Admin.Listen {
-			writeAdminDenied(w, req, "access_denied", "管理访问被拒绝")
-			return
-		}
-		origin := req.Header.Get("Origin")
-		if origin != "" && origin != "http://"+a.currentConfig().Admin.Listen {
-			writeAdminDenied(w, req, "origin_denied", "管理请求来源被拒绝")
-			return
-		}
-		if strings.HasPrefix(req.URL.Path, "/api/") {
-			w.Header().Set("Cache-Control", "no-store")
-		}
-		next.ServeHTTP(w, req)
-	})
 }
 
 func writeAdminDenied(w http.ResponseWriter, req *http.Request, code, message string) {
@@ -308,14 +289,14 @@ func (a *App) createAdminBackend(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	desired := append(slices.Clone(records), configstore.Record{Config: backendConfig, Enabled: enabled})
-	candidate, previous, ok := a.prepareAdminCandidate(w, desired, backendConfig.ID, "create")
+	candidate, previous, ok := a.prepareAdminCandidate(w, req, desired, backendConfig.ID, "create")
 	if !ok {
 		return
 	}
 	var saved configstore.Record
 	err = a.commitAdminCandidate(candidate, previous, func() error {
 		var commitErr error
-		saved, commitErr = a.store.Create(a.ctx, configstore.Record{Config: backendConfig, Enabled: enabled})
+		saved, commitErr = a.store.Create(a.adminMutationContext(req), configstore.Record{Config: backendConfig, Enabled: enabled})
 		return commitErr
 	})
 	if err != nil {
@@ -373,14 +354,14 @@ func (a *App) updateAdminBackend(w http.ResponseWriter, req *http.Request, id st
 		writeAPIError(w, http.StatusNotFound, "not_found", "后端不存在", "")
 		return
 	}
-	candidate, previous, ok := a.prepareAdminCandidate(w, records, id, "update")
+	candidate, previous, ok := a.prepareAdminCandidate(w, req, records, id, "update")
 	if !ok {
 		return
 	}
 	var saved configstore.Record
 	err = a.commitAdminCandidate(candidate, previous, func() error {
 		var commitErr error
-		saved, commitErr = a.store.Update(a.ctx, configstore.Record{Config: backendConfig, Enabled: enabled}, expected)
+		saved, commitErr = a.store.Update(a.adminMutationContext(req), configstore.Record{Config: backendConfig, Enabled: enabled}, expected)
 		return commitErr
 	})
 	if err != nil {
@@ -420,12 +401,12 @@ func (a *App) deleteAdminBackend(w http.ResponseWriter, req *http.Request, id st
 		writeAPIError(w, http.StatusNotFound, "not_found", "后端不存在", "")
 		return
 	}
-	candidate, previous, ok := a.prepareAdminCandidate(w, desired, id, "delete")
+	candidate, previous, ok := a.prepareAdminCandidate(w, req, desired, id, "delete")
 	if !ok {
 		return
 	}
 	err = a.commitAdminCandidate(candidate, previous, func() error {
-		return a.store.Delete(a.ctx, id, expected)
+		return a.store.Delete(a.adminMutationContext(req), id, expected)
 	})
 	if err != nil {
 		writeAdminCommitError(w, err)
@@ -434,7 +415,7 @@ func (a *App) deleteAdminBackend(w http.ResponseWriter, req *http.Request, id st
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (a *App) prepareAdminCandidate(w http.ResponseWriter, records []configstore.Record, id, action string) (*runtime, *runtime, bool) {
+func (a *App) prepareAdminCandidate(w http.ResponseWriter, req *http.Request, records []configstore.Record, id, action string) (*runtime, *runtime, bool) {
 	cfg := configWithRecords(a.currentConfig(), records)
 	if err := cfg.Validate(); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "validation_failed", err.Error(), "")
@@ -442,7 +423,7 @@ func (a *App) prepareAdminCandidate(w http.ResponseWriter, records []configstore
 	}
 	candidate, previous, err := a.buildCandidate(cfg)
 	if err != nil {
-		a.store.RecordFailure(a.ctx, id, action, "required backend unavailable")
+		a.store.RecordFailure(a.adminMutationContext(req), id, action, "required backend unavailable")
 		writeAPIError(w, http.StatusUnprocessableEntity, "required_backend_unavailable", "Required 后端无法连接，当前配置未改变", "")
 		return nil, nil, false
 	}
@@ -461,6 +442,7 @@ func (a *App) commitAdminCandidate(candidate, previous *runtime, commit func() e
 		candidate.close()
 		return err
 	}
+	a.limits.Configure(candidate.rateLimitPolicies())
 	a.runtime = candidate
 	a.runtimeMu.Unlock()
 	go previous.drain(previous.cfg.Server.DrainTimeout.Duration)
@@ -515,19 +497,22 @@ func (a *App) runProbe(w http.ResponseWriter, req *http.Request, cfg config.Back
 	if err != nil {
 		payload, _ := json.Marshal(map[string]any{"ok": false, "message": "无法连接或发现此 MCP 后端"})
 		if storedID != "" {
-			_ = a.store.UpdateProbe(a.ctx, storedID, false, payload)
+			_ = a.store.UpdateProbe(a.adminMutationContext(req), storedID, false, payload)
 		}
 		writeAPIError(w, http.StatusUnprocessableEntity, "backend_unavailable", "无法连接或发现此 MCP 后端", "")
 		return
 	}
 	payload, _ := json.Marshal(result)
 	if storedID != "" {
-		_ = a.store.UpdateProbe(a.ctx, storedID, true, payload)
+		_ = a.store.UpdateProbe(a.adminMutationContext(req), storedID, true, payload)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
 }
 
 func backendFromInput(input backendInput, current *config.BackendConfig) (config.BackendConfig, bool, error) {
+	if err := input.RateLimit.Validate(); err != nil {
+		return config.BackendConfig{}, false, err
+	}
 	enabled := true
 	if input.Enabled != nil {
 		enabled = *input.Enabled
@@ -541,7 +526,8 @@ func backendFromInput(input backendInput, current *config.BackendConfig) (config
 		}
 	}
 	value := config.BackendConfig{
-		ID: input.ID, URL: input.URL, Required: input.Required,
+		RateLimit: input.RateLimit,
+		ID:        input.ID, URL: input.URL, Required: input.Required,
 		RequiredScopes: input.RequiredScopes, ToolRules: input.ToolRules,
 		RequestTimeout: config.Duration{Duration: timeout}, AllowInsecureHTTP: input.AllowInsecureHTTP,
 		Headers: make(map[string]string, len(input.Headers)),
@@ -603,7 +589,8 @@ func headerValue(headers map[string]string, name string) (string, bool) {
 
 func makeBackendView(record configstore.Record, details map[string]backend.StatusDetail) backendView {
 	view := backendView{
-		ID: record.Config.ID, URL: record.Config.URL, Enabled: record.Enabled, Required: record.Config.Required,
+		RateLimit: record.Config.RateLimit,
+		ID:        record.Config.ID, URL: record.Config.URL, Enabled: record.Enabled, Required: record.Config.Required,
 		RequiredScopes: append([]string{}, record.Config.RequiredScopes...), ToolRules: append([]config.ToolRule{}, record.Config.ToolRules...),
 		RequestTimeout: record.Config.RequestTimeout.Duration.String(), AllowInsecureHTTP: record.Config.AllowInsecureHTTP,
 		Revision: record.Revision, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,

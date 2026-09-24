@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/SamuelSupe/mcphub/internal/authn"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 )
 
@@ -36,15 +36,26 @@ func httpClient(base *http.Client, timeout time.Duration) *http.Client {
 	return &c
 }
 
-func discover(ctx context.Context, server string, requested []string, c *http.Client) (*oauthex.AuthServerMeta, []string, error) {
+func discover(ctx context.Context, server string, requested []string, c *http.Client, admin bool) (*oauthex.AuthServerMeta, []string, error) {
 	u, err := httpsURL(server)
 	if err != nil {
 		return nil, nil, err
 	}
-	if u.RawQuery != "" || u.RawPath != "" || u.Path == "" || u.Path == "/" {
-		return nil, nil, errors.New("--server must contain the MCP endpoint path without query or encoded characters")
+	if u.RawQuery != "" || u.RawPath != "" {
+		return nil, nil, errors.New("--server cannot contain a query or encoded path")
 	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, server, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	var req *http.Request
+	if admin {
+		if u.Path != "" {
+			return nil, nil, errors.New("administrator --server must be an HTTPS origin without a path or trailing slash")
+		}
+		req, _ = http.NewRequestWithContext(ctx, http.MethodGet, server+"/api/v1/me", nil)
+	} else {
+		if u.Path == "" || u.Path == "/" {
+			return nil, nil, errors.New("--server must contain the MCP endpoint path")
+		}
+		req, _ = http.NewRequestWithContext(ctx, http.MethodPost, server, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	resp, err := c.Do(req)
@@ -87,24 +98,11 @@ func discover(ctx context.Context, server string, requested []string, c *http.Cl
 	if err != nil || issuer.RawQuery != "" {
 		return nil, nil, errors.New("invalid authorization server issuer")
 	}
-	meta, err := auth.GetAuthServerMetadata(ctx, issuer.String(), c)
-	if err != nil || meta == nil {
-		return nil, nil, errors.New("cannot discover OAuth/OIDC metadata with PKCE support")
+	meta, err := authn.LoginMetadata(ctx, issuer.String(), c, true)
+	if err != nil {
+		return nil, nil, err
 	}
-	if meta.Issuer != issuer.String() {
-		return nil, nil, errors.New("authorization metadata issuer does not match")
-	}
-	for _, raw := range []string{meta.AuthorizationEndpoint, meta.TokenEndpoint} {
-		if _, err := httpsURL(raw); err != nil {
-			return nil, nil, err
-		}
-	}
-	if !slices.Contains(meta.CodeChallengeMethodsSupported, "S256") {
-		return nil, nil, errors.New("identity service must support PKCE S256")
-	}
-	if len(meta.TokenEndpointAuthMethodsSupported) > 0 && !slices.Contains(meta.TokenEndpointAuthMethodsSupported, "none") {
-		return nil, nil, errors.New("identity service must support public clients without a client secret")
-	}
+
 	scopes := slices.Clone(requested)
 	if len(scopes) == 0 {
 		scopes = challengedScopes

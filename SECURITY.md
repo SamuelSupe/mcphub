@@ -4,7 +4,7 @@
 
 ## English
 
-Repository: [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · documented release: v1.3.1 · module: `github.com/SamuelSupe/mcphub` · [release notes](RELEASE_NOTES_v1.3.1.md) · license: [Apache License 2.0](LICENSE)
+Repository: [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · documented release: v1.4.0 · module: `github.com/SamuelSupe/mcphub` · [release notes](RELEASE_NOTES_v1.4.0.md) · license: [Apache License 2.0](LICENSE)
 
 ### Scope
 
@@ -16,10 +16,10 @@ MCPHub's security boundary includes:
 - backend-local `tool_rules` and per-tool scope challenges;
 - CORS/origin checks, RFC 9728 Protected Resource Metadata, readiness/health exposure;
 - configuration files, environment expansion, secrets, and SIGHUP reload behavior;
-- the optional v1.3.1 loopback administration listener, encrypted SQLite backend configuration, bootstrap import, and runtime replacement API;
+- the optional local/remote administration listener, encrypted SQLite/PostgreSQL backend configuration, bootstrap import, and runtime replacement API;
 - admin-managed tool groups, hand-authored HTTP tools, OpenAPI 3.0/3.1 imports, source refresh, and the response/body limits on those paths.
 
-The current published release explicitly does not provide stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The local admin platform has no user login or remote-access mode. TLS termination, external rate limiting, and edge access policy must be supplied by the deployment's reverse proxy or network layer.
+The current published release explicitly does not provide stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. Local mode is loopback-only; authenticated remote mode is described below. TLS termination, external rate limiting, and edge access policy must be supplied by the deployment's reverse proxy or network layer.
 
 The release also provides a separate `mcphub-cli` executable with `login/connect/status/logout` for external OIDC user login. The server executable `mcphub` provides `serve/validate`. Only the local CLI connector speaks stdio; it sends user access tokens to its saved HTTP gateway, never to backend servers. Login uses a public client, PKCE S256, state/issuer validation and a loopback callback, and saves credentials only after the gateway accepts an authenticated handshake. Discovery and token requests require HTTPS and do not follow redirects. The callback listener is temporary and binds only `127.0.0.1`.
 
@@ -48,19 +48,27 @@ Never include live client secrets, API keys, bearer tokens, private keys, produc
 - Treat `/healthz`, `/readyz`, and metadata as unauthenticated endpoints. Protect their network visibility at the proxy or network layer.
 - The stateless Streamable HTTP `/mcp` endpoint accepts POST only; modern clients may use request-scoped SSE in the POST response, while MCPHub exposes no standalone GET SSE or DELETE session endpoint. Compatibility clients use the same `/mcp` POST semantics.
 - Do not put secrets in backend IDs, capability names, logs, issue reports, or release artifacts. Static backend headers apply to data-plane requests; OAuth discovery/token requests intentionally do not receive them.
-- Manage tool groups, manual HTTP tools, and OpenAPI imports only through the loopback admin API under `/api/v1/tool-groups`; SQLite is their source of truth. Do not add a YAML schema for these resources or treat SIGHUP as a migration mechanism.
+- Manage tool groups, manual HTTP tools, and OpenAPI imports only through the local or authenticated remote admin API under `/api/v1/tool-groups`; the selected database is their source of truth. Do not add a YAML schema for these resources or treat SIGHUP as a migration mechanism.
 - A tool group shares one HTTPS base URL, static headers or OAuth `client_credentials`, JWT required scopes, and request timeout across its tools. Its HTTP tools are exposed only as MCP capabilities through `/mcp`; MCPHub must not become a raw HTTP proxy or arbitrary method/path passthrough.
-- Group and OpenAPI source URLs must use HTTPS and fetchers do not follow redirects. A cross-origin OpenAPI source fetch must not send the group's static headers, bearer material, or OAuth client secret. Keep group secrets encrypted in SQLite and outside logs, exports, and browser-visible API fields.
+- Group and OpenAPI source URLs must use HTTPS and fetchers do not follow redirects. A cross-origin OpenAPI source fetch must not send the group's static headers, bearer material, or OAuth client secret. Keep group secrets encrypted in the configuration database and outside logs, exports, and browser-visible API fields.
 - Tool-group, manual-tool, and import resources each use `ETag` revisions; update/delete requests must supply the matching `If-Match`, and stale revisions must fail closed with `409 revision_conflict`.
 - Enforce a 1 MiB default HTTP-tool response limit (configurable only from 64 KiB through 16 MiB), a 5 MiB OpenAPI document limit, and a 6 MiB request limit for bodies carrying an OpenAPI document. URL-backed imports refresh every 15 minutes by default (allowed range 1 minute to 24 hours); failed refreshes retain the last-known-good document/tools and retry with backoff.
 - During SIGHUP, an unavailable optional backend may reuse a previous in-memory catalog only when its backend ID/URL, `allow_insecure_http`, every fixed header, and OAuth configuration presence plus `type`, `issuer`, `client_id`, `client_secret`, and `scopes` are unchanged. Credential, OAuth, or tenant-selection-header changes prevent reuse; non-identity fields such as `required`, `required_scopes`, `tool_rules`, and timeouts do not, and reuse never marks the new backend ready.
 - SIGHUP candidate startup uses a cancelable context; shutdown cancels a candidate that is still connecting. Required backends must connect successfully before the candidate replaces the current generation, and each candidate or retired generation closes its own backend sessions and connections.
 - Backend IDs may contain uppercase letters but must be unique case-insensitively. Tool and prompt names preserve the configured ID; resource and resource-template URI authorities use the lowercase ID.
-- Keep the unauthenticated admin listener on its validated numeric loopback address and never publish it through a reverse proxy. Store `MCPHUB_CONFIG_KEY` separately from YAML and SQLite backups; stored secrets require the exact same Base64-encoded 32-byte key for recovery.
+- Keep the unauthenticated `mode: local` admin listener on its validated numeric loopback address and never publish it through a reverse proxy. Store `MCPHUB_CONFIG_KEY` separately from YAML and SQLite backups; stored secrets require the exact same Base64-encoded 32-byte key for recovery.
+
+### Remote administration
+
+`mode: remote` requires HTTPS termination at a trusted proxy, an exact configured Host/Origin and a separate admin JWT audience (`admin.public_url`) plus all configured administrator scopes. Upstream HTTP listeners must remain private. Identity-provider `roles`/`groups` and proxy identity headers never grant access. UI sessions use opaque Secure/HttpOnly/SameSite cookies, CSRF checks for mutations, PKCE S256, single-use browser-bound state and authorization-response issuer validation. Access/refresh tokens stay in server memory; refresh rotation is serialized per session. Sessions expire in eight hours and are lost on restart. Logout clears the current browser/CLI session, not IDP SSO or already issued JWTs.
+
+Configuration audit attributes remote writes to the verified subject; it is not a tamper-proof compliance log. PostgreSQL preserves encryption, revision checks and transactional audit. Use a dedicated database/schema and verify-full TLS for external database connections. The Compose example's unencrypted database connection is confined to its private container network. Both backends currently support one gateway instance; changing drivers does not migrate data. See [deployment boundaries](deploy/README.md).
+
+Endpoint rate/concurrency limits are opt-in and apply after authentication/scope checks. They reject before upstream execution, preserve cancellation/cleanup, and share budgets across callers of the same configured ID. Counters are process-local and reset on restart. They do not replace reverse-proxy protection for unauthenticated traffic.
 
 ### Security behavior to preserve
 
-Backend access uses all-of scope semantics: every entry in `required_scopes` must be present in the verified token; JWT `scope` is a space-delimited string, while `scp` is a string or string array. Backend headers reject line breaks, duplicates, `Accept`, `Content-Type`, any `Mcp-*`, `Proxy-Authorization`, `Proxy-Authenticate`, and other HTTP/MCP transport-managed names. OAuth mode rejects a static `Authorization` header. `client_credentials` discovery needs only an exact issuer and token endpoint from RFC 8414/OIDC metadata, not interactive authorization or PKCE metadata. Initial OIDC readiness also requires an absolute HTTPS `jwks_uri` and a reachable JWKS response containing at least one parseable, valid, asymmetric public verification key; symmetric `oct` keys and invalid or empty keys do not satisfy this condition. OIDC discovery and JWKS responses are each capped at 1 MiB; OAuth metadata responses have the same cap. OIDC and backend HTTP clients do not follow redirects. Every HTTP route keeps the `request_timeout` request-body read deadline until the body is consumed or closed, including unauthenticated and rejected requests; once MCP handling proceeds, ordinary MCP POSTs set response-write deadlines and request contexts from the same value. The newer `subscriptions/listen` POST remains long-lived after its body is read and bypasses those ordinary response-write and request-context timeouts. Logs regenerate overlong or invalid request IDs, validate or sanitize capability/resource-URI fields, and record only external error types. A retiring runtime generation waits for its active requests, then cancels request contexts bound to that generation before closing Hub/backend state; this prevents late session registration. SIGINT/SIGTERM force-close remaining HTTP connections when the `drain_timeout` HTTP drain expires.
+Backend access uses all-of scope semantics: every entry in `required_scopes` must be present in the verified token; JWT `scope` is a space-delimited string, while `scp` is a string or string array. Backend headers reject line breaks, duplicates, `Accept`, `Content-Type`, any `Mcp-*`, `Proxy-Authorization`, `Proxy-Authenticate`, and other HTTP/MCP transport-managed names. OAuth mode rejects a static `Authorization` header. `client_credentials` discovery needs only an exact issuer and token endpoint from RFC 8414/OIDC metadata, not interactive authorization or PKCE metadata. Initial OIDC readiness also requires an absolute HTTPS `jwks_uri` and a reachable JWKS response containing at least one parseable, valid, asymmetric public verification key; symmetric `oct` keys and invalid or empty keys do not satisfy this condition. OIDC discovery and JWKS responses are each capped at 1 MiB; OAuth metadata responses have the same cap. OIDC and backend HTTP clients do not follow redirects. Every MCP-listener HTTP route keeps the `request_timeout` request-body read deadline until the body is consumed or closed, including unauthenticated and rejected requests; once MCP handling proceeds, ordinary MCP POSTs set response-write deadlines and request contexts from the same value. The newer `subscriptions/listen` POST remains long-lived after its body is read and bypasses those ordinary response-write and request-context timeouts. Logs regenerate overlong or invalid request IDs, validate or sanitize capability/resource-URI fields, and record only external error types. A retiring runtime generation waits for its active requests, then cancels request contexts bound to that generation before closing Hub/backend state; this prevents late session registration. SIGINT/SIGTERM force-close remaining HTTP connections when the `drain_timeout` HTTP drain expires.
 
 Backend SSE responses are streaming passthrough: progress inspection buffers at most 1 MiB per event, and oversized events are forwarded unchanged without progress inspection. Acknowledged 2026 resource subscription IDs map updates back to their original subscription URI(s), including when the update event URI differs; timeout, cancellation, and session/reconnect cleanup remove the mapping. A canceled or disconnected modern `subscriptions/listen` stream detaches cleanup from the canceled upstream context but remains bounded by the backend timeout and session lifecycle, so legacy backends still receive `resources/unsubscribe`. Runtime or client context cancellation expires the underlying write deadline, so slow or unread subscription writes are interrupted at generation drain while ordinary requests retain `request_timeout`.
 
@@ -74,7 +82,7 @@ Security-sensitive changes should include a focused behavior-boundary test and e
 
 ## 中文
 
-仓库：[SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · 当前文档版本：v1.3.1 · module：`github.com/SamuelSupe/mcphub` · [发行说明](RELEASE_NOTES_v1.3.1.md) · 许可证：[Apache License 2.0](LICENSE)
+仓库：[SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · 当前文档版本：v1.4.0 · module：`github.com/SamuelSupe/mcphub` · [发行说明](RELEASE_NOTES_v1.4.0.md) · 许可证：[Apache License 2.0](LICENSE)
 
 ### 范围
 
@@ -86,10 +94,10 @@ MCPHub 的安全边界包括：
 - backend-local `tool_rules` 和按 tool 的 scope challenge；
 - CORS/Origin 检查、RFC 9728 Protected Resource Metadata、就绪/健康端点暴露；
 - 配置文件、环境展开、secret 和 SIGHUP 重载行为；
-- 可选的 v1.3.1 回环管理监听器、加密 SQLite backend 配置、首次导入和 runtime 替换 API；
+- 可选的本地/远程管理监听器、加密 SQLite/PostgreSQL backend 配置、首次导入和 runtime 替换 API；
 - admin 管理的工具组、手工 HTTP tool、OpenAPI 3.0/3.1 import、source 刷新以及这些路径上的响应/body 上限。
 
-当前正式发布版明确不提供 stdio 后端接入、独立旧式 GET SSE 端点、原生 TLS、动态租户或按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本地管理平台没有用户登录或远程访问模式。TLS 终止、外部限流和边缘访问策略必须由部署使用的反向代理或网络层提供。
+当前正式发布版明确不提供 stdio 后端接入、独立旧式 GET SSE 端点、原生 TLS、动态租户或按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本地模式只允许回环访问，认证远程模式见下文。TLS 终止、外部限流和边缘访问策略必须由部署使用的反向代理或网络层提供。
 
 本版本还提供独立的 `mcphub-cli` 可执行程序，提供 `login/connect/status/logout`，供用户通过外部 OIDC 身份服务登录；服务端程序 `mcphub` 提供 `serve/validate`。只有本地 CLI 连接器使用 stdio；用户 access token 仅发往保存的 HTTP 网关地址，不会发给后端。登录使用公开客户端、PKCE S256、state/issuer 校验和回环回调，只有网关接受认证握手后才保存凭证。Discovery 和 Token 请求必须使用 HTTPS，且不跟随重定向；临时回调监听器仅绑定 `127.0.0.1`。
 
@@ -118,19 +126,27 @@ MCPHub 的安全边界包括：
 - `/healthz`、`/readyz` 和 metadata 不需要认证，应在代理或网络层限制可见范围。
 - Stateless Streamable HTTP `/mcp` 入口只接受 POST；现代客户端可以在 POST 响应中使用 request-scoped SSE，但 MCPHub 不暴露 standalone GET SSE 或 DELETE session 会话端点。兼容客户端使用同一 `/mcp` POST 语义。
 - 不要把 secret 放入后端 ID、能力名称、日志、Issue 或发布产物。静态后端请求头用于数据面请求；OAuth discovery/token 请求会刻意排除这些请求头。
-- 工具组、手工 HTTP tool 和 OpenAPI import 只能通过回环 admin API 的 `/api/v1/tool-groups` 管理，SQLite 是它们的事实来源。不要为这些对象添加 YAML schema，也不要把 SIGHUP 当作迁移机制。
+- 工具组、手工 HTTP tool 和 OpenAPI import 只能通过本地或已认证的远程 admin API 的 `/api/v1/tool-groups` 管理，所选数据库是它们的事实来源。不要为这些对象添加 YAML schema，也不要把 SIGHUP 当作迁移机制。
 - 每个工具组在其 tool 之间共享一个 HTTPS Base URL、静态 Header 或 OAuth `client_credentials`、JWT required scope 和请求 timeout。HTTP tool 只能作为 MCP capability 通过 `/mcp` 暴露；MCPHub 不得变成 raw HTTP proxy 或任意 method/path 透传。
-- 工具组和 OpenAPI source URL 必须使用 HTTPS，抓取器不跟随重定向。跨 origin 的 OpenAPI source 抓取不得发送该组的静态 Header、Bearer 材料或 OAuth client secret。工具组 secret 要在 SQLite 中加密保存，并且不进入日志、导出或浏览器可见的 API 字段。
+- 工具组和 OpenAPI source URL 必须使用 HTTPS，抓取器不跟随重定向。跨 origin 的 OpenAPI source 抓取不得发送该组的静态 Header、Bearer 材料或 OAuth client secret。工具组 secret 要在配置数据库中加密保存，并且不进入日志、导出或浏览器可见的 API 字段。
 - 工具组、手工 tool 和 import 资源各自使用 `ETag` revision；更新/删除必须提交匹配的 `If-Match`，过期 revision 必须 fail closed 并返回 `409 revision_conflict`。
 - HTTP tool 响应默认限制 1 MiB（只允许配置在 64 KiB 至 16 MiB），OpenAPI 文档限制 5 MiB，携带 OpenAPI 文档的请求限制 6 MiB。URL-backed import 默认每 15 分钟刷新（允许 1 分钟至 24 小时）；刷新失败保留 last-known-good 文档和 tools，并采用退避重试。
 - SIGHUP 期间，只有 unavailable optional backend 的 backend ID/URL、`allow_insecure_http`、全部固定 header，以及 OAuth 配置是否存在和 `type`、`issuer`、`client_id`、`client_secret`、`scopes` 均未变化时，才可复用上一代内存目录。凭证、OAuth 或 tenant-selection header 变化会阻止复用；`required`、`required_scopes`、`tool_rules`、timeout 等不标识目录来源的字段不会阻止，且复用不会把新 backend 标记为 ready。
 - SIGHUP candidate 启动使用可取消的 context；关停开始时仍在连接的 candidate 会被取消。required backend 必须先连接成功，candidate 才能替换当前代际；每个 candidate 或已退役代际都会关闭自己持有的 backend session 和连接。
 - Backend ID 可以包含大写，但必须按大小写不敏感规则唯一。tool/prompt 名称保留配置 ID；resource 和 resource-template URI authority 使用小写 ID。
-- 未认证 admin listener 必须保持在配置校验允许的数字回环地址，不能通过反向代理发布。`MCPHUB_CONFIG_KEY` 应与 YAML、SQLite 备份分开保存；已存 Secret 只能由完全相同的 Base64 编码 32 字节密钥恢复。
+- 未认证的 `mode: local` admin listener 必须保持在配置校验允许的数字回环地址，不能通过反向代理发布。`MCPHUB_CONFIG_KEY` 应与 YAML、SQLite 备份分开保存；已存 Secret 只能由完全相同的 Base64 编码 32 字节密钥恢复。
+
+### 远程管理
+
+`mode: remote` 必须通过可信代理终止 HTTPS，并校验精确的 Host/Origin、独立管理员 JWT audience（`admin.public_url`）及全部管理员 scope。上游 HTTP 监听器必须保持私有；IDP 的 `roles`/`groups` 和代理身份头不会授予权限。浏览器会话使用不透明 Secure/HttpOnly/SameSite cookie、变更请求 CSRF 校验、PKCE S256、绑定浏览器的一次性 state 和授权响应 issuer 校验。令牌仅在服务端内存保存，每个会话串行刷新并保存轮换结果；会话最长 8 小时，重启需重新登录。退出只清理当前浏览器/CLI 会话，不退出 IDP SSO，也不撤销已签发 JWT。
+
+配置审计记录已验证的管理员 subject，不是不可篡改的合规日志。PostgreSQL 保留加密、版本冲突和事务审计语义。使用独立数据库/schema，外部数据库连接使用 verify-full TLS；Compose 示例的非加密数据库连接只在私有容器网络内使用。两种后端目前都支持一个网关实例；切换 driver 不迁移数据。详见[部署边界](deploy/README.zh-CN.md)。
+
+Endpoint 速率和并发限制默认关闭，在认证与 scope 检查后、上游执行前生效。同一配置 ID 的调用者共享额度；取消和退订保持可用。计数在进程内维护，重启重置，不能替代反向代理对未认证流量的防护。
 
 ### 应保持的安全行为
 
-后端访问使用 scope all-of 语义：`required_scopes` 的每一项都必须出现在已验证 token 中；JWT `scope` 是空格分隔字符串，`scp` 是字符串或字符串数组。后端请求头会拒绝换行、重复、`Accept`、`Content-Type`、任意 `Mcp-*`、`Proxy-Authorization`、`Proxy-Authenticate` 以及其他 HTTP/MCP transport 管理的名称。OAuth 模式会拒绝静态 `Authorization`。`client_credentials` discovery 只需要 RFC 8414/OIDC metadata 中精确匹配的 issuer 和 token endpoint，不要求交互式 authorization 或 PKCE metadata。OIDC verifier 首次 ready 还要求绝对 HTTPS 的 `jwks_uri`，以及可达的 JWKS 响应中至少包含一个可解析、有效且非对称的公开验证密钥；对称 `oct` 密钥以及无效或空 key 均不满足此条件。OIDC discovery 和 JWKS 响应分别限制为 1 MiB；OAuth metadata 响应同样限制为 1 MiB。OIDC 和后端 HTTP 客户端不跟随重定向。所有 HTTP 路由在 request body 被消费或关闭前都保持 `request_timeout` 读取 deadline，包括未认证或被拒绝请求；MCP 处理继续后，普通 MCP POST 随后用同一值设置 response 写入 deadline 和 request context。新版 `subscriptions/listen` POST 在 body 读完后保持长连接，不受普通 response 写入和 request context timeout 限制。日志会重新生成超长或无效 request ID，校验并脱敏能力名/资源 URI 字段，并且只记录外部错误类型。runtime 代际退役时会等待活动请求，然后先取消绑定到该代际的 request context，再关闭 Hub/backend 状态，避免 session 晚到登记；SIGINT/SIGTERM 的 HTTP drain 超时后会强制关闭剩余 HTTP 连接。
+后端访问使用 scope all-of 语义：`required_scopes` 的每一项都必须出现在已验证 token 中；JWT `scope` 是空格分隔字符串，`scp` 是字符串或字符串数组。后端请求头会拒绝换行、重复、`Accept`、`Content-Type`、任意 `Mcp-*`、`Proxy-Authorization`、`Proxy-Authenticate` 以及其他 HTTP/MCP transport 管理的名称。OAuth 模式会拒绝静态 `Authorization`。`client_credentials` discovery 只需要 RFC 8414/OIDC metadata 中精确匹配的 issuer 和 token endpoint，不要求交互式 authorization 或 PKCE metadata。OIDC verifier 首次 ready 还要求绝对 HTTPS 的 `jwks_uri`，以及可达的 JWKS 响应中至少包含一个可解析、有效且非对称的公开验证密钥；对称 `oct` 密钥以及无效或空 key 均不满足此条件。OIDC discovery 和 JWKS 响应分别限制为 1 MiB；OAuth metadata 响应同样限制为 1 MiB。OIDC 和后端 HTTP 客户端不跟随重定向。MCP 监听器的所有 HTTP 路由在 request body 被消费或关闭前都保持 `request_timeout` 读取 deadline，包括未认证或被拒绝请求；MCP 处理继续后，普通 MCP POST 随后用同一值设置 response 写入 deadline 和 request context。新版 `subscriptions/listen` POST 在 body 读完后保持长连接，不受普通 response 写入和 request context timeout 限制。日志会重新生成超长或无效 request ID，校验并脱敏能力名/资源 URI 字段，并且只记录外部错误类型。runtime 代际退役时会等待活动请求，然后先取消绑定到该代际的 request context，再关闭 Hub/backend 状态，避免 session 晚到登记；SIGINT/SIGTERM 的 HTTP drain 超时后会强制关闭剩余 HTTP 连接。
 
 后端 SSE 响应是 streaming passthrough：progress 检查每个 event 最多缓存 1 MiB，超大 event 原样转发但跳过 progress 检查。已确认的 2026 resource subscription ID 会把更新映射回原订阅 URI，包括 update event URI 不同的情况；timeout、取消订阅和 session/重连清理会删除映射。现代 `subscriptions/listen` stream 取消或断连时，清理会脱离已取消的 upstream context，但仍受 backend timeout 和 session lifecycle 约束，因此旧协议 backend 仍会收到 `resources/unsubscribe`。runtime 或 client context 取消会让底层 write deadline 到期，因此代际 drain 时会打断慢速或未读取的 subscription write，普通请求仍使用 `request_timeout`。
 

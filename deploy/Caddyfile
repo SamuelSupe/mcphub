@@ -1,0 +1,7 @@
+{$MCPHUB_HUB_HOST} {
+  reverse_proxy 127.0.0.1:8080
+}
+
+{$MCPHUB_ADMIN_HOST} {
+  reverse_proxy 127.0.0.1:8081
+}

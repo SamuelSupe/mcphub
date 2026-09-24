@@ -19,6 +19,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SamuelSupe/mcphub/internal/backend"
+	"github.com/SamuelSupe/mcphub/internal/ratelimit"
 )
 
 type Manager struct {
@@ -46,6 +47,16 @@ type StatusDetail struct {
 	ID      string `json:"id"`
 	Enabled bool   `json:"enabled"`
 	Tools   int    `json:"tools"`
+}
+
+func (m *Manager) RateLimits() map[string]ratelimit.Config {
+	policies := make(map[string]ratelimit.Config, len(m.groups))
+	for id, group := range m.groups {
+		if group.config.Enabled {
+			policies[id] = group.config.RateLimit
+		}
+	}
+	return policies
 }
 
 func NewManager(ctx context.Context, groups []GroupConfig, logger *slog.Logger) (*Manager, error) {

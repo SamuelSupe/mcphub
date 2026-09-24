@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/internal/ratelimit"
 )
 
 const (
@@ -27,6 +28,7 @@ var (
 )
 
 type GroupConfig struct {
+	RateLimit            ratelimit.Config    `json:"rate_limit"`
 	ID                   string              `json:"id"`
 	BaseURL              string              `json:"base_url"`
 	Enabled              bool                `json:"enabled"`
@@ -82,6 +84,9 @@ func ValidateGroups(groups []GroupConfig, backendIDs []string) error {
 }
 
 func ValidateGroup(group *GroupConfig) error {
+	if err := group.RateLimit.Validate(); err != nil {
+		return fmt.Errorf("tool group %q: %w", group.ID, err)
+	}
 	if !idPattern.MatchString(group.ID) {
 		return fmt.Errorf("tool group %q: id must match %s", group.ID, idPattern)
 	}

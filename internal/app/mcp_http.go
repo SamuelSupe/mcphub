@@ -37,7 +37,7 @@ func (a *App) serveMCP(w http.ResponseWriter, req *http.Request, rt *runtime) {
 			return
 		}
 		if envelope.Method != "resources/unsubscribe" {
-			release, rejected := a.limits.Acquire(envelope.backendIDs())
+			release, rejected := a.limits.Acquire(envelope.backendIDs)
 			if rejected != nil {
 				w.Header().Set("Retry-After", strconv.Itoa(rejected.RetryAfter))
 				w.Header().Set("Cache-Control", "no-store")
@@ -115,14 +115,14 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 	if err := json.Unmarshal(body, &envelope); err != nil {
 		return rpcEnvelope{}, true
 	}
-	backendIDs := envelope.backendIDs()
+	envelope.backendIDs = envelope.parseBackendIDs()
 	token := mcpauth.TokenInfoFromContext(req.Context())
 	var scopes []string
 	if token != nil {
 		scopes = token.Scopes
 	}
 	missingSet := make(map[string]struct{})
-	for _, backendID := range backendIDs {
+	for _, backendID := range envelope.backendIDs {
 		missing, known := rt.hub.MissingScopes(backendID, scopes)
 		if !known {
 			continue
@@ -161,6 +161,8 @@ type rpcEnvelope struct {
 	ID     json.RawMessage `json:"id"`
 	Method string          `json:"method"`
 	Params json.RawMessage `json:"params"`
+
+	backendIDs []string
 }
 
 func (e rpcEnvelope) toolName() (string, bool) {
@@ -176,7 +178,7 @@ func (e rpcEnvelope) toolName() (string, bool) {
 	return params.Name, true
 }
 
-func (e rpcEnvelope) backendIDs() []string {
+func (e rpcEnvelope) parseBackendIDs() []string {
 	var values []string
 	switch e.Method {
 	case "tools/call", "prompts/get":

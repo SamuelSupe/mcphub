@@ -59,6 +59,9 @@ func TestEndpointRateLimitsThroughAdminAndMCP(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &rejected); err != nil || rejected.ID != 17 || rejected.Error.Data.Endpoint != "alpha" {
 		t.Fatalf("rejection lost request identity: %s", response.Body.String())
 	}
+	if response := rateLimitedMCPRequest(application, t.Context(), "allowed", "tools/list", ""); response.Code != 200 || !strings.Contains(response.Body.String(), "alpha.echo") {
+		t.Fatalf("exhausted endpoint blocked catalog access: %d %s", response.Code, response.Body.String())
+	}
 	// Creating another endpoint rebuilds the runtime; its default remains unlimited.
 	unlimited := backendInput{ID: "beta", URL: backend.URL, AllowInsecureHTTP: true}
 	unlimitedBody, _ := json.Marshal(unlimited)

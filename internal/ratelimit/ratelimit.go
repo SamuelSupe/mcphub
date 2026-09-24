@@ -88,6 +88,9 @@ func (r *Registry) Configure(policies map[string]Config) {
 // Acquire rejects immediately, without queueing or consuming another endpoint's
 // allowance on rejection. The returned release must run when the response ends.
 func (r *Registry) Acquire(ids []string) (release func(), rejection *Rejection) {
+	if len(ids) == 0 {
+		return func() {}, nil
+	}
 	return r.acquire(ids, time.Now())
 }
 

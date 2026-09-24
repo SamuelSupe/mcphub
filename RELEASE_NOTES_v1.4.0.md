@@ -11,6 +11,7 @@ Remote administration, SQLite/PostgreSQL configuration storage, and optional end
 - Supports SQLite for local deployments and PostgreSQL for a separately operated configuration database. Both retain encrypted Header/OAuth secrets, revision conflict checks and transactional audit history. This release supports **one gateway instance**, including PostgreSQL deployments.
 - Adds per-endpoint `requests_per_second`, `burst` and `max_concurrent` settings in the UI/API and backend YAML. Limits are **off by default**. Callers share a backend's allowance; HTTP tools share their group's allowance. Rejections return HTTP 429 and a retry hint before upstream execution. Cancellation and unsubscribe remain available, and the CLI does not automatically replay a rejected call.
 - Preserves active request counts and unchanged rate budgets across configuration changes. Policies persist in the selected database; counters stay in memory and reset on process restart.
+- Reuses endpoint routing data between authorization and admission, skips limiter locking and allocation for requests without endpoint targets, and reuses shared issuer validation in CLI discovery.
 - Updates both README languages, the security policy, contribution checks and deployment guides. Server archives include SQLite/PostgreSQL configurations, a PostgreSQL Compose example and a Caddy proxy example. All archives include security policy and release notes.
 
 ### Getting started
@@ -49,6 +50,7 @@ Release gates run the race suite with a real PostgreSQL database, vet, JavaScrip
 - 支持本机 SQLite 与独立运维的 PostgreSQL 配置数据库。两种后端都保留 Header/OAuth 凭证加密、版本冲突检查和事务审计。本版包括 PostgreSQL 部署在内均支持 **一个网关实例**。
 - UI/API 与后端 YAML 新增 `requests_per_second`、`burst`、`max_concurrent`，**默认不限流**。调用者共享 backend 额度，HTTP tools 共享所属工具组额度。超限在上游执行前返回 HTTP 429 和重试提示；取消及退订保持可用，CLI 不自动重放被拒绝的调用。
 - 配置变更保留活动请求计数及未变策略的额度。策略保存在所选数据库；计数位于内存中，进程重启后重置。
+- 认证与限流复用 endpoint 解析结果；不涉及 endpoint 的请求跳过限流锁及临时对象分配，CLI discovery 复用共享 issuer 校验。
 - 更新中英文 README、安全策略、贡献检查与部署指南。服务端归档附带 SQLite/PostgreSQL 配置、PostgreSQL Compose 与 Caddy 代理示例；所有归档附带安全策略及发行说明。
 
 ### 使用方式

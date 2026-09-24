@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/authn"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
+
+	"github.com/SamuelSupe/mcphub/internal/authn"
 )
 
 func httpsURL(raw string) (*url.URL, error) {
@@ -94,11 +95,7 @@ func discover(ctx context.Context, server string, requested []string, c *http.Cl
 	if len(resource.AuthorizationServers) != 1 {
 		return nil, nil, errors.New("MCPHub must advertise exactly one authorization server")
 	}
-	issuer, err := httpsURL(resource.AuthorizationServers[0])
-	if err != nil || issuer.RawQuery != "" {
-		return nil, nil, errors.New("invalid authorization server issuer")
-	}
-	meta, err := authn.LoginMetadata(ctx, issuer.String(), c, true)
+	meta, err := authn.LoginMetadata(ctx, resource.AuthorizationServers[0], c, true)
 	if err != nil {
 		return nil, nil, err
 	}

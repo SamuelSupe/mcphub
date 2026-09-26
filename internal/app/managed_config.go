@@ -8,9 +8,9 @@ import (
 	"os"
 	"slices"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/configstore"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
 )
 
 func prepareManagedConfig(ctx context.Context, static *config.Config, configPath string) (*config.Config, *configstore.Store, error) {
@@ -126,11 +126,9 @@ func configWithRecords(base *config.Config, records []configstore.Record) *confi
 func cloneBackendConfig(value config.BackendConfig) config.BackendConfig {
 	result := value
 	result.RequiredScopes = slices.Clone(value.RequiredScopes)
+	result.PublishedTools = slices.Clone(value.PublishedTools)
 	result.Headers = maps.Clone(value.Headers)
-	result.ToolRules = make([]config.ToolRule, len(value.ToolRules))
-	for index, rule := range value.ToolRules {
-		result.ToolRules[index] = config.ToolRule{Match: rule.Match, RequiredScopes: slices.Clone(rule.RequiredScopes)}
-	}
+	result.ToolRules = config.CloneToolRules(value.ToolRules)
 	if value.OAuth != nil {
 		oauth := *value.OAuth
 		oauth.Scopes = slices.Clone(value.OAuth.Scopes)

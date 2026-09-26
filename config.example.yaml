@@ -15,8 +15,21 @@ server:
   allowed_origins:
     - ${MCPHUB_CONSOLE_ORIGIN}
 
+# Optional server-side SSO bridge and local user/group policy:
+# See docs/sso-and-user-management.md (auth.issuer becomes the Hub /sso URL).
 auth:
   issuer: ${MCPHUB_AUTH_ISSUER}
+
+# Optional per-client consent and local Broker support. Requires admin.enabled
+# and the configuration database (SQLite or single-instance PostgreSQL).
+# Register a separate portal OIDC client with the HTTPS callback
+# https://<MCPHub-host>/client-auth/auth/callback and the same MCP resource/audience.
+client_authorization:
+  enabled: false
+  require_client_grant: false # true enforces grants for every endpoint.
+  max_grant_ttl: 8h
+  client_id: "" # Registered ordinary-user portal client, not an admin identity.
+  # client_secret_env: MCPHUB_PORTAL_SECRET # Optional confidential web client.
 
 # Optional configuration database and UI. Existing deployments default to local
 # loopback-only management. See deploy/ for authenticated HTTPS remote mode and
@@ -29,12 +42,35 @@ admin:
   database_driver: sqlite
   database_path: ./data/mcphub.db
   encryption_key_env: MCPHUB_CONFIG_KEY
+  # Remote browser reviewers have a separate role from configuration admins.
+  # approvals:
+  #   required_scopes: [mcphub:approve]
+  #   pending_ttl: 30m
+  #   execution_ttl: 5m
+  #   retention: 720h
+  #   step_up_acr_values: ["urn:your-idp:mfa"] # Use your provider's enforced ACR.
+  #   policy_changes:
+  #     enabled: true # Requires remote mode and another security reviewer.
+  #     required_scopes: [mcphub:security]
+  #     subjects: [security-reviewer-sub]
+  #     require_step_up: true
+  #   notifications:
+  #     url: https://notify.example.com/mcphub
+  #     secret: ${MCPHUB_WEBHOOK_SECRET}
+  #   audit_archive:
+  #     url: https://audit.example.com/mcphub
+  #     key_id: audit-2026-01
+  #     signing_key: ${MCPHUB_AUDIT_SIGNING_KEY} # Base64 64-byte Ed25519 key.
 
 backends:
   # Required backend with a static API header.
   - id: primary
     url: ${MCPHUB_PRIMARY_BACKEND_URL}
     required: true
+    # require_client_grant: true # Opt this endpoint into strict mode first.
+    # Approve exact original tool names after discovery, e.g. [search, get_project].
+    # Empty means no tools are published. Scope globs never publish new tools.
+    published_tools: []
     # Optional; omitted or zero limits leave this endpoint unlimited.
     # rate_limit:
     #   requests_per_second: 20
@@ -45,9 +81,30 @@ backends:
     # Optional backend-local tool policy. `match` uses the original backend
     # tool name with Go path.Match semantics; matching rules add all scopes.
     tool_rules:
+      # Unclassified tools also require approval; classify verified reads explicitly.
+      # - match: "search"
+      #   effect: read
       - match: "admin.*"
+        effect: write
+        # approval:
+        #   required_approvals: 2
+        #   operation_id_argument: /operation_id
+        #   status_tool: get_operation_status # Explicitly published read-only tool.
+        #   action: Update production resource
+        #   environment: production
+        #   require_different_reviewer: true
+        #   require_step_up: true
+        #   approvers:
+        #     - subjects: [reviewer-a-sub, reviewer-b-sub]
+        #       resources:
+        #         - argument: /project
+        #           allowed_values: [work]
         required_scopes:
           - mcp:primary.admin
+        # Optional exact business-resource allowlist in tools/call arguments:
+        # resource_rules:
+        #   - argument: /project
+        #     allowed_values: [work]
     request_timeout: 30s
     headers:
       X-API-Key: ${MCPHUB_PRIMARY_API_KEY}
@@ -58,6 +115,7 @@ backends:
   - id: optional-crm
     url: ${MCPHUB_CRM_BACKEND_URL}
     required: false
+    published_tools: []
     required_scopes:
       - mcp:crm.read
       - mcp:crm.write

@@ -16,9 +16,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/backend"
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/mcpcompat"
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/mcpcompat"
 )
 
 func TestHubAggregatesAndRoutesProtocolFeatures(t *testing.T) {
@@ -712,8 +712,8 @@ func aggregationConfig(alphaURL, betaURL string) *config.Config {
 		},
 		Auth: config.AuthConfig{Issuer: "https://idp.example.com"},
 		Backends: []config.BackendConfig{
-			{ID: "alpha", URL: alphaURL, AllowInsecureHTTP: true, RequestTimeout: config.Duration{Duration: 5 * time.Second}},
-			{ID: "beta", URL: betaURL, AllowInsecureHTTP: true, RequestTimeout: config.Duration{Duration: 5 * time.Second}},
+			{ID: "alpha", PublishedTools: []string{"echo", "late", "slow", "confirm"}, ToolRules: []config.ToolRule{{Match: "*", Effect: "read"}}, URL: alphaURL, AllowInsecureHTTP: true, RequestTimeout: config.Duration{Duration: 5 * time.Second}},
+			{ID: "beta", PublishedTools: []string{"echo", "late", "slow", "confirm"}, ToolRules: []config.ToolRule{{Match: "*", Effect: "read"}}, URL: betaURL, AllowInsecureHTTP: true, RequestTimeout: config.Duration{Duration: 5 * time.Second}},
 		},
 	}
 }

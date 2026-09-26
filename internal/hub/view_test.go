@@ -9,8 +9,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/backend"
-	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
 )
 
 func TestApplyToolsDropsStalePublicToolAfterInvalidSchema(t *testing.T) {
@@ -106,7 +106,7 @@ func TestToolDefinitionsCacheTracksCatalogGeneration(t *testing.T) {
 		Name:        "delete_record",
 		InputSchema: countingSchema{calls: &calls},
 	}
-	backendConfig := config.BackendConfig{ToolRules: []config.ToolRule{{
+	backendConfig := config.BackendConfig{PublishedTools: []string{"delete_record"}, ToolRules: []config.ToolRule{{
 		Match:          "delete_*",
 		RequiredScopes: []string{"mcp:dangerous"},
 	}}}

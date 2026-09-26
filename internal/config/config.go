@@ -20,7 +20,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/SamuelSupe/mcphub/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 )
 
 const (
@@ -56,10 +56,11 @@ func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type Config struct {
-	Server   ServerConfig    `yaml:"server"`
-	Auth     AuthConfig      `yaml:"auth"`
-	Admin    AdminConfig     `yaml:"admin"`
-	Backends []BackendConfig `yaml:"backends"`
+	ClientAuthorization ClientAuthorizationConfig `yaml:"client_authorization"`
+	Server              ServerConfig              `yaml:"server"`
+	Auth                AuthConfig                `yaml:"auth"`
+	Admin               AdminConfig               `yaml:"admin"`
+	Backends            []BackendConfig           `yaml:"backends"`
 }
 
 type ServerConfig struct {
@@ -75,39 +76,47 @@ type ServerConfig struct {
 }
 
 type AuthConfig struct {
-	Issuer string `yaml:"issuer"`
+	Issuer string     `yaml:"issuer"`
+	SSO    *SSOConfig `yaml:"sso"`
 }
 
 type AdminConfig struct {
-	Enabled          bool     `yaml:"enabled"`
-	Mode             string   `yaml:"mode"`
-	PublicURL        string   `yaml:"public_url"`
-	ClientID         string   `yaml:"client_id"`
-	ClientSecretEnv  string   `yaml:"client_secret_env"`
-	RequiredScopes   []string `yaml:"required_scopes"`
-	DatabaseDriver   string   `yaml:"database_driver"`
-	DatabaseDSNEnv   string   `yaml:"database_dsn_env"`
-	Listen           string   `yaml:"listen"`
-	DatabasePath     string   `yaml:"database_path"`
-	EncryptionKeyEnv string   `yaml:"encryption_key_env"`
+	Approvals        ApprovalSettings `yaml:"approvals"`
+	Enabled          bool             `yaml:"enabled"`
+	Mode             string           `yaml:"mode"`
+	PublicURL        string           `yaml:"public_url"`
+	ClientID         string           `yaml:"client_id"`
+	ClientSecretEnv  string           `yaml:"client_secret_env"`
+	RequiredScopes   []string         `yaml:"required_scopes"`
+	DatabaseDriver   string           `yaml:"database_driver"`
+	DatabaseDSNEnv   string           `yaml:"database_dsn_env"`
+	Listen           string           `yaml:"listen"`
+	DatabasePath     string           `yaml:"database_path"`
+	EncryptionKeyEnv string           `yaml:"encryption_key_env"`
 }
 
 type BackendConfig struct {
-	RateLimit         ratelimit.Config  `yaml:"rate_limit"`
-	ID                string            `yaml:"id"`
-	URL               string            `yaml:"url"`
-	Required          bool              `yaml:"required"`
-	RequiredScopes    []string          `yaml:"required_scopes"`
-	ToolRules         []ToolRule        `yaml:"tool_rules"`
-	RequestTimeout    Duration          `yaml:"request_timeout"`
-	AllowInsecureHTTP bool              `yaml:"allow_insecure_http"`
-	Headers           map[string]string `yaml:"headers"`
-	OAuth             *OAuthConfig      `yaml:"oauth"`
+	EndpointUID        string            `yaml:"-"`
+	RequireClientGrant bool              `yaml:"require_client_grant"`
+	RateLimit          ratelimit.Config  `yaml:"rate_limit"`
+	ID                 string            `yaml:"id"`
+	URL                string            `yaml:"url"`
+	Required           bool              `yaml:"required"`
+	RequiredScopes     []string          `yaml:"required_scopes"`
+	PublishedTools     []string          `yaml:"published_tools"`
+	ToolRules          []ToolRule        `yaml:"tool_rules"`
+	RequestTimeout     Duration          `yaml:"request_timeout"`
+	AllowInsecureHTTP  bool              `yaml:"allow_insecure_http"`
+	Headers            map[string]string `yaml:"headers"`
+	OAuth              *OAuthConfig      `yaml:"oauth"`
 }
 
 type ToolRule struct {
-	Match          string   `yaml:"match" json:"match"`
-	RequiredScopes []string `yaml:"required_scopes" json:"required_scopes"`
+	Approval       *ToolApprovalPolicy `yaml:"approval" json:"approval,omitempty"`
+	Match          string              `yaml:"match" json:"match"`
+	Effect         string              `yaml:"effect" json:"effect,omitempty"`
+	RequiredScopes []string            `yaml:"required_scopes" json:"required_scopes"`
+	ResourceRules  []ResourceRule      `yaml:"resource_rules" json:"resource_rules,omitempty"`
 }
 
 type OAuthConfig struct {
@@ -236,11 +245,21 @@ func expandEnvironment(cfg *Config) error {
 		for j := range backend.RequiredScopes {
 			fields = append(fields, &backend.RequiredScopes[j])
 		}
+		for j := range backend.PublishedTools {
+			fields = append(fields, &backend.PublishedTools[j])
+		}
 		for j := range backend.ToolRules {
 			rule := &backend.ToolRules[j]
 			fields = append(fields, &rule.Match)
 			for k := range rule.RequiredScopes {
 				fields = append(fields, &rule.RequiredScopes[k])
+			}
+			for k := range rule.ResourceRules {
+				resource := &rule.ResourceRules[k]
+				fields = append(fields, &resource.Argument)
+				for n := range resource.AllowedValues {
+					fields = append(fields, &resource.AllowedValues[n])
+				}
 			}
 		}
 	}
@@ -256,14 +275,29 @@ func expandStaticEnvironment(cfg *Config) error {
 		&cfg.Admin.Mode,
 		&cfg.Admin.PublicURL,
 		&cfg.Admin.ClientID,
+		&cfg.ClientAuthorization.ClientID,
+		&cfg.ClientAuthorization.ClientSecretEnv,
 		&cfg.Admin.ClientSecretEnv,
 		&cfg.Admin.DatabaseDriver,
 		&cfg.Admin.DatabaseDSNEnv,
 		&cfg.Admin.DatabasePath,
 		&cfg.Admin.EncryptionKeyEnv,
 	}
+	fields = append(fields, &cfg.Admin.Approvals.Notifications.URL, &cfg.Admin.Approvals.Notifications.Secret, &cfg.Admin.Approvals.AuditArchive.URL, &cfg.Admin.Approvals.AuditArchive.SigningKey, &cfg.Admin.Approvals.AuditArchive.KeyID)
+	for i := range cfg.Admin.Approvals.PolicyChanges.RequiredScopes {
+		fields = append(fields, &cfg.Admin.Approvals.PolicyChanges.RequiredScopes[i])
+	}
+	for i := range cfg.Admin.Approvals.PolicyChanges.Subjects {
+		fields = append(fields, &cfg.Admin.Approvals.PolicyChanges.Subjects[i])
+	}
 	for i := range cfg.Admin.RequiredScopes {
 		fields = append(fields, &cfg.Admin.RequiredScopes[i])
+	}
+	for i := range cfg.Admin.Approvals.RequiredScopes {
+		fields = append(fields, &cfg.Admin.Approvals.RequiredScopes[i])
+	}
+	for i := range cfg.Admin.Approvals.StepUpACRValues {
+		fields = append(fields, &cfg.Admin.Approvals.StepUpACRValues[i])
 	}
 	for i := range cfg.Server.AllowedOrigins {
 		fields = append(fields, &cfg.Server.AllowedOrigins[i])
@@ -358,7 +392,13 @@ func (cfg *Config) Validate() error {
 	if err := validateOrigins(cfg.Server.AllowedOrigins); err != nil {
 		return err
 	}
+	if err := cfg.validateClientAuthorization(); err != nil {
+		return err
+	}
 	if err := validateAdmin(cfg.Admin); err != nil {
+		return err
+	}
+	if err := cfg.validateSSO(); err != nil {
 		return err
 	}
 	if len(cfg.Backends) == 0 && !cfg.Admin.Enabled {
@@ -398,7 +438,10 @@ func (cfg *Config) Validate() error {
 		if err := validateScopes("backend "+backend.ID+" required_scopes", backend.RequiredScopes); err != nil {
 			return err
 		}
-		if err := validateToolRules(backend); err != nil {
+		if err := validatePublishedTools(backend.PublishedTools); err != nil {
+			return fmt.Errorf("backend %s: %w", backend.ID, err)
+		}
+		if err := ValidateToolRules("backend "+backend.ID, backend.ToolRules); err != nil {
 			return err
 		}
 		canonicalHeaders := make(map[string]string, len(backend.Headers))
@@ -430,6 +473,15 @@ func (cfg *Config) Validate() error {
 func validateAdmin(admin AdminConfig) error {
 	if !admin.Enabled {
 		return nil
+	}
+	if err := admin.Approvals.Validate(); err != nil {
+		return err
+	}
+	if admin.Approvals.PolicyChanges.Enabled && !admin.Remote() {
+		return fmt.Errorf("policy change approval requires remote administration")
+	}
+	if admin.Approvals.PolicyChanges.RequireStepUp && len(admin.Approvals.StepUpACRValues) == 0 {
+		return fmt.Errorf("policy change step-up requires step_up_acr_values")
 	}
 	host, port, err := net.SplitHostPort(admin.Listen)
 	if err != nil {
@@ -513,11 +565,10 @@ func AdminEncryptionKey(admin AdminConfig) ([]byte, error) {
 	return key, nil
 }
 
-func validateToolRules(backend *BackendConfig) error {
-	seen := make(map[string]struct{}, len(backend.ToolRules))
-	for i := range backend.ToolRules {
-		rule := &backend.ToolRules[i]
-		field := fmt.Sprintf("backend %s tool_rules[%d]", backend.ID, i)
+func ValidateToolRules(source string, rules []ToolRule) error {
+	seen := make(map[string]struct{}, len(rules))
+	for i, rule := range rules {
+		field := fmt.Sprintf("%s tool_rules[%d]", source, i)
 		if rule.Match == "" {
 			return fmt.Errorf("%s match is required", field)
 		}
@@ -525,14 +576,28 @@ func validateToolRules(backend *BackendConfig) error {
 			return fmt.Errorf("%s match %q is invalid: %w", field, rule.Match, err)
 		}
 		if _, exists := seen[rule.Match]; exists {
-			return fmt.Errorf("backend %q: tool_rules contains duplicate match %q", backend.ID, rule.Match)
+			return fmt.Errorf("%s: tool_rules contains duplicate match %q", source, rule.Match)
 		}
 		seen[rule.Match] = struct{}{}
-		if len(rule.RequiredScopes) == 0 {
-			return fmt.Errorf("%s required_scopes must not be empty", field)
+		if rule.Effect != "" && rule.Effect != "read" && rule.Effect != "write" {
+			return fmt.Errorf("%s effect must be read or write", field)
+		}
+		if rule.Approval != nil {
+			if rule.Effect == "read" {
+				return fmt.Errorf("%s: read tools cannot have an approval policy", field)
+			}
+			if err := rule.Approval.Validate(); err != nil {
+				return fmt.Errorf("%s: %w", field, err)
+			}
+		}
+		if len(rule.RequiredScopes) == 0 && len(rule.ResourceRules) == 0 && rule.Effect == "" && rule.Approval == nil {
+			return fmt.Errorf("%s requires required_scopes, resource_rules, effect or approval", field)
 		}
 		if err := validateScopes(field+" required_scopes", rule.RequiredScopes); err != nil {
 			return err
+		}
+		if err := validateResourceRules(rule.ResourceRules); err != nil {
+			return fmt.Errorf("%s: %w", field, err)
 		}
 	}
 	return nil
@@ -730,6 +795,12 @@ func (cfg *Config) ImmutableEqual(other *Config) error {
 	}
 	if cfg.Auth.Issuer != other.Auth.Issuer {
 		return fmt.Errorf("auth.issuer requires a restart")
+	}
+	if !reflect.DeepEqual(cfg.Auth.SSO, other.Auth.SSO) {
+		return fmt.Errorf("auth.sso requires a restart")
+	}
+	if !reflect.DeepEqual(cfg.ClientAuthorization, other.ClientAuthorization) {
+		return fmt.Errorf("client_authorization configuration requires a restart")
 	}
 	if !reflect.DeepEqual(cfg.Admin, other.Admin) {
 		return fmt.Errorf("admin configuration requires a restart")

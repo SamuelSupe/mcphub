@@ -16,7 +16,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
 )
 
 func newHTTPClient(ctx context.Context, cfg config.BackendConfig) (*http.Client, error) {
@@ -29,6 +29,12 @@ type OutboundHTTPConfig struct {
 	Headers        map[string]string
 	OAuth          *config.OAuthConfig
 	RequestTimeout time.Duration
+}
+
+type noReplayKey struct{}
+
+func WithoutReplay(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noReplayKey{}, true)
 }
 
 // NewOutboundHTTPClient builds the shared credentialed transport used by MCP
@@ -51,9 +57,16 @@ func NewOutboundHTTPClient(ctx context.Context, cfg OutboundHTTPConfig) (*http.C
 	base.IdleConnTimeout = 90 * time.Second
 	base.TLSHandshakeTimeout = 10 * time.Second
 	base.ResponseHeaderTimeout = min(cfg.RequestTimeout, 30*time.Second)
+	// Go may retry GETs or requests with Idempotency-Key on a reused connection.
+	// A tool's actual effect, rather than its HTTP method, determines safety.
+	oneShot := base.Clone()
+	oneShot.DisableKeepAlives = true
+	oneShot.Protocols = new(http.Protocols)
+	oneShot.Protocols.SetHTTP1(true)
 
 	headeredTransport := &headerTransport{
 		base:    base,
+		oneShot: oneShot,
 		headers: config.HeaderMap(cfg.Headers),
 	}
 	client := &http.Client{
@@ -298,11 +311,15 @@ func (c *trackedConnection) Close() error {
 }
 
 type headerTransport struct {
+	oneShot *http.Transport
 	base    http.RoundTripper
 	headers http.Header
 }
 
 func (t *headerTransport) CloseIdleConnections() {
+	if t.oneShot != nil {
+		t.oneShot.CloseIdleConnections()
+	}
 	closeIdleConnections(t.base)
 }
 
@@ -427,6 +444,9 @@ func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		for _, value := range values {
 			cloned.Header.Add(name, value)
 		}
+	}
+	if noReplay, _ := req.Context().Value(noReplayKey{}).(bool); noReplay && t.oneShot != nil {
+		return t.oneShot.RoundTrip(cloned)
 	}
 	return t.base.RoundTrip(cloned)
 }

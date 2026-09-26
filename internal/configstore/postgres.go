@@ -65,6 +65,9 @@ func OpenPostgres(ctx context.Context, dsn string, key []byte, readOnly bool) (*
 	if err := store.migratePostgres(ctx); err != nil {
 		return closeOnError(err)
 	}
+	if err := store.ensureEndpointUIDs(ctx); err != nil {
+		return closeOnError(err)
+	}
 	return store, nil
 }
 
@@ -90,7 +93,7 @@ func (s *Store) migratePostgres(ctx context.Context) error {
 		if err := tx.QueryRowContext(ctx, "SELECT value FROM metadata WHERE key='schema_version'").Scan(&version); err != nil {
 			return err
 		}
-		if string(version) != "2" {
+		if string(version) != "2" && string(version) != "3" && string(version) != "4" && string(version) != "5" && string(version) != "6" && string(version) != "7" {
 			return fmt.Errorf("unsupported PostgreSQL configuration schema version %q", version)
 		}
 	}
@@ -102,9 +105,12 @@ func (s *Store) migratePostgres(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO metadata(key, value) VALUES('key_canary', ?), ('schema_version', ?)", sealed, []byte("2")); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO metadata(key, value) VALUES('key_canary', ?)", sealed); err != nil {
 			return err
 		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key, value) VALUES('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, []byte("7")); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

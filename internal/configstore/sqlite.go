@@ -79,6 +79,82 @@ CREATE TABLE IF NOT EXISTS openapi_imports (
   FOREIGN KEY(group_id) REFERENCES tool_groups(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS events_created_at ON events(created_at DESC);
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY,
+  issuer TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  intent BLOB NOT NULL,
+  status TEXT NOT NULL,
+  reviewer TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  expires_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  result BLOB
+);
+CREATE INDEX IF NOT EXISTS approvals_owner ON approvals(issuer, subject, status, expires_at);
+CREATE INDEX IF NOT EXISTS approvals_created ON approvals(created_at DESC);
+CREATE TABLE IF NOT EXISTS approval_events (
+  id TEXT PRIMARY KEY,
+  approval_id TEXT NOT NULL REFERENCES approvals(id) ON DELETE CASCADE,
+  action TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  detail BLOB,
+  created_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS approval_events_request ON approval_events(approval_id, created_at);
+CREATE TABLE IF NOT EXISTS approval_votes (
+  approval_id TEXT NOT NULL REFERENCES approvals(id) ON DELETE CASCADE,
+  reviewer TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  PRIMARY KEY(approval_id, reviewer)
+);
+CREATE TABLE IF NOT EXISTS approval_operations (
+  operation_key TEXT PRIMARY KEY,
+  request_hash TEXT NOT NULL,
+  approval_id TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS approval_deliveries (
+  sequence BIGINT PRIMARY KEY,
+  event_id TEXT NOT NULL UNIQUE,
+  approval_id TEXT NOT NULL,
+  envelope BLOB NOT NULL,
+  notification BLOB NOT NULL,
+  notify_due BIGINT NOT NULL,
+  archive_due BIGINT NOT NULL,
+  notify_attempts INTEGER NOT NULL DEFAULT 0,
+  archive_attempts INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS approval_delivery_archive ON approval_deliveries(archive_due, sequence);
+CREATE INDEX IF NOT EXISTS approval_delivery_notify ON approval_deliveries(notify_due, sequence);
+CREATE TABLE IF NOT EXISTS broker_sessions (
+ id TEXT PRIMARY KEY, issuer TEXT NOT NULL, subject TEXT NOT NULL, resource TEXT NOT NULL,
+ secret_hash TEXT NOT NULL, status TEXT NOT NULL, created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS client_grants (
+ id TEXT PRIMARY KEY, issuer TEXT NOT NULL, subject TEXT NOT NULL, resource TEXT NOT NULL,
+ session_id TEXT NOT NULL REFERENCES broker_sessions(id), client_id TEXT NOT NULL, endpoint_id TEXT NOT NULL,
+ status TEXT NOT NULL, revision BIGINT NOT NULL, data BLOB NOT NULL, credential_hash TEXT UNIQUE,
+ exchange_hash TEXT, created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL, request_expires_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS client_grants_owner ON client_grants(issuer,subject,status,expires_at);
+CREATE INDEX IF NOT EXISTS client_grants_session ON client_grants(session_id,client_id);
+CREATE TABLE IF NOT EXISTS client_authorization_events (
+ id TEXT PRIMARY KEY, grant_id TEXT NOT NULL, data BLOB NOT NULL, created_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS identities (
+ id TEXT PRIMARY KEY, provider TEXT NOT NULL, kind TEXT NOT NULL, external_id TEXT NOT NULL,
+ data BLOB NOT NULL, UNIQUE(provider,kind,external_id)
+);
+CREATE TABLE IF NOT EXISTS sso_sessions (
+ id TEXT PRIMARY KEY, data BLOB NOT NULL, expires_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sso_refresh (
+ hash TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sso_sessions(id) ON DELETE CASCADE,
+ used INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sso_refresh_session ON sso_refresh(session_id);
+
 `
 
 func Open(ctx context.Context, path string, key []byte) (*Store, error) {
@@ -142,6 +218,9 @@ func Open(ctx context.Context, path string, key []byte) (*Store, error) {
 		}
 	}
 	if err := migrateSchema(ctx, db); err != nil {
+		return closeOnError(err)
+	}
+	if err := store.ensureEndpointUIDs(ctx); err != nil {
 		return closeOnError(err)
 	}
 	if err := secureSQLiteFiles(path); err != nil {
@@ -218,7 +297,7 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 	}
 	if err == nil {
 		version, parseErr := strconv.Atoi(string(versionRaw))
-		if parseErr != nil || version < 1 || version > 2 {
+		if parseErr != nil || version < 1 || version > 7 {
 			return fmt.Errorf("unsupported configuration schema version %q", string(versionRaw))
 		}
 	}
@@ -228,7 +307,7 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureEventSourceColumns(ctx, tx); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key, value) VALUES('schema_version', '2')
+	if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key, value) VALUES('schema_version', '7')
 ON CONFLICT(key) DO UPDATE SET value=excluded.value`); err != nil {
 		return fmt.Errorf("record configuration schema version: %w", err)
 	}

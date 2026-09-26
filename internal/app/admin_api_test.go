@@ -5,17 +5,23 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	platform "runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
 )
 
 func TestAdminSecurityHeadersAndHostPolicy(t *testing.T) {
@@ -60,6 +66,108 @@ func TestAdminSecurityHeadersAndHostPolicy(t *testing.T) {
 		t.Fatalf("valid API Cache-Control = %q, want no-store", got)
 	}
 	assertAdminSecurityHeaders(t, recorder.Header())
+}
+
+func TestNativeToolPolicyWorkbench(t *testing.T) {
+	if os.Getenv("MCPHUB_POLICY_BROWSER_QA") != "1" || platform.GOOS != "darwin" {
+		t.Skip("set MCPHUB_POLICY_BROWSER_QA=1 on macOS for interactive tool-policy verification")
+	}
+	var calls atomic.Int32
+	upstream := mcp.NewServer(&mcp.Implementation{Name: "policy-browser-fixture", Version: "1"}, nil)
+	for _, name := range []string{"get_project", "update_project", "delete_project"} {
+		upstream.AddTool(&mcp.Tool{Name: name, Description: "Project operations / 项目操作", InputSchema: map[string]any{"type": "object"}}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			calls.Add(1)
+			return &mcp.CallToolResult{}, nil
+		})
+	}
+	backendHTTP := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return upstream }, &mcp.StreamableHTTPOptions{Stateless: true}))
+	defer backendHTTP.Close()
+	application := newAdminTestApp(t)
+	input := backendInput{ID: "projects", URL: backendHTTP.URL, Required: true, AllowInsecureHTTP: true, PublishedTools: []string{"get_project", "update_project"}, RequiredScopes: []string{"projects:access"}, ToolRules: []config.ToolRule{{Match: "get_*", Effect: "read"}, {Match: "update_*", Effect: "write"}}}
+	body, _ := json.Marshal(input)
+	response := serveAdminJSON(t, application, "POST", "/api/v1/backends", body, "")
+	if response.Code != 201 {
+		t.Fatalf("create fixture: %s", response.Body.String())
+	}
+	group := []byte(`{"id":"rest-api","base_url":"https://api.example.com","enabled":true,"required_scopes":["api:access"]}`)
+	if response := serveAdminJSON(t, application, "POST", "/api/v1/tool-groups", group, ""); response.Code != 201 {
+		t.Fatalf("create group: %s", response.Body.String())
+	}
+	tool := []byte(`{"name":"lookup","description":"Look up a business record","method":"GET","path":"/items","enabled":true}`)
+	if response := serveAdminJSON(t, application, "POST", "/api/v1/tool-groups/rest-api/tools", tool, ""); response.Code != 201 {
+		t.Fatalf("create HTTP tool: %s", response.Body.String())
+	}
+	application.currentConfig().ClientAuthorization.Enabled = true
+	uid, policy, err := application.store.ClientEndpointPolicy(t.Context(), "projects")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 28 {
+		subject := fmt.Sprintf("qa-user-%02d", i)
+		if i == 27 {
+			subject = "qa-alice"
+		}
+		input := configstore.ClientGrant{GrantBinding: configstore.GrantBinding{ClientID: fmt.Sprintf("ci_qa_editor_instance_%02d", i), EndpointUID: uid}, Issuer: application.currentConfig().Auth.Issuer, Subject: subject, Resource: application.currentConfig().Server.PublicURL, ClientName: fmt.Sprintf("QA editor %02d", i), EndpointID: "projects", EndpointPolicy: policy, AllowedScopes: []string{"projects:access"}, AllowedTools: []string{"get_project"}, Capabilities: configstore.GrantCapabilities{Tools: true}}
+		if err := application.currentRuntime().hub.PrepareClientGrant(&input, input.AllowedScopes); err != nil {
+			t.Fatal(err)
+		}
+		g, exchange, _, err := application.store.CreateClientGrant(t.Context(), input, "", time.Hour, 8*time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := application.store.DecideClientGrant(t.Context(), g.GrantID, g.Issuer, g.Subject, true); err != nil {
+			t.Fatal(err)
+		}
+		g, _, err = application.store.ExchangeClientGrant(t.Context(), g.GrantID, g.Issuer, g.Subject, exchange)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx := diagnostics.Begin(t.Context(), fmt.Sprintf("qa-request-%02d", i))
+		diagnostics.Update(ctx, func(r *diagnostics.Record) {
+			r.Subject = subject
+			r.ClientID = g.ClientID
+			r.GrantID = g.GrantID
+			r.Endpoint = "projects"
+			r.Tool = "get_project"
+			r.Method = "tools/call"
+			r.StartedAt = time.Now().Add(-time.Duration(i+1) * 20 * time.Millisecond)
+		})
+		outcome := "success"
+		status := 200
+		if i%4 == 0 {
+			outcome = "tool_error"
+		}
+		if i%4 == 1 {
+			outcome = "scope_denied"
+			status = 403
+		}
+		diagnostics.Outcome(ctx, outcome, "")
+		application.requests.Finish(ctx, status)
+	}
+	done := make(chan struct{}, 1)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/__qa/done" && r.Method == http.MethodPost {
+			select {
+			case done <- struct{}{}:
+			default:
+			}
+			w.WriteHeader(204)
+			return
+		}
+		application.adminHandler().ServeHTTP(w, r)
+	}))
+	application.currentRuntime().cfg.Admin.Listen = server.Listener.Addr().String()
+	server.Start()
+	defer server.Close()
+	t.Logf("POLICY_BROWSER_URL=%s/#tool-policies", server.URL)
+	select {
+	case <-done:
+	case <-time.After(10 * time.Minute):
+		t.Fatal("browser verification timed out")
+	}
+	if calls.Load() != 0 {
+		t.Fatal("policy browsing or simulation executed a tool")
+	}
 }
 
 func TestAdminBackendViewsRedactConfiguredSecrets(t *testing.T) {
@@ -350,4 +458,154 @@ func assertAdminSecurityHeaders(t *testing.T, headers http.Header) {
 			t.Errorf("missing admin security header %s", name)
 		}
 	}
+}
+
+func TestToolPublicationAndResourcePolicyThroughAdmin(t *testing.T) {
+	var calls atomic.Int32
+	upstream := mcp.NewServer(&mcp.Implementation{Name: "publication-test", Version: "1"}, nil)
+	handler := func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		calls.Add(1)
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(req.Params.Arguments)}}}, nil
+	}
+	upstream.AddTool(&mcp.Tool{Name: "search", InputSchema: map[string]any{"type": "object"}}, handler)
+	backendHTTP := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return upstream }, &mcp.StreamableHTTPOptions{Stateless: true}))
+	defer backendHTTP.Close()
+	application := newAdminTestApp(t)
+	input := backendInput{ID: "alpha", URL: backendHTTP.URL, Required: true, AllowInsecureHTTP: true, RequiredScopes: []string{"mcp:alpha"}, ToolRules: []config.ToolRule{{Match: "*", Effect: "read", RequiredScopes: []string{"mcp:alpha:audit"}, ResourceRules: []config.ResourceRule{{Argument: "/project", AllowedValues: []string{"work"}}, {Argument: "/body/database", AllowedValues: []string{"reports"}}}}}}
+	etag := ""
+	save := func(method string) {
+		t.Helper()
+		body, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		target := "/api/v1/backends"
+		if method == http.MethodPut {
+			target += "/alpha"
+		}
+		response := serveAdminJSON(t, application, method, target, body, etag)
+		if response.Code != http.StatusCreated && response.Code != http.StatusOK {
+			t.Fatalf("save: %d %s", response.Code, response.Body.String())
+		}
+		etag = response.Header().Get("ETag")
+	}
+	save(http.MethodPost)
+	hubHTTP := httptest.NewServer(application)
+	defer hubHTTP.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	client := connectAppClient(t, ctx, hubHTTP.URL+"/mcp", "privileged")
+	defer client.Close()
+	assertCatalog := func(want int) {
+		t.Helper()
+		fresh := connectAppClient(t, ctx, hubHTTP.URL+"/mcp", "privileged")
+		defer fresh.Close()
+		list, err := fresh.ListTools(ctx, nil)
+		if err != nil || len(list.Tools) != want {
+			t.Fatalf("catalog: %#v, %v; want %d", list, err, want)
+		}
+	}
+	args := json.RawMessage(`{"project":"work","body":{"database":"reports"}}`)
+	checkAccess := func(scopes []string, arguments json.RawMessage, outcome, failedCode string) {
+		t.Helper()
+		before := calls.Load()
+		body, _ := json.Marshal(accessCheckInput{Endpoint: "alpha", Tool: "search", Scopes: scopes, Arguments: arguments})
+		response := serveAdminJSON(t, application, http.MethodPost, "/api/v1/access-check", body, "")
+		var result accessCheckResult
+		if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &result) != nil || !result.Simulated || result.Outcome != outcome {
+			t.Fatalf("access check: %d %s", response.Code, response.Body.String())
+		}
+		if failedCode != "" {
+			found := false
+			for _, step := range result.Checks {
+				found = found || (step.Code == failedCode && !step.Passed)
+			}
+			if !found {
+				t.Fatalf("missing denial %s: %+v", failedCode, result)
+			}
+		}
+		if before != calls.Load() {
+			t.Fatal("permission simulation executed an upstream tool")
+		}
+	}
+	allScopes := []string{"mcp:alpha", "mcp:alpha:audit"}
+	policyResponse := serveAdminJSON(t, application, http.MethodGet, "/api/v1/tool-policies?endpoint=alpha", nil, "")
+	var policies endpointPolicies
+	if policyResponse.Code != 200 || json.Unmarshal(policyResponse.Body.Bytes(), &policies) != nil || len(policies.Tools) != 1 || policies.Tools[0].Published || policies.Tools[0].Effect != "read" || len(policies.Tools[0].RequiredScopes) != 2 {
+		t.Fatalf("unpublished tool policy: %s", policyResponse.Body.String())
+	}
+	checkAccess(allScopes, args, "denied", "tool_published")
+	assertDenied := func(name string, arguments json.RawMessage) {
+		t.Helper()
+		before := calls.Load()
+		fresh := connectAppClient(t, ctx, hubHTTP.URL+"/mcp", "privileged")
+		defer fresh.Close()
+		result, err := fresh.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: arguments})
+		if err == nil && !result.IsError {
+			t.Fatalf("accepted %s: %s", name, arguments)
+		}
+		if calls.Load() != before {
+			t.Fatal("denied request reached upstream")
+		}
+	}
+	assertCatalog(0)
+	assertDenied("alpha.search", args)
+	input.PublishedTools = []string{"search"}
+	save(http.MethodPut)
+	stored, err := application.store.Get(ctx, "alpha")
+	if err != nil || len(stored.Config.PublishedTools) != 1 || len(stored.Config.ToolRules[0].ResourceRules) != 2 {
+		t.Fatalf("policy not persisted: %#v, %v", stored, err)
+	}
+	assertCatalog(1)
+	checkAccess(allScopes[:1], args, "denied", "required_scopes")
+	checkAccess(allScopes, json.RawMessage(`{"project":"other"}`), "denied", "resource_allowed")
+	checkAccess(allScopes, args, "checks_passed", "")
+	unprivileged := connectAppClient(t, ctx, hubHTTP.URL+"/mcp", "allowed")
+	defer unprivileged.Close()
+	if _, err := unprivileged.CallTool(ctx, &mcp.CallToolParams{Name: "alpha.search", Arguments: args}); err == nil {
+		t.Fatal("missing tool scope allowed")
+	}
+	for _, bad := range []string{`{}`, `{"project":null}`, `{"project":"other","body":{"database":"reports"}}`, `{"project":["work","other"],"body":{"database":"reports"}}`, `{"project":"work","body":{"database":"private"}}`} {
+		assertDenied("alpha.search", json.RawMessage(bad))
+	}
+	if calls.Load() != 0 {
+		t.Fatal("unauthorized calls reached upstream")
+	}
+	valid := json.RawMessage(`{"project":"other","project":"work","body":{"database":"reports"},"n":9007199254740993}`)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{Name: "alpha.search", Arguments: valid})
+	if err != nil || result.IsError || calls.Load() != 1 {
+		t.Fatalf("allowed call: %#v, %v", result, err)
+	}
+	forwarded := result.Content[0].(*mcp.TextContent).Text
+	if strings.Count(forwarded, `"project"`) != 1 || !strings.Contains(forwarded, "9007199254740993") {
+		t.Fatalf("upstream received ambiguous or rounded arguments: %s", forwarded)
+	}
+	upstream.AddTool(&mcp.Tool{Name: "new_search", InputSchema: map[string]any{"type": "object"}}, handler)
+	backendClient, _ := application.currentRuntime().manager.Client("alpha")
+	for len(backendClient.Catalog().Tools) != 2 {
+		select {
+		case <-ctx.Done():
+			t.Fatal("new catalog was not discovered")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	assertCatalog(1)
+	assertDenied("alpha.new_search", args)
+	input.ToolRules[0].ResourceRules[0].AllowedValues = []string{"ops"}
+	save(http.MethodPut)
+	assertDenied("alpha.search", args)
+	input.PublishedTools = nil
+	save(http.MethodPut)
+	assertCatalog(0)
+	assertDenied("alpha.search", json.RawMessage(`{"project":"ops","body":{"database":"reports"}}`))
+	input.PublishedTools = []string{"search"}
+	input.ToolRules = append(input.ToolRules, config.ToolRule{Match: "search", Effect: "write"})
+	save(http.MethodPut)
+	checkAccess(allScopes, json.RawMessage(`{"project":"ops","body":{"database":"reports"}}`), "denied", "approval_service")
+	disabled := false
+	input.Enabled = &disabled
+	save(http.MethodPut)
+	assertCatalog(0)
+	assertDenied("alpha.search", args)
+	checkAccess(allScopes, args, "denied", "endpoint_enabled")
 }

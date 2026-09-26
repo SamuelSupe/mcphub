@@ -125,18 +125,8 @@ func (m *Manager) refresh(ctx context.Context) error {
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	requestCtx = oidc.ClientContext(requestCtx, m.client)
-	provider, err := oidc.NewProvider(requestCtx, m.issuer)
+	provider, err := discoverProvider(requestCtx, m.issuer, m.client)
 	if err != nil {
-		return err
-	}
-	var metadata struct {
-		JWKSURI           string   `json:"jwks_uri"`
-		SigningAlgorithms []string `json:"id_token_signing_alg_values_supported"`
-	}
-	if err := provider.Claims(&metadata); err != nil {
-		return fmt.Errorf("read OIDC provider metadata: %w", err)
-	}
-	if err := probeJWKS(requestCtx, metadata.JWKSURI, metadata.SigningAlgorithms, m.client); err != nil {
 		return err
 	}
 	verifier := provider.VerifierContext(requestCtx, &oidc.Config{
@@ -147,6 +137,24 @@ func (m *Manager) refresh(ctx context.Context) error {
 	m.ready.Store(true)
 	m.logger.Info("OIDC verifier ready", "issuer", m.issuer)
 	return nil
+}
+
+func discoverProvider(ctx context.Context, issuer string, client *http.Client) (*oidc.Provider, error) {
+	provider, err := oidc.NewProvider(oidc.ClientContext(ctx, client), issuer)
+	if err != nil {
+		return nil, err
+	}
+	var metadata struct {
+		JWKSURI           string   `json:"jwks_uri"`
+		SigningAlgorithms []string `json:"id_token_signing_alg_values_supported"`
+	}
+	if err := provider.Claims(&metadata); err != nil {
+		return nil, fmt.Errorf("read OIDC provider metadata: %w", err)
+	}
+	if err := probeJWKS(ctx, metadata.JWKSURI, metadata.SigningAlgorithms, client); err != nil {
+		return nil, err
+	}
+	return provider, nil
 }
 
 func probeJWKS(ctx context.Context, rawURL string, signingAlgorithms []string, client *http.Client) error {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -11,10 +12,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/backend"
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
-	"github.com/SamuelSupe/mcphub/internal/hub"
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/hub"
 )
 
 type runtime struct {
@@ -35,6 +36,11 @@ func newRuntime(parent context.Context, cfg *config.Config, logger *slog.Logger,
 }
 
 func newRuntimeWithGroups(parent context.Context, cfg *config.Config, groups []httptool.GroupConfig, logger *slog.Logger, requireReady bool) (*runtime, error) {
+	for _, group := range groups {
+		if group.RequireClientGrant && !cfg.ClientAuthorization.Enabled {
+			return nil, fmt.Errorf("tool group %s requires client_authorization.enabled", group.ID)
+		}
+	}
 	ctx, cancel := context.WithCancel(parent)
 	if err := httptool.ValidateGroups(groups, backendIDs(cfg)); err != nil {
 		cancel()

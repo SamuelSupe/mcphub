@@ -7,9 +7,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/mcpcompat"
-	"github.com/SamuelSupe/mcphub/internal/version"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/mcpcompat"
+	"github.com/SamuelSupe/mcphub/v2/internal/version"
 )
 
 type ProbeResult struct {
@@ -18,6 +18,7 @@ type ProbeResult struct {
 	Server          ProbeServer   `json:"server"`
 	Capabilities    ProbeFeatures `json:"capabilities"`
 	Counts          ProbeCounts   `json:"counts"`
+	Tools           []string      `json:"tools"`
 }
 
 type ProbeServer struct {
@@ -85,6 +86,11 @@ func Probe(ctx context.Context, cfg config.BackendConfig, maximumRefresh time.Du
 	result.Counts = ProbeCounts{
 		Tools: len(catalog.Tools), Prompts: len(catalog.Prompts), Resources: len(catalog.Resources),
 		ResourceTemplates: len(catalog.ResourceTemplates),
+	}
+	for _, tool := range catalog.Tools {
+		if tool != nil {
+			result.Tools = append(result.Tools, tool.Name)
+		}
 	}
 	return result, nil
 }

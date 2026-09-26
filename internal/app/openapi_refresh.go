@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/configstore"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
-	"github.com/SamuelSupe/mcphub/internal/openapiimport"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/openapiimport"
 )
 
 func (a *App) runOpenAPIRefreshLoop() {
@@ -102,6 +102,14 @@ func (a *App) refreshOpenAPIImport(record configstore.OpenAPIImportRecord) error
 	}
 	if current.Revision != record.Revision {
 		return nil
+	}
+	if a.currentConfig().Admin.Approvals.PolicyChanges.Enabled {
+		previousTools, err := a.store.ListHTTPTools(a.ctx, record.GroupID)
+		if err != nil {
+			return err
+		}
+		_, err = a.createConfigurationProposal(a.ctx, "system:openapi-refresh", configurationChange{Kind: "openapi_import", Revision: record.Revision, GroupRevision: group.Revision, Import: &next, Tools: tools}, importApprovalView(record, previousTools), importApprovalView(next, tools))
+		return err
 	}
 	groups, err := a.store.ListToolGroups(a.ctx)
 	if err != nil {

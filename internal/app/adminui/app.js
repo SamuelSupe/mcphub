@@ -1,5 +1,11 @@
+import { initIdentities, refreshIdentities, renderIdentities } from "./identities.js";
+import { renderOverview } from "./overview.js";
 import { fillRateLimit, collectRateLimit } from "./rate-limits.js";
-import { initializeAuth, canManage, authHeaders, requireLogin } from "./auth.js";
+import { initToolPolicies, updateToolEndpoints, renderToolPolicies } from "./tool-policies.js";
+import { initClientGrants, refreshClientGrants, renderClientGrants } from "./client-grants.js";
+import { initRequestDiagnostics, refreshRequestDiagnostics, renderRequestDiagnostics } from "./request-diagnostics.js";
+import { refreshApprovals, renderApprovals } from "./approvals.js";
+import { initializeAuth, canManage, canApprove, isAuthenticated, authHeaders, requireLogin, renderManagementMode } from "./auth.js";
 import { apiErrorMessage, getLocale, setLocale, t, translateDOM } from "./i18n.js";
 import { initShell, renderPage, renderSummary, renderRefreshState, updateRefreshState } from "./shell.js";
 
@@ -60,12 +66,19 @@ async function api(path, options = {}) {
     error.status = response.status;
     throw error;
   }
+  if (response.status === 202 && body.pending_approval) {
+    sessionStorage.setItem("mcphub.approval", body.approval_id);
+    document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
+    location.assign(`/?approval=${encodeURIComponent(body.approval_id)}#approvals`);
+    throw new Error(t("配置变更已提交审批，批准前不会生效。"));
+  }
   return body;
 }
 
 async function refresh() {
-  if (!canManage()) return;
+  if (!isAuthenticated()) return;
   try {
+    if (canManage()) {
     const [overview, backendData, groupData, eventData] = await Promise.all([
       api("/overview"), api("/backends"), api("/tool-groups"), api("/events?limit=50"),
     ]);
@@ -74,13 +87,30 @@ async function refresh() {
     state.events = eventData.events || [];
     state.overview = overview;
     renderSummary(overview);
+    renderOverview(overview, state.backends, openInspector);
     updateRefreshState();
     renderBackends();
     renderToolGroups();
     renderEvents(state.events);
+    updateToolEndpoints(state.backends, state.groups);
+    }
+    if (canApprove()) await refreshApprovals(api);
+    updateRefreshState();
   } catch (error) {
     updateRefreshState(error);
   }
+}
+
+async function refreshManagementPage() {
+  if (!canManage() || !isAuthenticated()) return;
+  if (location.hash === "#identities") await refreshIdentities();
+  if (location.hash === "#client-grants") await refreshClientGrants();
+  if (location.hash === "#requests") await refreshRequestDiagnostics();
+}
+
+async function refreshAll() {
+  await refresh();
+  await refreshManagementPage();
 }
 
 function renderBackends() {
@@ -135,6 +165,7 @@ function renderBackends() {
     pill.append(dot, document.createTextNode(stateLabel(backend.runtime.state)));
     const chevron = document.createElement("span");
     chevron.className = "chevron";
+    chevron.setAttribute("aria-hidden", "true");
     chevron.textContent = "›";
     const toggle = document.createElement("button");
     toggle.type = "button";
@@ -199,7 +230,13 @@ function stateLabel(value) {
 }
 
 function eventCopy(event) {
-  const actions = { bootstrap: "已从 YAML 导入", create: "已创建", update: "已更新", delete: "已删除", probe: "连接测试", refresh: "刷新来源" };
+  const actions = {
+    bootstrap: "已从 YAML 导入", create: "已创建", update: "已更新", delete: "已删除", probe: "连接测试", refresh: "刷新来源",
+    approval_requested: "已申请写入审批", approval_approved: "已批准写入", approval_rejected: "已拒绝写入",
+    approval_executing: "开始执行写入", approval_succeeded: "写入已完成", approval_failed: "写入返回错误", approval_unknown: "写入结果不确定",
+    approval_revoked: "已撤销", approval_cancelled: "已取消", approval_expired: "已过期", approval_investigated: "已记录人工核查",
+    identity_login: "用户登录同步", identity_permissions_updated: "已更新用户或组织权限", identity_discovered: "已发现组织", directory_synced: "目录同步完成",
+  };
   return `${event.source_id || event.backend_id || t("系统")} · ${t(actions[event.action] || event.action)}${event.success ? "" : t("失败")}`;
 }
 
@@ -287,6 +324,7 @@ function resetForm() {
   $("#headers-list").replaceChildren();
   addHeaderRow("X-API-Key", "", false);
   $("#field-rules").value = "";
+  $("#field-published-tools").value = "";
   setAuthMode("headers");
 }
 
@@ -297,8 +335,10 @@ function fillForm(backend) {
   $("#field-timeout").value = backend.request_timeout || "60s";
   $("#field-enabled").checked = backend.enabled;
   $("#field-required").checked = backend.required;
+  $("#field-client-grant").checked = !!backend.require_client_grant;
   $("#field-insecure").checked = backend.allow_insecure_http;
   $("#field-scopes").value = (backend.required_scopes || []).join(", ");
+  $("#field-published-tools").value = (backend.published_tools || []).join(", ");
   $("#field-rules").value = backend.tool_rules?.length ? JSON.stringify(backend.tool_rules, null, 2) : "";
   $("#headers-list").replaceChildren();
   for (const header of backend.headers || []) addHeaderRow(header.name, "", true);
@@ -367,7 +407,9 @@ function collectInput() {
     url: $("#field-url").value.trim(),
     enabled: $("#field-enabled").checked,
     required: $("#field-required").checked,
+    require_client_grant: $("#field-client-grant").checked,
     required_scopes: splitValues($("#field-scopes").value),
+    published_tools: splitValues($("#field-published-tools").value),
     tool_rules: rules,
     request_timeout: $("#field-timeout").value.trim(),
     rate_limit: collectRateLimit("field"),
@@ -401,7 +443,9 @@ function inputFromBackend(backend, enabled) {
     url: backend.url,
     enabled,
     required: backend.required,
+    require_client_grant: !!backend.require_client_grant,
     required_scopes: backend.required_scopes,
+    published_tools: backend.published_tools,
     tool_rules: backend.tool_rules,
     request_timeout: backend.request_timeout,
     rate_limit: backend.rate_limit,
@@ -454,7 +498,7 @@ async function probeForm() {
     const response = await api("/backends/probe", { method: "POST", body: JSON.stringify(input) });
     state.probeOK = true;
     const result = response.result;
-    elements.probeResult.textContent = `${t("连接成功")} · ${result.latency_ms} ms · ${result.server.title || result.server.name || "MCP Server"} · ${result.counts.tools} tools · ${result.counts.resources} resources`;
+    elements.probeResult.textContent = `${t("连接成功")} · ${result.latency_ms} ms · ${result.server.title || result.server.name || "MCP Server"} · ${result.counts.tools} tools · ${result.counts.resources} resources · ${t("发现的工具（尚未自动发布）")}：${(result.tools || []).join(", ") || "—"}`;
   } catch (error) {
     state.probeOK = false;
     elements.probeResult.hidden = false;
@@ -776,7 +820,8 @@ function renderToolGroups() {
     const pill = document.createElement("span"); pill.className = "state-pill";
     const dot = document.createElement("i"); dot.className = `status-dot ${group.enabled ? "ready" : "disabled"}`;
     pill.append(dot, document.createTextNode(group.enabled ? t("已启用") : t("已停用")));
-    const chevron = document.createElement("span"); chevron.className = "chevron"; chevron.textContent = "›";
+    const chevron = document.createElement("span"); chevron.className = "chevron";
+    chevron.setAttribute("aria-hidden", "true"); chevron.textContent = "›";
     actions.append(pill, chevron); row.append(identity, capabilities, policy, actions);
     row.addEventListener("click", () => openGroupDialog(group));
     row.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openGroupDialog(group); } });
@@ -811,6 +856,7 @@ async function openGroupDialog(group = null) {
     $("#group-response-limit").value = String(group.max_response_body_bytes);
     $("#group-enabled").checked = group.enabled;
     $("#group-scopes").value = (group.required_scopes || []).join(", ");
+    $("#group-client-grant").checked = !!group.require_client_grant;
     $("#group-rules").value = group.tool_rules?.length ? JSON.stringify(group.tool_rules, null, 2) : "";
     for (const header of group.headers || []) addHeaderRow(header.name, "", true, $("#group-headers-list"));
     if (group.oauth) {
@@ -876,7 +922,7 @@ function collectGroupInput() {
   });
   if ($("#group-rules").value.trim()) rules = JSON.parse($("#group-rules").value);
   if (!Array.isArray(rules)) throw new Error(t("Tool Rules 必须是 JSON 数组"));
-  const input = { id: $("#group-id").value.trim(), base_url: $("#group-base-url").value.trim(), enabled: $("#group-enabled").checked, required_scopes: splitValues($("#group-scopes").value), tool_rules: rules, request_timeout: $("#group-timeout").value.trim(), max_response_body_bytes: Number($("#group-response-limit").value), rate_limit: collectRateLimit("group"), headers };
+  const input = { id: $("#group-id").value.trim(), base_url: $("#group-base-url").value.trim(), enabled: $("#group-enabled").checked, require_client_grant: $("#group-client-grant").checked, required_scopes: splitValues($("#group-scopes").value), tool_rules: rules, request_timeout: $("#group-timeout").value.trim(), max_response_body_bytes: Number($("#group-response-limit").value), rate_limit: collectRateLimit("group"), headers };
   if ($("#group-oauth-issuer").value.trim() || $("#group-oauth-client-id").value.trim()) {
     input.oauth = { type: "client_credentials", issuer: $("#group-oauth-issuer").value.trim(), client_id: $("#group-oauth-client-id").value.trim(), scopes: splitValues($("#group-oauth-scopes").value) };
     if ($("#group-oauth-secret").value) input.oauth.client_secret = $("#group-oauth-secret").value;
@@ -1126,12 +1172,21 @@ async function changeLanguage() {
   updateLanguageControl();
   updateOpenEditorsForLocale();
   renderPage();
-  if (!canManage()) document.title = `${t("管理员登录")} · MCPHub`;
+  if (!isAuthenticated()) document.title = `${t("管理员登录")} · MCPHub`;
   renderRefreshState();
-  if (state.overview) renderSummary(state.overview);
+  renderManagementMode();
+  if (state.overview) {
+    renderSummary(state.overview);
+    renderOverview(state.overview, state.backends, openInspector);
+  }
   renderBackends();
   renderToolGroups();
   renderEvents(state.events);
+  renderApprovals();
+  renderToolPolicies();
+  renderClientGrants();
+  renderIdentities();
+  renderRequestDiagnostics();
   if (state.groupEditing && $("#group-dialog").open) await refreshGroupChildren(state.groupEditing.id);
   announce(getLocale() === "en" ? "Language changed to English" : "语言已切换为中文");
 }
@@ -1141,6 +1196,11 @@ translateDOM(document);
 updateLanguageControl();
 $("#language-toggle").addEventListener("click", changeLanguage);
 $("#auth-language-toggle").addEventListener("click", changeLanguage);
-initShell({ refresh, addBackend: () => openInspector(), addGroup: () => openGroupDialog() });
-initializeAuth(refresh);
+initShell({ refresh: refreshAll, addBackend: () => openInspector(), addGroup: () => openGroupDialog() });
+initToolPolicies({ api, refresh, backendInput: inputFromBackend, editEndpoint: (kind, value) => kind === "backend" ? openInspector(value) : openGroupDialog(value) });
+initClientGrants(api);
+initIdentities(api);
+initRequestDiagnostics(api);
+window.addEventListener("hashchange", refreshManagementPage);
+initializeAuth(() => { renderPage(); return refreshAll(); });
 setInterval(() => { if (!state.busy) refresh(); }, 5000);

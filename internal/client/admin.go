@@ -23,6 +23,10 @@ type AdminRequestOptions struct {
 
 func (c *credentials) allows(u *url.URL) bool {
 	if c.kind != "admin" {
+		if c.control {
+			base, err := url.Parse(c.endpoint)
+			return err == nil && u.Scheme == "https" && u.Host == base.Host && u.User == nil && u.Fragment == "" && u.RawPath == "" && path.Clean(u.Path) == u.Path && controlPath(u.Path)
+		}
 		return u.String() == c.endpoint
 	}
 	base, err := url.Parse(c.endpoint)

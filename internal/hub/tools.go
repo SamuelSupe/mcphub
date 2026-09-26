@@ -6,19 +6,25 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/backend"
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
 )
 
 type toolDefinition struct {
-	backendID      string
-	original       string
-	httpTool       bool
-	tool           *mcp.Tool
-	fingerprint    string
-	requiredScopes []string
-	httpManager    *httptool.Manager
+	grantPolicy       string
+	configurationHash string
+	approvalRules     []config.ToolApprovalPolicy
+	effect            string
+	target            string
+	backendID         string
+	original          string
+	httpTool          bool
+	tool              *mcp.Tool
+	fingerprint       string
+	requiredScopes    []string
+	resourceRules     []config.ResourceRule
+	httpManager       *httptool.Manager
 }
 
 func (h *Hub) httpToolDefinitions(groupID string) map[string]toolDefinition {
@@ -27,6 +33,7 @@ func (h *Hub) httpToolDefinitions(groupID string) map[string]toolDefinition {
 	definitions := make(map[string]toolDefinition, len(values))
 	for exposed, value := range values {
 		copyTool := *value.Tool
+		setToolEffect(&copyTool, value.Effect)
 		requiredScopes := slices.Clone(value.RequiredScopes)
 		fingerprint, err := fingerprint(struct {
 			Tool           *mcp.Tool `json:"tool"`
@@ -37,8 +44,12 @@ func (h *Hub) httpToolDefinitions(groupID string) map[string]toolDefinition {
 			continue
 		}
 		definitions[exposed] = toolDefinition{
+			grantPolicy:       value.GrantPolicy,
+			configurationHash: value.ConfigurationHash,
+			approvalRules:     value.ApprovalRules,
+			effect:            value.Effect, target: value.Target,
 			backendID: groupID, original: value.Original, httpTool: true,
-			tool: &copyTool, fingerprint: fingerprint, requiredScopes: requiredScopes, httpManager: manager,
+			tool: &copyTool, fingerprint: fingerprint, requiredScopes: requiredScopes, httpManager: manager, resourceRules: value.ResourceRules,
 		}
 	}
 	return definitions
@@ -97,7 +108,7 @@ func buildToolDefinitions(backendID string, backendConfig config.BackendConfig, 
 	definitions := make(map[string]toolDefinition)
 	var warnings []toolDefinitionWarning
 	for _, tool := range catalog.Tools {
-		if tool == nil {
+		if tool == nil || !slices.Contains(backendConfig.PublishedTools, tool.Name) {
 			continue
 		}
 		exposed, err := exposeName(backendID, tool.Name)
@@ -110,7 +121,9 @@ func buildToolDefinitions(backendID string, backendConfig config.BackendConfig, 
 		}
 		copyTool := *tool
 		copyTool.Name = exposed
-		fingerprint, err := fingerprint(&copyTool)
+		effect := config.ToolEffect(backendConfig.ToolRules, tool.Name)
+		setToolEffect(&copyTool, effect)
+		toolFingerprint, err := fingerprint(&copyTool)
 		if err != nil {
 			warnings = append(warnings, toolDefinitionWarning{
 				message:    "omit backend tool with invalid metadata",
@@ -125,15 +138,37 @@ func buildToolDefinitions(backendID string, backendConfig config.BackendConfig, 
 			})
 			continue
 		}
+		configurationHash, err := fingerprint([]any{copyTool, backendConfig})
+		if err != nil {
+			continue
+		}
 		definitions[exposed] = toolDefinition{
+			configurationHash: configurationHash,
+			approvalRules:     config.ToolApprovalPolicies(backendConfig.ToolRules, tool.Name),
+			effect:            effect, target: backendConfig.URL,
 			backendID:      backendID,
 			original:       tool.Name,
 			tool:           &copyTool,
-			fingerprint:    fingerprint,
+			fingerprint:    toolFingerprint,
 			requiredScopes: backendConfig.RequiredToolScopes(tool.Name),
+			resourceRules:  config.ToolResourceRules(backendConfig.ToolRules, tool.Name),
 		}
 	}
 	return definitions, warnings
+}
+
+func setToolEffect(tool *mcp.Tool, effect string) {
+	annotations := &mcp.ToolAnnotations{}
+	if tool.Annotations != nil {
+		*annotations = *tool.Annotations
+	}
+	annotations.ReadOnlyHint = effect == "read"
+	if effect != "read" {
+		annotations.IdempotentHint = false
+		annotations.DestructiveHint = nil
+		tool.Description += "\nMCPHub requires one-time human approval before execution. Query mcphub_approval_status to check progress. After approval, call mcphub_resume_approval with the approval_id."
+	}
+	tool.Annotations = annotations
 }
 
 func (h *Hub) MissingToolScopes(exposedName string, scopes []string) ([]string, bool) {
@@ -142,8 +177,10 @@ func (h *Hub) MissingToolScopes(exposedName string, scopes []string) ([]string, 
 		return nil, false
 	}
 	definition, known := h.backendToolDefinitions(backendID, false)[exposedName]
+	required := definition.requiredScopes
 	if !known {
-		definition, known = h.httpToolDefinitions(backendID)[exposedName]
+		d, ok := h.currentHTTPTools().Definitions(backendID)[exposedName]
+		required, known = d.RequiredScopes, ok
 	}
 	if !known {
 		return nil, false
@@ -152,14 +189,24 @@ func (h *Hub) MissingToolScopes(exposedName string, scopes []string) ([]string, 
 	for _, scope := range scopes {
 		granted[scope] = struct{}{}
 	}
-	missing := make([]string, 0, len(definition.requiredScopes))
-	for _, scope := range definition.requiredScopes {
+	missing := make([]string, 0, len(required))
+	for _, scope := range required {
 		if _, ok := granted[scope]; !ok {
 			missing = append(missing, scope)
 		}
 	}
 	slices.Sort(missing)
 	return missing, true
+}
+
+// ToolTarget resolves only known published names, including hashed long names.
+func (h *Hub) ToolTarget(name string) (string, string, bool) {
+	id := backendFromName(name)
+	if d, ok := h.backendToolDefinitions(id, false)[name]; ok {
+		return d.backendID, d.original, true
+	}
+	d, ok := h.currentHTTPTools().Definitions(id)[name]
+	return d.GroupID, d.Original, ok
 }
 
 func hasRequiredScopes(granted map[string]struct{}, required []string) bool {

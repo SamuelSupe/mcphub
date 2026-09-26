@@ -15,7 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
 )
 
 func TestCatalogPublicationWarnsOncePerUnmatchedRuleAndGeneration(t *testing.T) {

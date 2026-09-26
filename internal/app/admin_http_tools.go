@@ -10,14 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/backend"
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/configstore"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
-	"github.com/SamuelSupe/mcphub/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 )
 
 type toolGroupInput struct {
+	RequireClientGrant   bool              `json:"require_client_grant"`
 	RateLimit            ratelimit.Config  `json:"rate_limit"`
 	ID                   string            `json:"id"`
 	BaseURL              string            `json:"base_url"`
@@ -31,6 +32,7 @@ type toolGroupInput struct {
 }
 
 type toolGroupView struct {
+	RequireClientGrant   bool              `json:"require_client_grant"`
 	RateLimit            ratelimit.Config  `json:"rate_limit"`
 	ID                   string            `json:"id"`
 	BaseURL              string            `json:"base_url"`
@@ -157,6 +159,9 @@ func (a *App) createAdminToolGroup(w http.ResponseWriter, req *http.Request) {
 	}
 	desired := groupConfigs(groups)
 	desired = append(desired, group)
+	if a.stageConfigurationChange(w, req, configurationChange{Kind: "tool_group", Group: &configstore.ToolGroupRecord{Config: group}}, nil, a.makeToolGroupView(configstore.ToolGroupRecord{Config: group})) {
+		return
+	}
 	candidate, previous, ok := a.prepareToolGroupCandidate(w, desired)
 	if !ok {
 		return
@@ -215,6 +220,9 @@ func (a *App) updateAdminToolGroup(w http.ResponseWriter, req *http.Request, id 
 			group.Tools = desired[index].Tools
 			desired[index] = group
 		}
+	}
+	if !groupDisableOnly(current.Config, group) && a.stageConfigurationChange(w, req, configurationChange{Kind: "tool_group", Revision: expected, Group: &configstore.ToolGroupRecord{Config: group}}, a.makeToolGroupView(current), a.makeToolGroupView(configstore.ToolGroupRecord{Config: group})) {
+		return
 	}
 	candidate, previous, ok := a.prepareToolGroupCandidate(w, desired)
 	if !ok {
@@ -356,6 +364,14 @@ func (a *App) createAdminHTTPTool(w http.ResponseWriter, req *http.Request, grou
 		writeAPIError(w, http.StatusNotFound, "not_found", "工具组不存在", "")
 		return
 	}
+	group, err := a.store.GetToolGroup(req.Context(), canonicalGroupID)
+	if err != nil {
+		writeToolStoreError(w, err, "工具组不存在")
+		return
+	}
+	if a.stageConfigurationChange(w, req, configurationChange{Kind: "http_tool", GroupRevision: group.Revision, Tool: &configstore.HTTPToolRecord{GroupID: canonicalGroupID, Config: tool}}, nil, makeHTTPToolView(configstore.HTTPToolRecord{GroupID: canonicalGroupID, Config: tool})) {
+		return
+	}
 	candidate, previous, ok := a.prepareToolGroupCandidate(w, desired)
 	if !ok {
 		return
@@ -404,6 +420,14 @@ func (a *App) updateAdminHTTPTool(w http.ResponseWriter, req *http.Request, grou
 	tool.Origin, tool.ImportID = current.Config.Origin, current.Config.ImportID
 	if err := httptool.ValidateTool(groupID, &tool); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "validation_failed", err.Error(), "")
+		return
+	}
+	group, err := a.store.GetToolGroup(req.Context(), current.GroupID)
+	if err != nil {
+		writeToolStoreError(w, err, "工具组不存在")
+		return
+	}
+	if !toolDisableOnly(current.Config, tool) && a.stageConfigurationChange(w, req, configurationChange{Kind: "http_tool", Revision: expected, GroupRevision: group.Revision, Tool: &configstore.HTTPToolRecord{GroupID: current.GroupID, Config: tool}}, makeHTTPToolView(current), makeHTTPToolView(configstore.HTTPToolRecord{GroupID: current.GroupID, Config: tool})) {
 		return
 	}
 	a.applyHTTPToolUpdate(w, req, current.GroupID, tool, expected)
@@ -507,6 +531,12 @@ func (a *App) applyHTTPToolUpdate(w http.ResponseWriter, req *http.Request, grou
 }
 
 func (a *App) prepareToolGroupCandidate(w http.ResponseWriter, groups []httptool.GroupConfig) (*httptool.Manager, *runtime, bool) {
+	for _, group := range groups {
+		if group.RequireClientGrant && !a.currentConfig().ClientAuthorization.Enabled {
+			writeAPIError(w, http.StatusBadRequest, "validation_failed", "Enable client_authorization before requiring client grants", "require_client_grant")
+			return nil, nil, false
+		}
+	}
 	if err := httptool.ValidateGroups(groups, backendIDs(a.currentConfig())); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "validation_failed", err.Error(), "")
 		return nil, nil, false
@@ -554,8 +584,9 @@ func (a *App) toolGroupFromInput(input toolGroupInput, current *httptool.GroupCo
 		timeout = value
 	}
 	value := httptool.GroupConfig{
-		RateLimit: input.RateLimit,
-		ID:        input.ID, BaseURL: input.BaseURL, Enabled: enabled, RequiredScopes: input.RequiredScopes,
+		RequireClientGrant: input.RequireClientGrant,
+		RateLimit:          input.RateLimit,
+		ID:                 input.ID, BaseURL: input.BaseURL, Enabled: enabled, RequiredScopes: input.RequiredScopes,
 		ToolRules: input.ToolRules, RequestTimeout: timeout, MaxResponseBodyBytes: input.MaxResponseBodyBytes,
 		Headers: make(map[string]string, len(input.Headers)),
 	}
@@ -586,6 +617,7 @@ func (a *App) toolGroupFromInput(input toolGroupInput, current *httptool.GroupCo
 		value.OAuth = &config.OAuthConfig{Type: input.OAuth.Type, Issuer: input.OAuth.Issuer, ClientID: input.OAuth.ClientID, ClientSecret: secret, Scopes: input.OAuth.Scopes}
 	}
 	if current != nil {
+		value.EndpointUID = current.EndpointUID
 		value.Tools = current.Tools
 	}
 	if err := httptool.ValidateGroup(&value); err != nil {
@@ -633,8 +665,9 @@ func (a *App) probeAdminToolGroup(w http.ResponseWriter, req *http.Request, id s
 
 func (a *App) makeToolGroupView(record configstore.ToolGroupRecord) toolGroupView {
 	view := toolGroupView{
-		RateLimit: record.Config.RateLimit,
-		ID:        record.Config.ID, BaseURL: record.Config.BaseURL, Enabled: record.Config.Enabled,
+		RequireClientGrant: record.Config.RequireClientGrant,
+		RateLimit:          record.Config.RateLimit,
+		ID:                 record.Config.ID, BaseURL: record.Config.BaseURL, Enabled: record.Config.Enabled,
 		RequiredScopes: slices.Clone(record.Config.RequiredScopes), ToolRules: slices.Clone(record.Config.ToolRules),
 		RequestTimeout: record.Config.RequestTimeout.String(), MaxResponseBodyBytes: record.Config.MaxResponseBodyBytes,
 		Revision: record.Revision, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
@@ -666,7 +699,7 @@ func makeHTTPToolView(record configstore.HTTPToolRecord) httpToolView {
 }
 
 func toolFromInput(input httpToolInput) httptool.ToolConfig {
-	enabled := true
+	enabled := false
 	if input.Enabled != nil {
 		enabled = *input.Enabled
 	}

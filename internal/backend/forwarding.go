@@ -7,6 +7,7 @@ import (
 	"maps"
 	"time"
 
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -91,6 +92,9 @@ func (c *Client) CallTool(ctx context.Context, upstream *mcp.ServerSession, para
 	defer cleanup()
 	callCtx, cancel := downstreamContext(ctx, c.cfg.RequestTimeout.Duration)
 	defer cancel()
+	if config.ToolEffect(c.cfg.ToolRules, params.Name) != "read" {
+		callCtx = WithoutReplay(callCtx)
+	}
 	result, err := session.CallTool(callCtx, &p)
 	c.observeCallError(session, err)
 	return result, err

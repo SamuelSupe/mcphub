@@ -2,17 +2,23 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
 )
 
 func (v *view) toolHandler(definition toolDefinition) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if !v.hasToolScopes(definition) {
+		diagnostics.Update(ctx, func(r *diagnostics.Record) { r.Endpoint, r.Tool = definition.backendID, definition.original })
+		if !v.canCallTool(req, definition) {
+			diagnostics.Outcome(ctx, "policy_denied", "tool_policy_changed")
 			// The HTTP authorization layer normally rejects this request first. Keep
 			// the forwarding boundary closed if a handler is reached through another
 			// transport path or during a catalog reconciliation race.
@@ -21,47 +27,110 @@ func (v *view) toolHandler(definition toolDefinition) mcp.ToolHandler {
 				Message: fmt.Sprintf("unknown tool %q", definition.tool.Name),
 			}
 		}
-		if definition.httpTool {
-			if definition.httpManager == nil {
-				return nil, &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "HTTP tool unavailable"}
-			}
-			result, err := definition.httpManager.Call(ctx, definition.backendID, definition.original, req.Params.Arguments)
-			if err != nil {
-				failure := &mcp.CallToolResult{}
-				failure.SetError(fmt.Errorf("HTTP tool request is invalid"))
-				return failure, nil
-			}
-			return result, nil
+		arguments, err := config.CheckToolResources(definition.resourceRules, req.Params.Arguments)
+		if err == nil && v.identity != nil {
+			arguments, err = v.identity.Permissions.ToolArguments(definition.backendID, definition.original, definition.effect, arguments)
 		}
-		client, _ := v.hub.manager.Client(definition.backendID)
-		params := &mcp.CallToolParams{
-			Meta:           req.Params.Meta,
-			Name:           definition.original,
-			Arguments:      req.Params.Arguments,
-			InputResponses: req.Params.InputResponses,
-			RequestState:   req.Params.RequestState,
-		}
-		result, err := client.CallTool(ctx, req.Session, params)
 		if err != nil {
-			publicError := publicBackendError(definition.backendID, err)
-			var protocolError *jsonrpc.Error
-			if errors.As(publicError, &protocolError) {
-				return nil, protocolError
-			}
+			diagnostics.Outcome(ctx, "policy_denied", "resource_not_allowed")
 			failure := &mcp.CallToolResult{}
-			failure.SetError(publicError)
+			failure.SetError(err)
 			return failure, nil
 		}
-		return v.hub.rewriteToolResult(definition.backendID, result), nil
+		if definition.effect != "read" {
+			return v.requestApproval(ctx, req, definition, arguments), nil
+		}
+		return v.forwardTool(ctx, req, definition, arguments)
 	}
 }
 
-func (v *view) hasToolScopes(definition toolDefinition) bool {
-	if !definition.httpTool || !v.dynamicHTTP {
-		return hasRequiredScopes(v.toolScopes, definition.requiredScopes)
+func (v *view) forwardTool(ctx context.Context, req *mcp.CallToolRequest, definition toolDefinition, arguments json.RawMessage) (*mcp.CallToolResult, error) {
+	if v.identity != nil {
+		var err error
+		arguments, err = v.identity.Permissions.ToolArguments(definition.backendID, definition.original, definition.effect, arguments)
+		if err != nil {
+			return toolFailure(err.Error()), nil
+		}
+		call, release, err := v.hub.identityStore.AdmitIdentity(ctx, *v.identity)
+		if err != nil {
+			return toolFailure(err.Error()), nil
+		}
+		defer release()
+		ctx = call
 	}
-	granted := make(map[string]struct{}, len(v.granted))
-	for _, scope := range v.granted {
+	ctx, release, err := v.admitGrant(ctx)
+	if err != nil {
+		return toolFailure(err.Error()), nil
+	}
+	defer release()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if definition.httpTool {
+		result, err := definition.httpManager.Call(ctx, definition.backendID, definition.original, arguments)
+		if err != nil {
+			failure := &mcp.CallToolResult{}
+			failure.SetError(fmt.Errorf("HTTP tool request is invalid"))
+			return failure, nil
+		}
+		return result, nil
+	}
+	client, _ := v.hub.manager.Client(definition.backendID)
+	params := &mcp.CallToolParams{
+		Meta:           req.Params.Meta,
+		Name:           definition.original,
+		Arguments:      arguments,
+		InputResponses: req.Params.InputResponses,
+		RequestState:   req.Params.RequestState,
+	}
+	result, err := client.CallTool(ctx, req.Session, params)
+	if err != nil {
+		publicError := publicBackendError(definition.backendID, err)
+		var protocolError *jsonrpc.Error
+		if errors.As(publicError, &protocolError) {
+			return nil, protocolError
+		}
+		failure := &mcp.CallToolResult{}
+		failure.SetError(publicError)
+		failure.Meta = mcp.Meta{"io.mcphub/executionOutcome": "unknown"}
+		return failure, nil
+	}
+	return v.hub.rewriteToolResult(definition.backendID, result), nil
+}
+
+func (v *view) canCallTool(req *mcp.CallToolRequest, definition toolDefinition) bool {
+	if !v.grantAllowsDefinition(definition) {
+		return false
+	}
+	if v.grant != nil && !v.grant.AllowsTool(definition.backendID, definition.original, definition.effect, req.Params.Arguments) {
+		return false
+	}
+	if definition.httpTool {
+		if definition.httpManager == nil || definition.httpManager != v.hub.currentHTTPTools() || !v.allowsHTTPGroup(definition.backendID) {
+			return false
+		}
+	} else {
+		current, ok := v.hub.backendToolDefinitions(definition.backendID, false)[definition.tool.Name]
+		if !v.allows(definition.backendID) || !ok || current.fingerprint != definition.fingerprint {
+			return false
+		}
+	}
+	granted := v.toolScopes
+	scopes := v.granted
+	if extra := req.GetExtra(); extra != nil && extra.TokenInfo != nil {
+		scopes = extra.TokenInfo.Scopes
+	} else if !v.dynamicHTTP {
+		return hasRequiredScopes(granted, definition.requiredScopes)
+	}
+	if v.grant != nil {
+		scopes = v.grant.EffectiveScopes(scopes)
+	}
+	missing, known := v.hub.MissingScopes(definition.backendID, scopes)
+	if !known || len(missing) != 0 {
+		return false
+	}
+	granted = make(map[string]struct{}, len(scopes))
+	for _, scope := range scopes {
 		granted[scope] = struct{}{}
 	}
 	return hasRequiredScopes(granted, definition.requiredScopes)

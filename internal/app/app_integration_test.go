@@ -19,9 +19,11 @@ import (
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/backend"
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/hub"
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
+	"github.com/SamuelSupe/mcphub/v2/internal/hub"
 )
 
 func TestAppEnforcesScopesAndPublishesResourceMetadata(t *testing.T) {
@@ -42,7 +44,10 @@ func TestAppEnforcesScopesAndPublishesResourceMetadata(t *testing.T) {
 	backendServer.AddTool(&mcp.Tool{
 		Name:        "echo",
 		InputSchema: map[string]any{"type": "object"},
-	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if bytes.Contains(req.Params.Arguments, []byte("diagnostic-private-input")) {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "diagnostic-private-output"}}}, nil
+		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "allowed"}}}, nil
 	})
 	backendServer.AddTool(&mcp.Tool{
@@ -82,7 +87,8 @@ func TestAppEnforcesScopesAndPublishesResourceMetadata(t *testing.T) {
 			URL:            backendHTTP.URL,
 			Required:       true,
 			RequiredScopes: []string{"mcp:alpha"},
-			ToolRules: []config.ToolRule{{
+			PublishedTools: []string{"echo", protectedToolName, "future_delete"},
+			ToolRules: []config.ToolRule{{Match: "*", Effect: "read"}, {
 				Match:          "delete_*",
 				RequiredScopes: []string{"mcp:alpha:dangerous"},
 			}, {
@@ -182,6 +188,29 @@ func TestAppEnforcesScopesAndPublishesResourceMetadata(t *testing.T) {
 	if text, ok := result.Content[0].(*mcp.TextContent); !ok || text.Text != "allowed" {
 		t.Fatalf("allowed tool result = %#v", result.Content)
 	}
+
+	t.Run("completed request diagnostics", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"alpha.echo","arguments":{"secret":"diagnostic-private-input"}}}`))
+		req.Header.Set("Authorization", "Bearer allowed")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		req.Header.Set("Mcp-Protocol-Version", "2025-06-18")
+		req.Header.Set("X-Request-Id", "diagnostic-request")
+		response := httptest.NewRecorder()
+		application.ServeHTTP(response, req)
+		page := application.requests.Query(diagnostics.Query{RequestID: "diagnostic-request"})
+		if response.Code != 200 || len(page.Records) != 1 || page.Records[0].Outcome != "tool_error" || page.Records[0].Tool != "echo" || page.Records[0].Endpoint != "alpha" {
+			t.Fatalf("tool error diagnostics: %+v HTTP %d %s", page, response.Code, response.Body.String())
+		}
+		all := application.requests.Query(diagnostics.Query{})
+		if all.Statistics.Outcomes["auth_denied"] == 0 || all.Statistics.Outcomes["scope_denied"] == 0 || all.Statistics.Outcomes["success"] == 0 {
+			t.Fatalf("outcomes: %+v", all.Statistics)
+		}
+		data, _ := json.Marshal(all)
+		if bytes.Contains(data, []byte("diagnostic-private-input")) || bytes.Contains(data, []byte("diagnostic-private-output")) {
+			t.Fatal("diagnostics retained tool input/output")
+		}
+	})
 
 	protectedListChanged := make(chan struct{}, 1)
 	privilegedSession := connectAppClientWithOptions(t, ctx, hubHTTP.URL+"/mcp", "privileged", &mcp.ClientOptions{
@@ -325,6 +354,8 @@ func TestParentCancellationDoesNotInterruptRuntimeBeforeDrain(t *testing.T) {
 		Auth: config.AuthConfig{Issuer: "https://idp.example.com"},
 		Backends: []config.BackendConfig{{
 			ID:                "alpha",
+			PublishedTools:    []string{"slow"},
+			ToolRules:         []config.ToolRule{{Match: "slow", Effect: "read"}},
 			URL:               backendHTTP.URL,
 			Required:          true,
 			RequestTimeout:    config.Duration{Duration: 5 * time.Second},
@@ -586,6 +617,7 @@ func (staticVerifier) Verify(_ context.Context, token string, _ *http.Request) (
 
 type bearerTransport struct {
 	token string
+	grant string
 	base  http.RoundTripper
 }
 
@@ -593,6 +625,9 @@ func (t bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	copyRequest := req.Clone(req.Context())
 	copyRequest.Header = req.Header.Clone()
 	copyRequest.Header.Set("Authorization", "Bearer "+t.token)
+	if t.grant != "" {
+		copyRequest.Header.Set(configstore.GrantHeader, t.grant)
+	}
 	return t.base.RoundTrip(copyRequest)
 }
 

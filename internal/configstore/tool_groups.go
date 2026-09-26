@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
-	"github.com/SamuelSupe/mcphub/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 )
 
 type ToolGroupRecord struct {
@@ -37,6 +37,8 @@ type HTTPToolRecord struct {
 }
 
 type storedToolGroup struct {
+	EndpointUID          string             `json:"endpoint_uid"`
+	RequireClientGrant   bool               `json:"require_client_grant"`
 	RateLimit            ratelimit.Config   `json:"rate_limit"`
 	ID                   string             `json:"id"`
 	BaseURL              string             `json:"base_url"`
@@ -103,6 +105,7 @@ last_probe_at, last_probe_ok, last_probe_json FROM tool_groups WHERE id=? COLLAT
 }
 
 func (s *Store) CreateToolGroup(ctx context.Context, record ToolGroupRecord) (ToolGroupRecord, error) {
+	record.Config.EndpointUID = "ep_" + rand.Text()
 	record.Config.Tools = nil
 	record.CreatedAt = time.Now().UTC()
 	record.UpdatedAt = record.CreatedAt
@@ -144,6 +147,8 @@ VALUES(?, ?, ?, ?, ?, ?, ?)`, record.Config.ID, boolInt(record.Config.Enabled), 
 }
 
 func (s *Store) UpdateToolGroup(ctx context.Context, record ToolGroupRecord, expected int64) (ToolGroupRecord, error) {
+	s.grantMu.Lock()
+	defer s.grantMu.Unlock()
 	current, err := s.GetToolGroup(ctx, record.Config.ID)
 	if err != nil {
 		return ToolGroupRecord{}, err
@@ -151,6 +156,7 @@ func (s *Store) UpdateToolGroup(ctx context.Context, record ToolGroupRecord, exp
 	if current.Revision != expected {
 		return ToolGroupRecord{}, ErrConflict
 	}
+	record.Config.EndpointUID = current.Config.EndpointUID
 	record.Config.Tools = current.Config.Tools
 	record.Revision = expected + 1
 	record.CreatedAt = current.CreatedAt
@@ -177,13 +183,25 @@ WHERE id=? COLLATE NOCASE AND revision=?`, boolInt(record.Config.Enabled), publi
 	if err := insertSourceEvent(ctx, tx, "tool_group", record.Config.ID, "update", true, "", record.Revision, record.UpdatedAt); err != nil {
 		return ToolGroupRecord{}, err
 	}
+	var ids []string
+	if clientGroupPolicy(current.Config) != clientGroupPolicy(record.Config) || !record.Config.Enabled {
+		ids, err = s.invalidateClientGrants(ctx, tx, record.Config.ID)
+		if err != nil {
+			return ToolGroupRecord{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return ToolGroupRecord{}, fmt.Errorf("commit tool group update: %w", err)
+	}
+	for _, id := range ids {
+		s.cancelGrantLocked(id)
 	}
 	return record, nil
 }
 
 func (s *Store) DeleteToolGroup(ctx context.Context, id string, expected int64) error {
+	s.grantMu.Lock()
+	defer s.grantMu.Unlock()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tool group delete: %w", err)
@@ -204,7 +222,17 @@ func (s *Store) DeleteToolGroup(ctx context.Context, id string, expected int64) 
 	if err := insertSourceEvent(ctx, tx, "tool_group", id, "delete", true, "", expected+1, now); err != nil {
 		return err
 	}
-	return tx.Commit()
+	ids, err := s.invalidateClientGrants(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		s.cancelGrantLocked(id)
+	}
+	return nil
 }
 
 func (s *Store) ListHTTPTools(ctx context.Context, groupID string) ([]HTTPToolRecord, error) {
@@ -269,6 +297,8 @@ VALUES(?, ?, ?, ?, ?, ?)`, record.GroupID, record.Config.Name, encoded, record.R
 }
 
 func (s *Store) UpdateHTTPTool(ctx context.Context, record HTTPToolRecord, expected int64) (HTTPToolRecord, error) {
+	s.grantMu.Lock()
+	defer s.grantMu.Unlock()
 	current, err := s.GetHTTPTool(ctx, record.GroupID, record.Config.Name)
 	if err != nil {
 		return HTTPToolRecord{}, err
@@ -300,13 +330,25 @@ WHERE group_id=? COLLATE NOCASE AND name=? COLLATE NOCASE AND revision=?`, encod
 	if err := insertSourceEvent(ctx, tx, "http_tool", record.GroupID+"."+record.Config.Name, "update", true, "", record.Revision, record.UpdatedAt); err != nil {
 		return HTTPToolRecord{}, err
 	}
+	var ids []string
+	if policyHash(httptool.AuthorizationToolConfig(current.Config)) != policyHash(httptool.AuthorizationToolConfig(record.Config)) {
+		ids, err = s.invalidateClientGrants(ctx, tx, record.GroupID, record.Config.Name)
+		if err != nil {
+			return HTTPToolRecord{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return HTTPToolRecord{}, fmt.Errorf("commit HTTP tool update: %w", err)
+	}
+	for _, id := range ids {
+		s.cancelGrantLocked(id)
 	}
 	return record, nil
 }
 
 func (s *Store) DeleteHTTPTool(ctx context.Context, groupID, name string, expected int64) error {
+	s.grantMu.Lock()
+	defer s.grantMu.Unlock()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin HTTP tool delete: %w", err)
@@ -327,7 +369,17 @@ func (s *Store) DeleteHTTPTool(ctx context.Context, groupID, name string, expect
 	if err := insertSourceEvent(ctx, tx, "http_tool", groupID+"."+name, "delete", true, "", expected+1, now); err != nil {
 		return err
 	}
-	return tx.Commit()
+	ids, err := s.invalidateClientGrants(ctx, tx, groupID, name)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		s.cancelGrantLocked(id)
+	}
+	return nil
 }
 
 func (s *Store) UpdateToolGroupProbe(ctx context.Context, id string, ok bool, result json.RawMessage) error {
@@ -350,6 +402,7 @@ func (s *Store) encodeToolGroup(group httptool.GroupConfig) ([]byte, []byte, err
 	}
 	slices.Sort(names)
 	public := storedToolGroup{
+		EndpointUID: group.EndpointUID, RequireClientGrant: group.RequireClientGrant,
 		RateLimit: group.RateLimit,
 		ID:        group.ID, BaseURL: group.BaseURL, RequiredScopes: group.RequiredScopes, ToolRules: group.ToolRules,
 		RequestTimeoutNS: int64(group.RequestTimeout), MaxResponseBodyBytes: group.MaxResponseBodyBytes, HeaderNames: names,
@@ -394,6 +447,7 @@ func (s *Store) scanToolGroup(row rowScanner) (ToolGroupRecord, error) {
 		return ToolGroupRecord{}, fmt.Errorf("decode tool group %q secrets: %w", id, err)
 	}
 	record.Config = httptool.GroupConfig{
+		EndpointUID: public.EndpointUID, RequireClientGrant: public.RequireClientGrant,
 		RateLimit: public.RateLimit,
 		ID:        public.ID, BaseURL: public.BaseURL, Enabled: enabled != 0, RequiredScopes: slices.Clone(public.RequiredScopes),
 		ToolRules: slices.Clone(public.ToolRules), RequestTimeout: time.Duration(public.RequestTimeoutNS),

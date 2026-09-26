@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/SamuelSupe/mcphub/internal/client"
+	"github.com/SamuelSupe/mcphub/v2/internal/client"
 )
 
 func runAdmin(args []string) error {

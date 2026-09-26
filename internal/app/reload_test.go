@@ -15,7 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
 )
 
 func TestReloadRetainsLastKnownGoodCatalogForUnavailableOptionalBackend(t *testing.T) {
@@ -288,6 +288,7 @@ backends:
   - id: alpha
     url: %s
     required: %t
+    published_tools: [echo]
     allow_insecure_http: true
     request_timeout: 500ms
 %s`, backendURL, required, extraBackends)

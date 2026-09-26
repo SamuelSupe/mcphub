@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 )
@@ -49,4 +50,21 @@ func LoginHTTPClient() *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = 15 * time.Second
 	return &http.Client{Transport: transport, Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+// LoginIDVerifier checks HTTPS discovery/JWKS and bounds their responses before
+// accepting signed, unexpired ID tokens for the browser client's audience.
+func LoginIDVerifier(ctx context.Context, issuer, clientID string, client *http.Client) (*oidc.IDTokenVerifier, error) {
+	bounded := *client
+	base := bounded.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	bounded.Transport = &boundedResponseTransport{base: base, maximum: maximumOIDCResponseBytes}
+	ctx = oidc.ClientContext(ctx, &bounded)
+	provider, err := discoverProvider(ctx, issuer, &bounded)
+	if err != nil {
+		return nil, err
+	}
+	return provider.VerifierContext(ctx, &oidc.Config{ClientID: clientID}), nil
 }

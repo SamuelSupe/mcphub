@@ -1,4 +1,4 @@
-module github.com/SamuelSupe/mcphub
+module github.com/SamuelSupe/mcphub/v2
 
 go 1.26.0
 

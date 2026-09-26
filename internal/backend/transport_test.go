@@ -15,7 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/oauth2"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
 )
 
 func TestClientCredentialsDiscoveryWithoutPKCEAndHeaderIsolation(t *testing.T) {

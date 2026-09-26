@@ -1,6 +1,8 @@
 # 远程管理与数据库部署
 
-本目录对应 MCPHub v1.4.0 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
+本目录对应 MCPHub v2.0.0 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
+
+v2.0.0 包含显式发布、审批、Broker、接入向导、SSO 用户权限和新版控制台，使用 schema 7。部署仍限单实例；替换 v1.4.0 前请按[升级与回滚流程](../RELEASE_NOTES_v2.0.0.md)备份并检查兼容性。SSO/用户目录将 schema 6 升级到 7；参见 [SSO 部署与组织同步](../docs/sso-and-user-management.zh-CN.md)。
 
 | 方式 | 用途 | 配置 |
 | --- | --- | --- |

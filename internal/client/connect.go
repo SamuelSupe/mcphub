@@ -13,9 +13,10 @@ import (
 )
 
 type ConnectOptions struct {
-	Input      io.ReadCloser
-	Output     io.WriteCloser
-	HTTPClient *http.Client
+	clientID, grantID string
+	Input             io.ReadCloser
+	Output            io.WriteCloser
+	HTTPClient        *http.Client
 }
 
 type pendingCall struct {
@@ -32,26 +33,56 @@ type bridge struct {
 	writeMu       sync.Mutex
 }
 
-func Connect(ctx context.Context, store *Store, name string, opts ConnectOptions) error {
-	if name == "" {
-		name = "default"
-	}
+func connectorHTTPClient(ctx context.Context, store *Store, name string, opts ConnectOptions) (*credentials, *http.Client, error) {
 	credentials, err := bindCredentials(ctx, store, name, opts.HTTPClient)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if credentials.kind == "admin" {
-		return errors.New("administrator profiles cannot be used for MCP connections; log in to the MCP endpoint with a separate profile")
+		return nil, nil, errors.New("administrator profiles cannot be used for MCP connections; log in to the MCP endpoint with a separate profile")
 	}
 	if _, err := credentials.token(ctx, ""); err != nil {
-		return err
+		return nil, nil, err
 	}
 	httpConnection := httpClient(opts.HTTPClient, 0)
 	base := httpConnection.Transport
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	httpConnection.Transport = &authenticatedTransport{base: base, credentials: credentials}
+	transport := &authenticatedTransport{base: base, credentials: credentials}
+	if opts.clientID != "" {
+		transport.grant = func(ctx context.Context) (string, error) {
+			var secret string
+			err := store.locked(ctx, name, func() error {
+				p, err := store.load(name)
+				if err != nil {
+					return err
+				}
+				if p.Session != credentials.session || p.Broker == nil {
+					return ErrProfileChanged
+				}
+				entry, ok := p.Broker.Clients[opts.clientID]
+				if !ok || entry.Grant.GrantID != opts.grantID {
+					return ErrProfileChanged
+				}
+				secret = entry.Credential
+				return nil
+			})
+			return secret, err
+		}
+	}
+	httpConnection.Transport = transport
+	return credentials, httpConnection, nil
+}
+
+func Connect(ctx context.Context, store *Store, name string, opts ConnectOptions) error {
+	if name == "" {
+		name = "default"
+	}
+	credentials, httpConnection, err := connectorHTTPClient(ctx, store, name, opts)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var localTransport mcp.Transport = &mcp.StdioTransport{}

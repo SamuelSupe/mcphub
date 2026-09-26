@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MCPHub · Client access</title>
+    <link rel="stylesheet" href="/client-auth/styles.css" />
+    <script defer src="/client-auth/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <a href="/client-auth/"><svg class="portal-brand" viewBox="0 0 28 32" aria-hidden="true"><rect x="2" y="7" width="5" height="21" rx="2.5"/><rect x="11" y="0" width="5" height="32" rx="2.5"/><rect x="20" y="3" width="5" height="27" rx="2.5"/></svg>MCPHub <span>Client access</span></a
+      ><button id="language" class="secondary">English</button>
+    </header>
+    <main>
+      <p class="eyebrow" id="eyebrow"></p>
+      <h1 id="title"></h1>
+      <p class="intro" id="intro"></p>
+      <section id="identity"></section>
+      <p id="message" role="status" aria-live="polite"></p>
+      <section id="request"></section>
+      <section id="grants"></section>
+    </main>
+    <footer id="footer"></footer>
+  </body>
+</html>

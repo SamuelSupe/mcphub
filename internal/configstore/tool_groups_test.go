@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
-	"github.com/SamuelSupe/mcphub/internal/openapiimport"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/openapiimport"
 )
 
 func TestToolGroupSecretsAreEncryptedAndWrongKeyIsRejected(t *testing.T) {

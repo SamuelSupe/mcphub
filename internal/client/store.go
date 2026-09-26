@@ -23,29 +23,37 @@ var (
 type Store struct{ Dir string }
 
 type profile struct {
-	Kind      string        `json:"kind,omitempty"`
-	Version   int           `json:"version"`
-	Session   string        `json:"session"`
-	ServerURL string        `json:"server_url"`
-	Issuer    string        `json:"issuer"`
-	ClientID  string        `json:"client_id"`
-	TokenURL  string        `json:"token_url"`
-	Scopes    []string      `json:"scopes"`
-	Token     *oauth2.Token `json:"token,omitempty"`
+	Broker             *brokerCredentials  `json:"broker,omitempty"`
+	PendingRevocations []pendingRevocation `json:"pending_revocations,omitempty"`
+	Kind               string              `json:"kind,omitempty"`
+	Version            int                 `json:"version"`
+	Session            string              `json:"session"`
+	ServerURL          string              `json:"server_url"`
+	Issuer             string              `json:"issuer"`
+	ClientID           string              `json:"client_id"`
+	TokenURL           string              `json:"token_url"`
+	Scopes             []string            `json:"scopes"`
+	Token              *oauth2.Token       `json:"token,omitempty"`
 }
 
 // Status describes cached credentials, without checking their validity at the issuer.
 type Status struct {
-	Admin      bool
-	ServerURL  string
-	ClientID   string
-	Scopes     []string
-	LoggedIn   bool
-	ExpiresAt  time.Time
-	CanRefresh bool
+	BrokerSession      string
+	ClientCount        int
+	PendingRevocations int
+	Admin              bool
+	ServerURL          string
+	ClientID           string
+	Scopes             []string
+	LoggedIn           bool
+	ExpiresAt          time.Time
+	CanRefresh         bool
 }
 
 func DefaultStore() (*Store, error) {
+	if dir := os.Getenv("MCPHUB_HOME"); dir != "" {
+		return &Store{Dir: dir}, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
@@ -64,6 +72,10 @@ func (s *Store) Status(ctx context.Context, name string) (Status, error) {
 			return err
 		}
 		status = Status{Admin: p.Kind == "admin", ServerURL: p.ServerURL, ClientID: p.ClientID, Scopes: p.Scopes}
+		if p.Broker != nil {
+			status.BrokerSession, status.ClientCount = p.Broker.SessionID, len(p.Broker.Clients)
+		}
+		status.PendingRevocations = len(p.PendingRevocations)
 		if p.Token != nil {
 			status.LoggedIn = true
 			status.ExpiresAt = p.Token.Expiry
@@ -83,6 +95,7 @@ func (s *Store) Logout(ctx context.Context, name string) error {
 		if err != nil {
 			return err
 		}
+		p.Broker = nil
 		p.Token = nil
 		p.Session = rand.Text()
 		return s.save(name, p)
@@ -149,6 +162,9 @@ func (s *Store) load(name string) (*profile, error) {
 // The stable lock file is never replaced: all processes must lock the same inode.
 func (s *Store) save(name string, p *profile) error {
 	data, err := json.MarshalIndent(p, "", "  ")
+	if len(data) > 1<<20 {
+		return errors.New("profile capacity exceeded; remove unused client authorizations")
+	}
 	if err != nil {
 		return err
 	}

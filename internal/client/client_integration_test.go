@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -29,8 +30,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/oauth2"
 
-	"github.com/SamuelSupe/mcphub/internal/app"
-	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/app"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
 )
 
 type authCode struct{ challenge, redirect, resource, scope string }
@@ -56,7 +58,7 @@ type loginFixture struct {
 	subscriptionReady         chan struct{}
 }
 
-func newLoginFixture(t *testing.T) *loginFixture {
+func newLoginFixture(t *testing.T, broker ...bool) *loginFixture {
 	t.Helper()
 	f := &loginFixture{t: t, store: &Store{Dir: filepath.Join(t.TempDir(), "credentials")}, codes: make(map[string]authCode), refresh: make(map[string]string), slowStarted: make(chan struct{}, 8), slowCanceled: make(chan struct{}, 8), subscribed: make(chan string, 8), unsubscribed: make(chan string, 8), subscriptionReady: make(chan struct{}, 8)}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -137,7 +139,24 @@ func newLoginFixture(t *testing.T) *loginFixture {
 	f.hub = httptest.NewUnstartedServer(nil)
 	f.hub.StartTLS()
 	t.Cleanup(f.hub.Close)
-	cfg := &config.Config{Server: config.ServerConfig{Listen: "127.0.0.1:0", PublicURL: f.hub.URL + "/mcp", PageSize: 1, RequestTimeout: config.Duration{Duration: 10 * time.Second}, DrainTimeout: config.Duration{Duration: time.Second}, RefreshInterval: config.Duration{Duration: time.Hour}, CatalogTTL: config.Duration{Duration: time.Second}, MaxRequestBodyBytes: 4 << 20}, Auth: config.AuthConfig{Issuer: f.issuer.URL}, Backends: []config.BackendConfig{{ID: "alpha", URL: backendHTTP.URL, Required: true, RequiredScopes: []string{"mcp:alpha"}, ToolRules: []config.ToolRule{{Match: "admin", RequiredScopes: []string{"mcp:admin"}}}, AllowInsecureHTTP: true, RequestTimeout: config.Duration{Duration: 10 * time.Second}}}}
+	cfg := &config.Config{Server: config.ServerConfig{Listen: "127.0.0.1:0", PublicURL: f.hub.URL + "/mcp", PageSize: 1, RequestTimeout: config.Duration{Duration: 10 * time.Second}, DrainTimeout: config.Duration{Duration: time.Second}, RefreshInterval: config.Duration{Duration: time.Hour}, CatalogTTL: config.Duration{Duration: time.Second}, MaxRequestBodyBytes: 4 << 20}, Auth: config.AuthConfig{Issuer: f.issuer.URL}, Backends: []config.BackendConfig{{PublishedTools: []string{"echo", "slow", "admin"}, ID: "alpha", URL: backendHTTP.URL, Required: true, RequiredScopes: []string{"mcp:alpha"}, ToolRules: []config.ToolRule{{Match: "*", Effect: "read"}, {Match: "admin", RequiredScopes: []string{"mcp:admin"}}}, AllowInsecureHTTP: true, RequestTimeout: config.Duration{Duration: 10 * time.Second}}}}
+	if len(broker) > 0 && broker[0] {
+		key := make([]byte, 32)
+		_, _ = rand.Read(key)
+		t.Setenv("MCPHUB_TEST_BROKER_KEY", base64.StdEncoding.EncodeToString(key))
+		cfg.Server.Listen = "127.0.0.1:8787"
+		cfg.Admin = config.AdminConfig{Enabled: true, Mode: "local", Listen: "127.0.0.1:8788", DatabasePath: filepath.Join(t.TempDir(), "broker.db"), EncryptionKeyEnv: "MCPHUB_TEST_BROKER_KEY"}
+		cfg.ClientAuthorization = config.ClientAuthorizationConfig{Enabled: true, RequireClientGrant: true, ClientID: "mcphub-cli"}
+		database, err := configstore.Open(t.Context(), cfg.Admin.DatabasePath, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := database.Bootstrap(t.Context(), cfg.Backends); err != nil {
+			database.Close()
+			t.Fatal(err)
+		}
+		database.Close()
+	}
 	application, err := app.New(context.Background(), cfg, "", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -332,6 +351,14 @@ func TestBrowserLoginThroughMCPHubAndConnector(t *testing.T) {
 	defer cancel()
 	if err := f.login(ctx, nil); err != nil {
 		t.Fatal(err)
+	}
+	report := Doctor(ctx, f.store, "work", DoctorOptions{HTTPClient: f.client})
+	if !report.Healthy || len(report.Tools) != 1 || !report.MoreTools || f.toolCalls.Load() != 0 {
+		t.Fatalf("doctor did not safely discover the paginated catalog: %+v", report)
+	}
+	report = Doctor(ctx, f.store, "missing", DoctorOptions{HTTPClient: f.client})
+	if report.Healthy || f.toolCalls.Load() != 0 {
+		t.Fatalf("doctor accepted missing credentials: %+v", report)
 	}
 	status, err := f.store.Status(ctx, "work")
 	if err != nil || !status.LoggedIn || !status.CanRefresh {

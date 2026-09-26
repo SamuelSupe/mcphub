@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/backend"
-	"github.com/SamuelSupe/mcphub/internal/configstore"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
-	"github.com/SamuelSupe/mcphub/internal/openapiimport"
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/openapiimport"
 )
 
 const maximumOpenAPIAdminBodyBytes = 6 << 20
@@ -174,6 +174,9 @@ func (a *App) createAdminOpenAPIImport(w http.ResponseWriter, req *http.Request,
 	desired := groupConfigs(groups)
 	if err := addImportedTools(desired, groupID, tools, ""); err != nil {
 		writeAPIError(w, http.StatusConflict, "revision_conflict", err.Error(), "selected")
+		return
+	}
+	if a.stageConfigurationChange(w, req, configurationChange{Kind: "openapi_import", GroupRevision: groupRecord.Revision, Import: &record, Tools: tools}, nil, importApprovalView(record, tools)) {
 		return
 	}
 	candidate, previous, ok := a.prepareToolGroupCandidate(w, desired)
@@ -369,6 +372,14 @@ func (a *App) replaceAdminOpenAPIImport(w http.ResponseWriter, req *http.Request
 	removeImportedTools(desired, current.GroupID, current.Config.ID)
 	if err := addImportedTools(desired, current.GroupID, tools, ""); err != nil {
 		writeAPIError(w, http.StatusConflict, "revision_conflict", err.Error(), "selected")
+		return
+	}
+	previousTools, err := a.store.ListHTTPTools(req.Context(), current.GroupID)
+	if err != nil {
+		writeToolStoreError(w, err, "无法读取工具")
+		return
+	}
+	if a.stageConfigurationChange(w, req, configurationChange{Kind: "openapi_import", Revision: current.Revision, GroupRevision: groupRevision, Import: &next, Tools: tools}, importApprovalView(current, previousTools), importApprovalView(next, tools)) {
 		return
 	}
 	candidate, previous, ok := a.prepareToolGroupCandidate(w, desired)

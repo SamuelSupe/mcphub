@@ -144,6 +144,10 @@ func (v *view) resolveResource(exposed string, requireListedConcrete bool) (stri
 }
 
 func (v *view) resourceUpdated(backendID, original string) {
+	if v.grant != nil && v.hub.grantStore.ValidateClientGrant(context.Background(), *v.grant) != nil {
+		return
+	}
+
 	key := backendSubscription{backendID: backendID, original: original}
 	v.subscriptionMu.Lock()
 	var exposed []string

@@ -14,12 +14,12 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/backend"
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
 )
 
-func TestHTTPToolHandlerKeepsCapturedManagerAcrossReplacement(t *testing.T) {
+func TestHTTPToolHandlerRejectsStaleManagerAfterReplacement(t *testing.T) {
 	var oldCalls, newCalls atomic.Int32
 	oldUpstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		oldCalls.Add(1)
@@ -53,6 +53,7 @@ func TestHTTPToolHandlerKeepsCapturedManagerAcrossReplacement(t *testing.T) {
 	managerFor := func(baseURL string) *httptool.Manager {
 		manager, err := httptool.NewManager(context.Background(), []httptool.GroupConfig{{
 			ID:                   "payments",
+			ToolRules:            []config.ToolRule{{Match: "lookup", Effect: "read"}},
 			BaseURL:              baseURL,
 			Enabled:              true,
 			RequestTimeout:       time.Second,
@@ -104,11 +105,11 @@ func TestHTTPToolHandlerKeepsCapturedManagerAcrossReplacement(t *testing.T) {
 	}
 
 	h.ReplaceHTTPTools(newManager)
-	if got := call(oldHandler); got != "old" {
-		t.Fatalf("captured old handler result after replacement = %q, want old", got)
+	if _, err := oldHandler(context.Background(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: []byte(`{}`)}}); err == nil {
+		t.Fatal("stale handler forwarded a request after policy replacement")
 	}
-	if oldCalls.Load() != 2 || newCalls.Load() != 0 {
-		t.Fatalf("upstream calls after old handler = old %d, new %d; want 2, 0", oldCalls.Load(), newCalls.Load())
+	if oldCalls.Load() != 1 || newCalls.Load() != 0 {
+		t.Fatalf("upstream calls after stale handler = old %d, new %d; want 1, 0", oldCalls.Load(), newCalls.Load())
 	}
 
 	newDefinition, ok := h.httpToolDefinitions("payments")["payments.lookup"]
@@ -118,7 +119,7 @@ func TestHTTPToolHandlerKeepsCapturedManagerAcrossReplacement(t *testing.T) {
 	if got := call(v.toolHandler(newDefinition)); got != "new" {
 		t.Fatalf("new handler result = %q, want new", got)
 	}
-	if oldCalls.Load() != 2 || newCalls.Load() != 1 {
-		t.Fatalf("upstream calls after new handler = old %d, new %d; want 2, 1", oldCalls.Load(), newCalls.Load())
+	if oldCalls.Load() != 1 || newCalls.Load() != 1 {
+		t.Fatalf("upstream calls after new handler = old %d, new %d; want 1, 1", oldCalls.Load(), newCalls.Load())
 	}
 }

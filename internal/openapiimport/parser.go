@@ -15,7 +15,7 @@ import (
 	"github.com/pb33f/libopenapi/datamodel"
 	"gopkg.in/yaml.v3"
 
-	"github.com/SamuelSupe/mcphub/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
 )
 
 const MaximumDocumentBytes = 5 << 20

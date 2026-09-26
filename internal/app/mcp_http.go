@@ -17,7 +17,11 @@ import (
 
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 
-	"github.com/SamuelSupe/mcphub/internal/mcpcompat"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
+	"github.com/SamuelSupe/mcphub/v2/internal/hub"
+	"github.com/SamuelSupe/mcphub/v2/internal/mcpcompat"
+	"github.com/SamuelSupe/mcphub/v2/internal/sso"
 )
 
 func (a *App) serveMCP(w http.ResponseWriter, req *http.Request, rt *runtime) {
@@ -32,6 +36,48 @@ func (a *App) serveMCP(w http.ResponseWriter, req *http.Request, rt *runtime) {
 			ClockSkew:           30 * time.Second,
 		},
 	)(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		diagnostics.Update(req.Context(), func(r *diagnostics.Record) { r.Subject = mcpauth.TokenInfoFromContext(req.Context()).UserID })
+		if identity := sso.Identity(mcpauth.TokenInfoFromContext(req.Context())); identity != nil {
+			ctx, endToken := context.WithDeadline(req.Context(), mcpauth.TokenInfoFromContext(req.Context()).Expiration)
+			defer endToken()
+			ctx, release, err := a.store.AdmitIdentity(ctx, *identity)
+			if err != nil {
+				http.Error(w, "user permission denied", http.StatusForbidden)
+				return
+			}
+			defer release()
+			req = req.WithContext(ctx)
+		}
+		if len(req.Header.Values(configstore.GrantHeader)) > 1 {
+			writeGrantError(w, configstore.ErrGrantInvalid)
+			return
+		}
+		if secret := req.Header.Get(configstore.GrantHeader); secret != "" {
+			if a.store == nil || !rt.cfg.ClientAuthorization.Enabled {
+				writeGrantError(w, configstore.ErrGrantInvalid)
+				return
+			}
+			info := mcpauth.TokenInfoFromContext(req.Context())
+			ctx, endToken := context.WithDeadline(req.Context(), info.Expiration)
+			defer endToken()
+			req = req.WithContext(ctx)
+			issuer, _ := info.Extra["issuer"].(string)
+			grant, err := a.store.AuthenticateClientGrant(req.Context(), secret, issuer, info.UserID, rt.cfg.Server.PublicURL)
+			if err != nil {
+				writeGrantError(w, err)
+				return
+			}
+			ctx, release, err := a.store.AdmitClientGrant(req.Context(), grant.GrantBinding, issuer, info.UserID)
+			if err != nil {
+				writeGrantError(w, err)
+				return
+			}
+			defer release()
+			req = req.WithContext(hub.WithClientGrant(ctx, grant))
+			diagnostics.Update(req.Context(), func(r *diagnostics.Record) {
+				r.ClientID, r.GrantID, r.Endpoint = grant.ClientID, grant.GrantID, grant.EndpointID
+			})
+		}
 		envelope, ok := a.authorizeMCPRequest(w, req, rt)
 		if !ok {
 			return
@@ -39,6 +85,7 @@ func (a *App) serveMCP(w http.ResponseWriter, req *http.Request, rt *runtime) {
 		if envelope.Method != "resources/unsubscribe" {
 			release, rejected := a.limits.Acquire(envelope.backendIDs)
 			if rejected != nil {
+				diagnostics.Outcome(req.Context(), "rate_limited", "endpoint_limit")
 				w.Header().Set("Retry-After", strconv.Itoa(rejected.RetryAfter))
 				w.Header().Set("Cache-Control", "no-store")
 				writeJSON(w, http.StatusTooManyRequests, map[string]any{"jsonrpc": "2.0", "id": envelope.ID, "error": map[string]any{"code": -32000, "message": "Endpoint rate limit exceeded", "data": rejected}})
@@ -116,10 +163,39 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 		return rpcEnvelope{}, true
 	}
 	envelope.backendIDs = envelope.parseBackendIDs()
+	diagnostics.Update(req.Context(), func(r *diagnostics.Record) {
+		switch envelope.Method {
+		case "initialize", "notifications/initialized", "ping", "tools/list", "tools/call", "prompts/list", "prompts/get", "resources/list", "resources/read", "resources/templates/list", "resources/subscribe", "resources/unsubscribe", "subscriptions/listen", "completion/complete", "server/discover", "notifications/cancelled", "notifications/cancel":
+			r.Method = envelope.Method
+		default:
+			r.Method = "other"
+		}
+		if len(envelope.backendIDs) == 1 {
+			if _, known := rt.hub.MissingScopes(envelope.backendIDs[0], nil); known {
+				r.Endpoint = envelope.backendIDs[0]
+			}
+		}
+		if name, ok := envelope.toolName(); ok {
+			if endpoint, tool, known := rt.hub.ToolTarget(name); known {
+				r.Endpoint, r.Tool = endpoint, tool
+			}
+		}
+	})
+	for _, id := range envelope.backendIDs {
+		if req.Header.Get(configstore.GrantHeader) == "" && rt.hub.RequiresClientGrant(id) {
+			writeGrantError(w, configstore.ErrGrantRequired)
+			return envelope, false
+		}
+	}
 	token := mcpauth.TokenInfoFromContext(req.Context())
 	var scopes []string
 	if token != nil {
 		scopes = token.Scopes
+	}
+	if err := rt.hub.CheckIdentityRequest(sso.Identity(token), envelope.Method, envelope.Params, envelope.backendIDs); err != nil {
+		diagnostics.Outcome(req.Context(), "policy_denied", "user_permission_denied")
+		http.Error(w, "user permission denied", http.StatusForbidden)
+		return envelope, false
 	}
 	missingSet := make(map[string]struct{})
 	for _, backendID := range envelope.backendIDs {
@@ -140,9 +216,23 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 		}
 	}
 	if len(missingSet) == 0 {
+		if grant := hub.ClientGrantFromContext(req.Context()); grant != nil {
+			for _, id := range envelope.backendIDs {
+				if !strings.EqualFold(id, grant.EndpointID) {
+					writeGrantError(w, configstore.ErrGrantInsufficient)
+					return envelope, false
+				}
+			}
+			if err := rt.hub.CheckClientGrantRequest(*grant, envelope.Method, envelope.Params, scopes); err != nil {
+				_ = a.store.RecordClientGrantDenial(req.Context(), *grant, "client_scope_or_resource_denied")
+				writeGrantError(w, err)
+				return envelope, false
+			}
+		}
 		return envelope, true
 	}
 	missing := make([]string, 0, len(missingSet))
+	diagnostics.Outcome(req.Context(), "scope_denied", "insufficient_scope")
 	for scope := range missingSet {
 		missing = append(missing, scope)
 	}

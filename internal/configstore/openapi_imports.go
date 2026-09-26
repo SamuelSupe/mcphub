@@ -9,7 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/openapiimport"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/openapiimport"
 )
 
 type OpenAPIImportRecord struct {
@@ -106,6 +107,8 @@ VALUES(?, ?, ?, 1, ?, ?)`, tool.GroupID, tool.Config.Name, toolJSON, now.Format(
 }
 
 func (s *Store) ReplaceOpenAPIImport(ctx context.Context, record OpenAPIImportRecord, expected int64, tools []HTTPToolRecord, action string) (OpenAPIImportRecord, []HTTPToolRecord, error) {
+	s.grantMu.Lock()
+	defer s.grantMu.Unlock()
 	current, err := s.GetOpenAPIImport(ctx, record.GroupID, record.Config.ID)
 	if err != nil {
 		return OpenAPIImportRecord{}, nil, err
@@ -143,12 +146,17 @@ last_refresh_at=?, last_refresh_ok=1, last_refresh_message='' WHERE group_id=? C
 	if err := deleteImportedToolsTx(ctx, tx, record.GroupID, record.Config.ID); err != nil {
 		return OpenAPIImportRecord{}, nil, err
 	}
+	var changedTools []string
 	createdTools := make([]HTTPToolRecord, len(tools))
 	for index, tool := range tools {
 		tool.GroupID, tool.Revision, tool.CreatedAt, tool.UpdatedAt = record.GroupID, 1, now, now
 		if previous, exists := existingTools[strings.ToLower(tool.Config.Name)]; exists {
 			tool.Revision = previous.Revision + 1
 			tool.CreatedAt = previous.CreatedAt
+			if policyHash(httptool.AuthorizationToolConfig(previous.Config)) != policyHash(httptool.AuthorizationToolConfig(tool.Config)) {
+				changedTools = append(changedTools, previous.Config.Name)
+			}
+			delete(existingTools, strings.ToLower(tool.Config.Name))
 		}
 		toolJSON, _ := json.Marshal(tool.Config)
 		_, err := tx.ExecContext(ctx, `INSERT INTO http_tools(group_id, name, config_json, revision, created_at, updated_at)
@@ -165,13 +173,28 @@ VALUES(?, ?, ?, ?, ?, ?)`, tool.GroupID, tool.Config.Name, toolJSON, tool.Revisi
 	if err := insertSourceEvent(ctx, tx, "openapi_import", record.GroupID+"/"+record.Config.ID, action, true, "", record.Revision, now); err != nil {
 		return OpenAPIImportRecord{}, nil, err
 	}
+	for _, previous := range existingTools {
+		changedTools = append(changedTools, previous.Config.Name)
+	}
+	var ids []string
+	if len(changedTools) > 0 {
+		ids, err = s.invalidateClientGrants(ctx, tx, record.GroupID, changedTools...)
+		if err != nil {
+			return OpenAPIImportRecord{}, nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return OpenAPIImportRecord{}, nil, fmt.Errorf("commit OpenAPI import replace: %w", err)
+	}
+	for _, id := range ids {
+		s.cancelGrantLocked(id)
 	}
 	return record, createdTools, nil
 }
 
 func (s *Store) DeleteOpenAPIImport(ctx context.Context, groupID, id string, expected int64) error {
+	s.grantMu.Lock()
+	defer s.grantMu.Unlock()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin OpenAPI import delete: %w", err)
@@ -188,6 +211,10 @@ func (s *Store) DeleteOpenAPIImport(ctx context.Context, groupID, id string, exp
 		}
 		return ErrConflict
 	}
+	previous, err := importedToolsTx(ctx, tx, groupID, id)
+	if err != nil {
+		return err
+	}
 	if err := deleteImportedToolsTx(ctx, tx, groupID, id); err != nil {
 		return err
 	}
@@ -195,7 +222,23 @@ func (s *Store) DeleteOpenAPIImport(ctx context.Context, groupID, id string, exp
 	if err := insertSourceEvent(ctx, tx, "openapi_import", groupID+"/"+id, "delete", true, "", expected+1, now); err != nil {
 		return err
 	}
-	return tx.Commit()
+	var names, ids []string
+	for _, tool := range previous {
+		names = append(names, tool.Config.Name)
+	}
+	if len(names) > 0 {
+		ids, err = s.invalidateClientGrants(ctx, tx, groupID, names...)
+		if err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		s.cancelGrantLocked(id)
+	}
+	return nil
 }
 
 func (s *Store) MarkOpenAPIRefreshFailure(ctx context.Context, groupID, id string, expected int64, message string) error {

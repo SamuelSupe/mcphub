@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/client"
+	"github.com/SamuelSupe/mcphub/v2/internal/client"
 )
 
 type scopeFlags []string
@@ -26,9 +26,21 @@ func main() {
 
 func run(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: mcphub-cli <login|connect|status|logout|admin> [flags]")
+		return fmt.Errorf("usage: mcphub-cli <setup|login|connect|status|logout|client|broker|doctor|admin> [flags]")
 	}
 	command := args[1]
+	if command == "setup" {
+		return runSetup(args[2:])
+	}
+	if command == "doctor" {
+		return runDoctor(args[2:])
+	}
+	if command == "client" {
+		return runClient(args[2:])
+	}
+	if command == "broker" {
+		return runBroker(args[2:])
+	}
 	if command == "admin" {
 		return runAdmin(args[2:])
 	}
@@ -40,6 +52,10 @@ func run(args []string) error {
 	flags := flag.NewFlagSet("mcphub-cli "+command, flag.ContinueOnError)
 	profile := flags.String("profile", "default", "local credential profile")
 	var server, clientID *string
+	var clientEntry *string
+	if command == "connect" {
+		clientEntry = flags.String("client", "", "paired client instance; connects through the local broker")
+	}
 	var callbackPort *int
 	var admin *bool
 	var scopes scopeFlags
@@ -84,16 +100,31 @@ func run(args []string) error {
 		}
 		return client.Login(ctx, store, client.LoginOptions{Admin: *admin, ServerURL: *server, ClientID: *clientID, Profile: *profile, Scopes: scopes, CallbackPort: *callbackPort, Output: os.Stderr})
 	case "connect":
+		if *clientEntry != "" {
+			return client.ConnectBroker(ctx, store, *profile, *clientEntry, client.ConnectOptions{})
+		}
 		return client.Connect(ctx, store, *profile, client.ConnectOptions{})
 	case "logout":
-		if err := store.Logout(ctx, *profile); err != nil {
+		revoked, err := client.Logout(ctx, store, *profile, nil)
+		if err != nil {
 			return err
 		}
-		fmt.Printf("Cleared local credentials for profile %q. The identity-service browser session is unchanged.\n", *profile)
+		fmt.Printf("Cleared local credentials for profile %q.\n", *profile)
+		if revoked {
+			fmt.Println("Remote broker session revoked, if present.")
+		} else {
+			fmt.Println("Local logout completed; remote revocation is unconfirmed. Revoke the old session in the MCPHub client portal.")
+		}
 	case "status":
 		status, err := store.Status(ctx, *profile)
 		if err != nil {
 			return err
+		}
+		if status.PendingRevocations > 0 {
+			fmt.Printf("Remote session revocations pending: %d; review the client authorization portal.\n", status.PendingRevocations)
+		}
+		if status.BrokerSession != "" {
+			fmt.Printf("Cached broker session: %s\nPaired clients: %d\n", status.BrokerSession, status.ClientCount)
 		}
 		if !status.LoggedIn {
 			fmt.Printf("Profile %q: not logged in\n", *profile)
@@ -108,7 +139,17 @@ func run(args []string) error {
 		if !time.Now().Before(status.ExpiresAt) {
 			state = "expired"
 		}
-		fmt.Printf("Profile: %s\nServer: %s\nCached access token: %s\nExpires: %s\nCan refresh: %t\nThis is local cache status; authorization has not been checked online.\n", *profile, status.ServerURL, state, status.ExpiresAt.Format(time.RFC3339), status.CanRefresh)
+		fmt.Printf("Profile: %s\nServer: %s\nCached access token: %s\nExpires: %s\nCan refresh: %t\nThese login fields describe the local credential cache.\n", *profile, status.ServerURL, state, status.ExpiresAt.Format(time.RFC3339), status.CanRefresh)
+		if status.BrokerSession != "" {
+			values, online, err := client.ListClients(ctx, store, *profile, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Client authorization server reachable: %t (offline results are cached)\n", online)
+			for _, value := range values {
+				printClientStatus(value, online)
+			}
+		}
 	}
 	return nil
 }

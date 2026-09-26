@@ -1,6 +1,6 @@
 package app
 
-import "github.com/SamuelSupe/mcphub/internal/ratelimit"
+import "github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 
 func (r *runtime) rateLimitPolicies() map[string]ratelimit.Config {
 	policies := r.hub.HTTPToolRateLimits()

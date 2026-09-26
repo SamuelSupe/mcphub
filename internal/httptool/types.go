@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	pathpkg "path"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 )
 
 const (
@@ -28,6 +27,8 @@ var (
 )
 
 type GroupConfig struct {
+	EndpointUID          string              `json:"endpoint_uid,omitempty"`
+	RequireClientGrant   bool                `json:"require_client_grant"`
 	RateLimit            ratelimit.Config    `json:"rate_limit"`
 	ID                   string              `json:"id"`
 	BaseURL              string              `json:"base_url"`
@@ -117,24 +118,8 @@ func ValidateGroup(group *GroupConfig) error {
 	if err := validateScopes("tool group "+group.ID+" required_scopes", group.RequiredScopes); err != nil {
 		return err
 	}
-	seenRules := make(map[string]struct{}, len(group.ToolRules))
-	for _, rule := range group.ToolRules {
-		if rule.Match == "" {
-			return fmt.Errorf("tool group %q: tool rule match is required", group.ID)
-		}
-		if _, err := pathpkg.Match(rule.Match, ""); err != nil {
-			return fmt.Errorf("tool group %q: invalid tool rule match %q", group.ID, rule.Match)
-		}
-		if _, exists := seenRules[rule.Match]; exists {
-			return fmt.Errorf("tool group %q: duplicate tool rule match %q", group.ID, rule.Match)
-		}
-		seenRules[rule.Match] = struct{}{}
-		if len(rule.RequiredScopes) == 0 {
-			return fmt.Errorf("tool group %q: tool rule scopes are required", group.ID)
-		}
-		if err := validateScopes("tool group "+group.ID+" tool rule", rule.RequiredScopes); err != nil {
-			return err
-		}
+	if err := config.ValidateToolRules("tool group "+group.ID, group.ToolRules); err != nil {
+		return err
 	}
 	canonicalHeaders := make(map[string]string, len(group.Headers))
 	for name, value := range group.Headers {

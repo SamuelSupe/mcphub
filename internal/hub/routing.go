@@ -14,6 +14,11 @@ import (
 
 var featureNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
+// ExposedToolName includes the bounded hash suffix used for long upstream names.
+func ExposedToolName(backendID, original string) (string, error) {
+	return exposeName(backendID, original)
+}
+
 func exposeName(backendID, original string) (string, error) {
 	if !featureNamePattern.MatchString(original) {
 		return "", fmt.Errorf("invalid MCP feature name %q", original)

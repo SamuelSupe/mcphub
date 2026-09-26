@@ -14,8 +14,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 )
 
 func TestEndpointRateLimitsThroughAdminAndMCP(t *testing.T) {
@@ -28,7 +28,7 @@ func TestEndpointRateLimitsThroughAdminAndMCP(t *testing.T) {
 	backend := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return upstream }, &mcp.StreamableHTTPOptions{Stateless: true}))
 	defer backend.Close()
 	application := newAdminTestApp(t)
-	input := backendInput{ID: "alpha", URL: backend.URL, AllowInsecureHTTP: true, RequiredScopes: []string{"mcp:alpha"}, RateLimit: ratelimit.Config{RequestsPerSecond: .001, Burst: 1}}
+	input := backendInput{PublishedTools: []string{"echo"}, ToolRules: []config.ToolRule{{Match: "echo", Effect: "read"}}, ID: "alpha", URL: backend.URL, AllowInsecureHTTP: true, RequiredScopes: []string{"mcp:alpha"}, RateLimit: ratelimit.Config{RequestsPerSecond: .001, Burst: 1}}
 	body, _ := json.Marshal(input)
 	created := serveAdminJSON(t, application, "POST", "/api/v1/backends", body, "")
 	if created.Code != 201 {
@@ -63,7 +63,7 @@ func TestEndpointRateLimitsThroughAdminAndMCP(t *testing.T) {
 		t.Fatalf("exhausted endpoint blocked catalog access: %d %s", response.Code, response.Body.String())
 	}
 	// Creating another endpoint rebuilds the runtime; its default remains unlimited.
-	unlimited := backendInput{ID: "beta", URL: backend.URL, AllowInsecureHTTP: true}
+	unlimited := backendInput{PublishedTools: []string{"echo"}, ToolRules: []config.ToolRule{{Match: "echo", Effect: "read"}}, ID: "beta", URL: backend.URL, AllowInsecureHTTP: true}
 	unlimitedBody, _ := json.Marshal(unlimited)
 	if response := serveAdminJSON(t, application, "POST", "/api/v1/backends", unlimitedBody, ""); response.Code != 201 {
 		t.Fatal(response.Body.String())
@@ -99,18 +99,18 @@ func TestHTTPToolGroupRateLimitSurvivesChildEdits(t *testing.T) {
 	http.DefaultTransport = api.Client().Transport
 	t.Cleanup(func() { http.DefaultTransport = previousTransport })
 	application := newAdminTestApp(t)
-	group := fmt.Appendf(nil, `{"id":"api","base_url":%q,"rate_limit":{"requests_per_second":0.001,"burst":1}}`, api.URL)
+	group := fmt.Appendf(nil, `{"id":"api","tool_rules":[{"match":"*","effect":"read"}],"base_url":%q,"rate_limit":{"requests_per_second":0.001,"burst":1}}`, api.URL)
 	if response := serveAdminJSON(t, application, "POST", "/api/v1/tool-groups", group, ""); response.Code != 201 {
 		t.Fatal(response.Body.String())
 	}
-	tool := []byte(`{"name":"get","method":"GET","path":"/get"}`)
+	tool := []byte(`{"name":"get","enabled":true,"method":"GET","path":"/get"}`)
 	if response := serveAdminJSON(t, application, "POST", "/api/v1/tool-groups/api/tools", tool, ""); response.Code != 201 {
 		t.Fatal(response.Body.String())
 	}
 	if response := rateLimitedMCPRequest(application, t.Context(), "allowed", "tools/call", "api.get"); response.Code != 200 || calls.Load() != 1 {
 		t.Fatalf("HTTP tool call: %s", response.Body.String())
 	}
-	if response := serveAdminJSON(t, application, "POST", "/api/v1/tool-groups/api/tools", []byte(`{"name":"other","method":"GET","path":"/other"}`), ""); response.Code != 201 {
+	if response := serveAdminJSON(t, application, "POST", "/api/v1/tool-groups/api/tools", []byte(`{"name":"other","enabled":true,"method":"GET","path":"/other"}`), ""); response.Code != 201 {
 		t.Fatal(response.Body.String())
 	}
 	if response := rateLimitedMCPRequest(application, t.Context(), "allowed", "tools/call", "api.other"); response.Code != 429 || calls.Load() != 1 {

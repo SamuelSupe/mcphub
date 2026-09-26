@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,9 +16,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
-	"github.com/SamuelSupe/mcphub/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 )
 
 // A real PostgreSQL run protects SQL dialect, transaction and bytea/citext
@@ -69,6 +70,8 @@ func TestPostgresConfigurationLifecycle(t *testing.T) {
 	}
 	t.Cleanup(func() { s.Close() })
 	backend := config.BackendConfig{RateLimit: ratelimit.Config{RequestsPerSecond: 2.5, Burst: 4, MaxConcurrent: 3}, ID: "Alpha", URL: "https://alpha.example/mcp", Headers: map[string]string{"X-Key": "private-value"}}
+	backend.PublishedTools = []string{"search"}
+	backend.ToolRules = []config.ToolRule{{Match: "search", ResourceRules: []config.ResourceRule{{Argument: "/project", AllowedValues: []string{"work"}}}}}
 	if err := s.Bootstrap(ctx, []config.BackendConfig{backend}); err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +81,9 @@ func TestPostgresConfigurationLifecycle(t *testing.T) {
 	loaded, err := s.Get(ctx, "ALPHA")
 	if err != nil || loaded.Config.Headers["X-Key"] != "private-value" || loaded.Config.RateLimit != backend.RateLimit {
 		t.Fatalf("case-insensitive encrypted read: %v", err)
+	}
+	if !reflect.DeepEqual(loaded.Config.PublishedTools, backend.PublishedTools) || !reflect.DeepEqual(loaded.Config.ToolRules, backend.ToolRules) {
+		t.Fatal("tool publication policy did not round trip")
 	}
 	var public, sealed []byte
 	if err := s.db.QueryRowContext(ctx, "SELECT config_json,secrets FROM backends WHERE id=?", "alpha").Scan(&public, &sealed); err != nil {
@@ -191,4 +197,29 @@ func TestPostgresConfigurationLifecycle(t *testing.T) {
 	if _, err := ro.Create(ctx, Record{Config: config.BackendConfig{ID: "blocked"}}); err == nil {
 		t.Fatal("read-only connection accepted a write")
 	}
+	t.Run("approvals", func(t *testing.T) {
+		legacy, err := s.CreateApproval(t.Context(), ApprovalIntent{Subject: "legacy", Params: []byte(`{"arguments":{}}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.db.ExecContext(ctx, "DROP TABLE approval_events"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.db.ExecContext(ctx, "UPDATE metadata SET value=? WHERE key='schema_version'", []byte("3")); err != nil {
+			t.Fatal(err)
+		}
+		migrated, err := OpenPostgres(ctx, dsn, key, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer migrated.Close()
+		if record, err := migrated.GetApproval(ctx, legacy.ID); err != nil || record.Intent.Subject != "legacy" {
+			t.Fatal("PostgreSQL schema 3 upgrade lost an approval")
+		}
+		testApprovalLifecycle(t, migrated)
+		testApprovalGovernance(t, migrated)
+		testClientGrantLifecycle(t, migrated)
+		testIdentityLifecycle(t, migrated)
+		testClientGrantAdministratorQuery(t, migrated)
+	})
 }

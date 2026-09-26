@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -16,14 +18,17 @@ import (
 
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 
-	"github.com/SamuelSupe/mcphub/internal/authn"
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/configstore"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
-	"github.com/SamuelSupe/mcphub/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/authn"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/sso"
 )
 
 type App struct {
+	requests   diagnostics.Recorder
 	limits     ratelimit.Registry
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -31,6 +36,7 @@ type App struct {
 	configPath string
 	logger     *slog.Logger
 	auth       tokenVerifier
+	sso        *sso.Server
 	stopping   atomic.Bool
 
 	runtimeMu       sync.RWMutex
@@ -44,6 +50,7 @@ type App struct {
 	server      *http.Server
 	adminServer *http.Server
 	adminAuth   *adminAuthorization
+	userAuth    *adminAuthorization
 	store       *configstore.Store
 	closeOnce   sync.Once
 }
@@ -72,8 +79,23 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 		}
 		return nil, err
 	}
-	authManager := authn.NewManager(cfg.Auth.Issuer, cfg.Server.PublicURL, logger)
-	go authManager.Run(ctx)
+	var authManager tokenVerifier
+	var ssoServer *sso.Server
+	if cfg.Auth.SSO != nil {
+		ssoServer, err = sso.New(ctx, cfg, store)
+		if err != nil {
+			cancel()
+			if store != nil {
+				_ = store.Close()
+			}
+			return nil, err
+		}
+		authManager = ssoServer.Verifier(cfg.Server.PublicURL)
+	} else {
+		manager := authn.NewManager(cfg.Auth.Issuer, cfg.Server.PublicURL, logger)
+		go manager.Run(ctx)
+		authManager = manager
+	}
 	rt, err := newRuntimeWithGroups(ctx, cfg, groups, logger, false)
 	if err != nil {
 		cancel()
@@ -89,11 +111,27 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 		configPath:      configPath,
 		logger:          logger,
 		auth:            authManager,
+		sso:             ssoServer,
 		runtime:         rt,
 		store:           store,
 		refreshFailures: make(map[string]int),
 	}
 	app.limits.Configure(rt.rateLimitPolicies())
+	if store != nil {
+		store.ConfigureApprovalDelivery(cfg.Admin.Approvals, cfg.Admin.PublicURL)
+		if err := store.RecoverApprovals(ctx); err != nil {
+			app.Close()
+			return nil, fmt.Errorf("recover tool approvals: %w", err)
+		}
+	}
+	rt.hub.ConfigureApprovals(store, &app.limits)
+	rt.hub.ConfigureClientAuthorization(store)
+	if cfg.ClientAuthorization.Enabled {
+		u, _ := url.Parse(cfg.Server.PublicURL)
+		portal := config.AdminConfig{PublicURL: u.Scheme + "://" + u.Host, ClientID: cfg.ClientAuthorization.ClientID, ClientSecretEnv: cfg.ClientAuthorization.ClientSecretEnv, RequiredScopes: rt.allScopes()}
+		app.userAuth = newAdminAuthorization(portal, cfg.Auth.Issuer, authManager)
+		app.userAuth.userPortal, app.userAuth.resource = true, cfg.Server.PublicURL
+	}
 	app.server = &http.Server{
 		Addr:              cfg.Server.Listen,
 		Handler:           app,
@@ -104,8 +142,14 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 	}
 	if cfg.Admin.Enabled {
 		if cfg.Admin.Remote() {
-			adminManager := authn.NewManager(cfg.Auth.Issuer, cfg.Admin.PublicURL, logger)
-			go adminManager.Run(ctx)
+			var adminManager tokenVerifier
+			if ssoServer != nil {
+				adminManager = ssoServer.Verifier(cfg.Admin.PublicURL)
+			} else {
+				manager := authn.NewManager(cfg.Auth.Issuer, cfg.Admin.PublicURL, logger)
+				go manager.Run(ctx)
+				adminManager = manager
+			}
 			app.adminAuth = newAdminAuthorization(cfg.Admin, cfg.Auth.Issuer, adminManager)
 		}
 		app.adminServer = &http.Server{
@@ -139,6 +183,8 @@ func (a *App) Run() error {
 	}()
 	if a.store != nil {
 		go a.runOpenAPIRefreshLoop()
+		go a.runApprovalMaintenance()
+		go a.runApprovalDelivery()
 	}
 
 	errCh := make(chan error, 2)
@@ -312,6 +358,10 @@ func (a *App) activateCandidate(candidate, previous *runtime) error {
 		candidate.close()
 		return fmt.Errorf("runtime changed while reloading configuration")
 	}
+	candidate.hub.ConfigureApprovals(a.store, &a.limits)
+	candidate.hub.ConfigureClientAuthorization(a.store)
+	previous.hub.CloseGrantViews()
+	previous.hub.RetireApprovals()
 	a.limits.Configure(candidate.rateLimitPolicies())
 	a.runtime = candidate
 	a.runtimeMu.Unlock()
@@ -363,6 +413,21 @@ func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		cancelRequest()
 	}()
 	req = req.WithContext(requestCtx)
+	if req.URL.Path == rt.cfg.MCPPath() && req.Method == http.MethodPost {
+		req = req.WithContext(diagnostics.Begin(req.Context(), requestID))
+		writer := &diagnosticWriter{ResponseWriter: w}
+		w = writer
+		defer func() {
+			status := writer.status
+			if status == 0 {
+				status = 200
+			}
+			if reason := writer.Header().Get("MCPHub-Authorization-Error"); reason != "" {
+				diagnostics.Outcome(req.Context(), "grant_denied", reason)
+			}
+			a.requests.Finish(req.Context(), status)
+		}()
+	}
 
 	controller := http.NewResponseController(w)
 	_ = controller.SetReadDeadline(time.Now().Add(rt.cfg.Server.RequestTimeout.Duration))
@@ -378,7 +443,15 @@ func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if !a.allowOrigin(w, req, rt) {
 		return
 	}
+	if a.sso != nil && a.sso.Handles(req.URL.Path) {
+		a.sso.ServeHTTP(w, req)
+		return
+	}
 
+	if a.userAuth != nil && (strings.HasPrefix(req.URL.Path, "/client-auth/") || strings.HasPrefix(req.URL.Path, "/api/v1/client-") || strings.HasPrefix(req.URL.Path, "/api/v1/broker-sessions/")) {
+		a.serveClientAuthorization(w, req, rt)
+		return
+	}
 	switch req.URL.Path {
 	case "/healthz":
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})

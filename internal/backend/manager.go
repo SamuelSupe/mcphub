@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
 )
 
 type Manager struct {

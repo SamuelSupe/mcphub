@@ -12,7 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 
-	"github.com/SamuelSupe/mcphub/internal/authn"
+	"github.com/SamuelSupe/mcphub/v2/internal/authn"
 )
 
 func httpsURL(raw string) (*url.URL, error) {

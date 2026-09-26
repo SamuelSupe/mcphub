@@ -11,10 +11,11 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 )
 
 var (
@@ -23,8 +24,14 @@ var (
 )
 
 type Store struct {
-	db   *database
-	aead cipher.AEAD
+	identityMu    sync.Mutex
+	identityCalls map[string]identityCall
+	grantMu       sync.Mutex
+	grantCalls    map[string]map[string]context.CancelFunc
+	db            *database
+	aead          cipher.AEAD
+	delivery      config.ApprovalSettings
+	approvalURL   string
 }
 
 type Record struct {
@@ -52,16 +59,19 @@ type Event struct {
 }
 
 type storedConfig struct {
-	RateLimit         ratelimit.Config   `json:"rate_limit"`
-	ID                string             `json:"id"`
-	URL               string             `json:"url"`
-	Required          bool               `json:"required"`
-	RequiredScopes    []string           `json:"required_scopes,omitempty"`
-	ToolRules         []config.ToolRule  `json:"tool_rules,omitempty"`
-	RequestTimeoutNS  int64              `json:"request_timeout_ns"`
-	AllowInsecureHTTP bool               `json:"allow_insecure_http"`
-	HeaderNames       []string           `json:"header_names,omitempty"`
-	OAuth             *storedOAuthConfig `json:"oauth,omitempty"`
+	EndpointUID        string             `json:"endpoint_uid"`
+	RequireClientGrant bool               `json:"require_client_grant"`
+	RateLimit          ratelimit.Config   `json:"rate_limit"`
+	ID                 string             `json:"id"`
+	URL                string             `json:"url"`
+	Required           bool               `json:"required"`
+	RequiredScopes     []string           `json:"required_scopes,omitempty"`
+	PublishedTools     []string           `json:"published_tools,omitempty"`
+	ToolRules          []config.ToolRule  `json:"tool_rules,omitempty"`
+	RequestTimeoutNS   int64              `json:"request_timeout_ns"`
+	AllowInsecureHTTP  bool               `json:"allow_insecure_http"`
+	HeaderNames        []string           `json:"header_names,omitempty"`
+	OAuth              *storedOAuthConfig `json:"oauth,omitempty"`
 }
 
 type storedOAuthConfig struct {
@@ -157,6 +167,7 @@ last_probe_at, last_probe_ok, last_probe_json FROM backends WHERE id = ? COLLATE
 }
 
 func (s *Store) Create(ctx context.Context, record Record) (Record, error) {
+	record.Config.EndpointUID = "ep_" + rand.Text()
 	record.CreatedAt = time.Now().UTC()
 	record.UpdatedAt = record.CreatedAt
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -190,6 +201,8 @@ func (s *Store) Create(ctx context.Context, record Record) (Record, error) {
 }
 
 func (s *Store) Update(ctx context.Context, record Record, expectedRevision int64) (Record, error) {
+	s.grantMu.Lock()
+	defer s.grantMu.Unlock()
 	current, err := s.Get(ctx, record.Config.ID)
 	if err != nil {
 		return Record{}, err
@@ -197,6 +210,7 @@ func (s *Store) Update(ctx context.Context, record Record, expectedRevision int6
 	if current.Revision != expectedRevision {
 		return Record{}, ErrConflict
 	}
+	record.Config.EndpointUID = current.Config.EndpointUID
 	record.Revision = expectedRevision + 1
 	record.CreatedAt = current.CreatedAt
 	record.UpdatedAt = time.Now().UTC()
@@ -225,13 +239,25 @@ WHERE id=? COLLATE NOCASE AND revision=?`, boolInt(record.Enabled), public, secr
 	if err := insertEvent(ctx, tx, record.Config.ID, "update", true, "", record.Revision, record.UpdatedAt); err != nil {
 		return Record{}, err
 	}
+	var ids []string
+	if clientBackendPolicy(current.Config) != clientBackendPolicy(record.Config) || !record.Enabled {
+		ids, err = s.invalidateClientGrants(ctx, tx, record.Config.ID)
+		if err != nil {
+			return Record{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return Record{}, fmt.Errorf("commit backend update: %w", err)
+	}
+	for _, id := range ids {
+		s.cancelGrantLocked(id)
 	}
 	return record, nil
 }
 
 func (s *Store) Delete(ctx context.Context, id string, expectedRevision int64) error {
+	s.grantMu.Lock()
+	defer s.grantMu.Unlock()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin backend delete: %w", err)
@@ -253,8 +279,15 @@ func (s *Store) Delete(ctx context.Context, id string, expectedRevision int64) e
 	if err := insertEvent(ctx, tx, id, "delete", true, "", expectedRevision+1, now); err != nil {
 		return err
 	}
+	ids, err := s.invalidateClientGrants(ctx, tx, id)
+	if err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit backend delete: %w", err)
+	}
+	for _, id := range ids {
+		s.cancelGrantLocked(id)
 	}
 	return nil
 }
@@ -306,6 +339,9 @@ FROM events ORDER BY id DESC LIMIT ?`, limit)
 }
 
 func (s *Store) insertRecord(ctx context.Context, tx *transaction, record Record) error {
+	if record.Config.EndpointUID == "" {
+		record.Config.EndpointUID = "ep_" + rand.Text()
+	}
 	public, secrets, err := s.encodeRecord(record)
 	if err != nil {
 		return err
@@ -326,12 +362,14 @@ func (s *Store) encodeRecord(record Record) ([]byte, []byte, error) {
 	}
 	slices.Sort(headerNames)
 	public := storedConfig{
+		EndpointUID: record.Config.EndpointUID, RequireClientGrant: record.Config.RequireClientGrant,
 		RateLimit:         record.Config.RateLimit,
 		ID:                record.Config.ID,
 		URL:               record.Config.URL,
 		Required:          record.Config.Required,
 		RequiredScopes:    record.Config.RequiredScopes,
 		ToolRules:         record.Config.ToolRules,
+		PublishedTools:    record.Config.PublishedTools,
 		RequestTimeoutNS:  int64(record.Config.RequestTimeout.Duration),
 		AllowInsecureHTTP: record.Config.AllowInsecureHTTP,
 		HeaderNames:       headerNames,
@@ -390,9 +428,10 @@ func (s *Store) scanRecord(row rowScanner) (Record, error) {
 		return Record{}, fmt.Errorf("decode backend %q secrets: %w", id, err)
 	}
 	record.Config = config.BackendConfig{
+		EndpointUID: public.EndpointUID, RequireClientGrant: public.RequireClientGrant,
 		RateLimit: public.RateLimit,
 		ID:        public.ID, URL: public.URL, Required: public.Required,
-		RequiredScopes: slices.Clone(public.RequiredScopes), ToolRules: slices.Clone(public.ToolRules),
+		RequiredScopes: slices.Clone(public.RequiredScopes), ToolRules: config.CloneToolRules(public.ToolRules), PublishedTools: slices.Clone(public.PublishedTools),
 		RequestTimeout:    config.Duration{Duration: time.Duration(public.RequestTimeoutNS)},
 		AllowInsecureHTTP: public.AllowInsecureHTTP, Headers: secretValues.Headers,
 	}

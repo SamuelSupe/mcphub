@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,6 +59,16 @@ backends:
 	}
 	if got, want := cfg.ResourceMetadataPath(), "/.well-known/oauth-protected-resource/mcp"; got != want {
 		t.Fatalf("metadata path = %q, want %q", got, want)
+	}
+}
+
+func TestToolEffectDefaultsToApprovalAndWriteOverridesRead(t *testing.T) {
+	rules := []ToolRule{{Match: "project.*", Effect: "read"}, {Match: "*.update", Effect: "write"}}
+	if ToolEffect(rules, "project.update") != "write" || ToolEffect(rules, "project.get") != "read" || ToolEffect(rules, "unknown") != "unknown" {
+		t.Fatal("tool effect weakened the approval boundary")
+	}
+	if err := ValidateToolRules("test", []ToolRule{{Match: "*", Effect: "auto"}}); err == nil {
+		t.Fatal("invalid effect accepted")
 	}
 }
 
@@ -146,7 +157,7 @@ backends:
 		{
 			name:    "empty tool rule scopes",
 			content: strings.Replace(valid, "    url: https://alpha.example.com/mcp", "    url: https://alpha.example.com/mcp\n    tool_rules:\n      - match: delete_*\n        required_scopes: []", 1),
-			want:    "required_scopes must not be empty",
+			want:    "requires required_scopes, resource_rules, effect or approval",
 		},
 		{
 			name: "duplicate tool rule match",
@@ -286,4 +297,105 @@ func writeConfig(t *testing.T, content string) string {
 		t.Fatalf("write config: %v", err)
 	}
 	return path
+}
+
+func TestResourcePolicyRejectsMissingOrOutOfRangeArguments(t *testing.T) {
+	rules := []ToolRule{
+		{Match: "*", ResourceRules: []ResourceRule{{Argument: "/project", AllowedValues: []string{"work", "other"}}}},
+		{Match: "search", ResourceRules: []ResourceRule{{Argument: "/project", AllowedValues: []string{"work"}}, {Argument: "/body/db~1name~0", AllowedValues: []string{"reports"}}}},
+	}
+	if err := ValidateToolRules("test", rules); err != nil {
+		t.Fatal(err)
+	}
+	resources := ToolResourceRules(rules, "search")
+	for _, tc := range []struct {
+		name, args string
+		allowed    bool
+	}{
+		{"exact", `{"project":"work","body":{"db/name~":"reports"}}`, true},
+		{"array", `{"project":["work","work"],"body":{"db/name~":"reports"}}`, true},
+		{"overlapping rules", `{"project":"other","body":{"db/name~":"reports"}}`, false},
+		{"mixed array", `{"project":["work","other"],"body":{"db/name~":"reports"}}`, false},
+		{"empty array", `{"project":[],"body":{"db/name~":"reports"}}`, false},
+		{"wrong type", `{"project":42,"body":{"db/name~":"reports"}}`, false},
+		{"null", `{"project":null,"body":{"db/name~":"reports"}}`, false},
+		{"missing", `{"body":{"db/name~":"reports"}}`, false},
+		{"nested missing", `{"project":"work","body":{}}`, false},
+		{"malformed", `{"project":"work"`, false},
+		{"trailing", `{} {}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := CheckToolResources(resources, json.RawMessage(tc.args))
+			if (err == nil) != tc.allowed {
+				t.Fatalf("authorization: %v; want allowed=%v", err, tc.allowed)
+			}
+		})
+	}
+	normalized, err := CheckToolResources(resources, json.RawMessage(`{"project":"other","project":"work","body":{"db/name~":"reports"},"n":9007199254740993}`))
+	if err != nil || strings.Count(string(normalized), `"project"`) != 1 || !strings.Contains(string(normalized), `9007199254740993`) {
+		t.Fatalf("normalized arguments: %s, %v", normalized, err)
+	}
+	for _, pointer := range []string{"project", "/bad~", "/bad~2"} {
+		invalid := []ToolRule{{Match: "search", ResourceRules: []ResourceRule{{Argument: pointer, AllowedValues: []string{"work"}}}}}
+		if err := ValidateToolRules("test", invalid); err == nil {
+			t.Fatalf("accepted invalid pointer %q", pointer)
+		}
+	}
+	if err := ValidateToolRules("test", []ToolRule{{Match: "search", ResourceRules: []ResourceRule{{Argument: "/project"}}}}); err == nil {
+		t.Fatal("accepted an empty resource allowlist")
+	}
+	for _, names := range [][]string{{"*"}, {"search", "search"}, {""}} {
+		if err := validatePublishedTools(names); err == nil {
+			t.Fatalf("accepted publication list: %v", names)
+		}
+	}
+}
+
+func TestApprovalPolicyIntersectsReviewerAndResourceGrants(t *testing.T) {
+	policies := []ToolApprovalPolicy{
+		{Approvers: []ApprovalGrant{{Subjects: []string{"reviewer"}, Resources: []ResourceRule{{Argument: "/project", AllowedValues: []string{"work"}}}}}, RequireDifferentReviewer: true},
+		{Approvers: []ApprovalGrant{{Subjects: []string{"reviewer"}, Resources: []ResourceRule{{Argument: "/environment", AllowedValues: []string{"production"}}}}}},
+	}
+	for _, tc := range []struct {
+		reviewer, requester, arguments string
+		allowed                        bool
+	}{
+		{"reviewer", "requester", `{"project":"work","environment":"production"}`, true},
+		{"outsider", "requester", `{"project":"work","environment":"production"}`, false},
+		{"reviewer", "reviewer", `{"project":"work","environment":"production"}`, false},
+		{"reviewer", "requester", `{"project":"other","environment":"production"}`, false},
+		{"reviewer", "requester", `{"project":"work","environment":"test"}`, false},
+	} {
+		if got := CanReviewApproval(policies, tc.reviewer, tc.requester, []byte(tc.arguments), true); got != tc.allowed {
+			t.Fatalf("reviewer/resource boundary: %+v allowed=%v", tc, got)
+		}
+	}
+	rules := []ToolRule{{Match: "*", Effect: "read"}, {Match: "update", Approval: &policies[0]}}
+	if ToolEffect(rules, "update") != "write" {
+		t.Fatal("approval policy was bypassed by broader read classification")
+	}
+}
+
+func TestRiskPolicyCannotBeWeakenedByArguments(t *testing.T) {
+	policy := ToolApprovalPolicy{RiskRules: []ApprovalRiskRule{{Resources: []ResourceRule{{Argument: "/projects", AllowedValues: []string{"production"}}}, RequiredApprovals: 2, RequireStepUp: true}}}
+	for _, body := range []string{`{}`, `{"projects":null}`, `{"projects":1}`, `{"projects":[]}`, `{"projects":["production",1]}`} {
+		if _, err := ResolveApprovalPolicies([]ToolApprovalPolicy{policy}, []byte(body)); err == nil {
+			t.Errorf("ambiguous risk input accepted: %s", body)
+		}
+	}
+	for _, body := range []string{`{"projects":"production"}`, `{"projects":["development","production"]}`} {
+		result, err := ResolveApprovalPolicies([]ToolApprovalPolicy{policy}, []byte(body))
+		if err != nil || ApprovalQuorum(result) != 2 || !ApprovalNeedsStepUp(result) || CanReviewApproval(result, "caller", "caller", []byte(body), true) {
+			t.Fatalf("high-risk policy weakened for %s: %v", body, err)
+		}
+	}
+	result, err := ResolveApprovalPolicies([]ToolApprovalPolicy{policy}, []byte(`{"projects":"development"}`))
+	if err != nil || ApprovalQuorum(result) != 1 {
+		t.Fatal("nonmatching condition raised quorum")
+	}
+	policy.RequiredApprovals = 2
+	result, err = ResolveApprovalPolicies([]ToolApprovalPolicy{policy}, []byte(`{"projects":"development"}`))
+	if err != nil || ApprovalQuorum(result) != 2 {
+		t.Fatal("nonmatching condition lowered base quorum")
+	}
 }

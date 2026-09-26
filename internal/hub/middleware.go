@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -74,11 +75,25 @@ func (v *view) loggingMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 		started := time.Now()
 		result, err := next(ctx, method, req)
+		outcome := "success"
+		if err != nil {
+			outcome = "protocol_error"
+		}
+		if value, ok := result.(*mcp.CallToolResult); ok && value != nil && value.IsError {
+			outcome = "tool_error"
+		}
+		if ctx.Err() != nil {
+			outcome = "cancelled"
+		}
+		outcome = diagnostics.Result(ctx, outcome)
 		attributes := []any{
 			"mcp_method", methodForLog(method),
 			"backend", backendForLog(backendForParams(req.GetParams())),
 			"capability_name", capabilityForParams(req.GetParams()),
 			"duration_ms", time.Since(started).Milliseconds(),
+		}
+		if g := v.grant; g != nil {
+			attributes = append(attributes, "grant_id", g.GrantID, "grant_revision", g.Revision, "client_instance_id", g.ClientID, "broker_session_id", g.SessionID, "endpoint_uid", g.EndpointUID)
 		}
 		if extra := req.GetExtra(); extra != nil {
 			if extra.TokenInfo != nil {
@@ -91,11 +106,13 @@ func (v *view) loggingMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 				)
 			}
 		}
-		if err != nil {
-			attributes = append(attributes, "status", "error", "error_type", fmt.Sprintf("%T", err))
+		attributes = append(attributes, "status", outcome)
+		if err != nil || outcome == "tool_error" || outcome == "protocol_error" {
+			if err != nil {
+				attributes = append(attributes, "error_type", fmt.Sprintf("%T", err))
+			}
 			v.hub.logger.Warn("MCP request", attributes...)
 		} else {
-			attributes = append(attributes, "status", "ok")
 			v.hub.logger.Info("MCP request", attributes...)
 		}
 		return result, err

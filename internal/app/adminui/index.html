@@ -8,6 +8,9 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/editors.css">
+  <link rel="stylesheet" href="/tool-policies.css">
+  <link rel="stylesheet" href="/overview.css">
+  <link rel="stylesheet" href="/identities.css">
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -21,46 +24,76 @@
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7"/><path d="m16 16 5 5"/></symbol>
     <symbol id="i-network" viewBox="0 0 24 24"><circle cx="12" cy="4" r="2.5"/><circle cx="5" cy="20" r="2.5"/><circle cx="19" cy="20" r="2.5"/><path d="M12 6.5v5M5 17.5V14a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3.5"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v5c0 5-4 8-8 10-4-2-8-5-8-10V6l8-3Z"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M2 12h5l3-8 4 16 3-8h5"/></symbol>
+    <symbol id="i-checklist" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10l1.5 1.5L14 8M9 16h6"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
   </svg>
   <a class="skip-link" href="#main-content">跳转到内容</a>
   <section id="auth-panel" class="auth-panel" aria-labelledby="auth-title">
-    <div class="auth-card"><div class="auth-brand">MCPHub<button class="language-button" id="auth-language-toggle" type="button" aria-label="Switch to English">EN</button></div><h1 id="auth-title">管理员登录</h1><p id="auth-message" role="status">正在检查登录状态…</p><div class="auth-actions"><a id="admin-login" class="primary" href="/auth/login" hidden>使用身份服务登录</a><button id="auth-retry" class="secondary" type="button">重试</button></div><p class="auth-boundary">管理权限由身份服务授权，普通 MCP 用户登录不会获得管理权限。</p></div>
+    <div class="auth-card"><div class="auth-brand">MCPHub<button class="language-button" id="auth-language-toggle" type="button" aria-label="Switch to English">EN</button></div><h1 id="auth-title">管理员登录</h1><p id="auth-message" role="status">正在检查登录状态…</p><div class="auth-actions"><a id="admin-login" class="primary" href="/auth/login" hidden>使用身份服务登录</a><a id="approver-login" class="secondary" href="/auth/login?role=approver">以审批人身份登录</a><a class="secondary" href="/auth/login?role=security">以安全管理员身份登录</a><button id="auth-retry" class="secondary" type="button">重试</button></div><p class="auth-boundary">管理入口仅面向获授权的管理员与审批员。</p></div>
   </section>
   <div class="app-shell" hidden>
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <a class="brand" href="#overview" aria-label="MCPHub">
         <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
-        <span><strong>MCPHub</strong><small>配置中心</small></span>
+        <span><strong>MCPHub</strong><small>管理控制台</small></span>
       </a>
+      <button class="icon-button" id="close-navigation" type="button" aria-label="关闭导航"><svg class="icon"><use href="#i-close"/></svg></button>
       <nav aria-label="主导航">
-        <p class="nav-section-label">工作空间</p>
+        <div class="nav-group"><p class="nav-section-label">总览</p>
         <a class="nav-item active" href="#overview" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg><span>概览</span></a>
+        </div><div class="nav-group"><p class="nav-section-label">服务接入</p>
         <a class="nav-item" href="#backends"><svg class="icon"><use href="#i-server"/></svg><span>MCP 后端</span><span class="nav-count" id="nav-backend-count">—</span></a>
         <a class="nav-item" href="#tool-groups"><svg class="icon"><use href="#i-braces"/></svg><span>HTTP 工具组</span><span class="nav-count" id="nav-group-count">—</span></a>
-        <p class="nav-section-label nav-divider">管理</p>
+        </div><div class="nav-group"><p class="nav-section-label">访问控制</p>
+        <a class="nav-item" href="#tool-policies"><svg class="icon"><use href="#i-shield"/></svg><span>工具权限</span></a>
+        <a class="nav-item" href="#identities"><svg class="icon"><use href="#i-users"/></svg><span>用户与组织</span></a>
+        <a class="nav-item" href="#client-grants"><svg class="icon"><use href="#i-monitor"/></svg><span>客户端授权</span></a>
+        </div><div class="nav-group"><p class="nav-section-label">治理与审计</p>
+        <a class="nav-item" href="#approvals"><svg class="icon"><use href="#i-checklist"/></svg><span>审批中心</span></a>
+        <a class="nav-item" href="#requests"><svg class="icon"><use href="#i-pulse"/></svg><span>请求诊断</span></a>
         <a class="nav-item" href="#activity"><svg class="icon"><use href="#i-clock"/></svg><span>变更记录</span></a>
+        </div>
       </nav>
       <div class="sidebar-note"><svg class="icon"><use href="#i-monitor"/></svg><div><strong id="management-mode">本地管理</strong><small id="management-boundary">仅在本机访问</small></div></div>
     </aside>
     <main id="main-content" tabindex="-1">
       <header class="topbar">
-        <div class="breadcrumb"><span>工作空间</span><span aria-hidden="true">/</span><strong id="breadcrumb-page">概览</strong></div>
+        <div class="topbar-leading"><button class="icon-button" id="open-navigation" type="button" aria-label="打开导航" aria-controls="navigation-dialog" aria-expanded="false"><svg class="icon"><use href="#i-menu"/></svg></button><div class="breadcrumb"><span id="breadcrumb-group">总览</span><span aria-hidden="true">/</span><strong id="breadcrumb-page">概览</strong></div></div>
         <div class="topbar-actions"><span id="admin-identity" class="admin-identity" hidden><span id="admin-subject"></span><button class="text-button" id="admin-logout" type="button">退出登录</button></span><span class="sync-status" id="sync-status" role="status">正在读取配置…</span><button class="language-button" id="language-toggle" type="button" aria-label="Switch to English">EN</button></div>
       </header>
       <div class="content">
-        <div class="page-heading"><div><h1 id="page-title">概览</h1><p id="page-description">将分散的服务与 API，统一为可供 AI 调用的工具。</p></div><div class="page-actions"><button class="secondary" id="refresh-button" type="button"><svg class="icon"><use href="#i-refresh"/></svg><span>刷新</span></button><button class="primary" id="register-button" type="button" hidden>＋ 添加 MCP 后端</button><button class="primary" id="new-group-button" type="button" hidden>＋ 创建工具组</button></div></div>
+        <div class="page-heading"><div><h1 id="page-title" tabindex="-1">概览</h1><p id="page-description">集中管理服务接入、访问权限与调用治理。</p></div><div class="page-actions"><button class="secondary" id="refresh-button" type="button"><svg class="icon"><use href="#i-refresh"/></svg><span>刷新</span></button><button class="primary" id="register-button" type="button" hidden><svg class="icon"><use href="#i-plus"/></svg><span>添加 MCP 后端</span></button><button class="primary" id="new-group-button" type="button" hidden><svg class="icon"><use href="#i-plus"/></svg><span>创建工具组</span></button></div></div>
         <div class="page-error" id="page-error" role="alert" hidden><svg class="icon"><use href="#i-info"/></svg><span id="page-error-message"></span><button class="text-button" id="retry-button" type="button">重试</button></div>
 
         <section data-page="overview" aria-label="概览">
-          <div class="metric-strip" aria-label="运行概览"><a href="#backends"><strong id="metric-total">—</strong><span>MCP 后端</span></a><a href="#backends"><strong id="metric-ready">—</strong><span>已连接</span></a><a href="#tool-groups"><strong id="metric-groups">—</strong><span>HTTP 工具组</span></a><a href="#tool-groups"><strong id="metric-tools">—</strong><span>可用 HTTP 工具</span></a></div>
-          <div class="section-title"><h2 id="onboarding-title">从接入第一个服务开始</h2><p>根据已有服务的类型，选择一种接入方式。</p></div>
-          <div class="connection-options">
-            <article class="connection-option"><div class="option-symbol"><svg class="icon"><use href="#i-network"/></svg></div><div><h3>接入 MCP 服务</h3><p>适用于已经提供 MCP 协议的服务。保留工具、资源和提示词能力。</p><button class="primary" data-create="backend" type="button">添加 MCP 后端<svg class="icon"><use href="#i-arrow"/></svg></button></div></article>
-            <article class="connection-option"><div class="option-symbol"><svg class="icon"><use href="#i-braces"/></svg></div><div><h3>将 HTTP API 转为工具</h3><p>适用于 REST API。手工定义接口，或从 OpenAPI 文档导入。</p><button class="secondary" data-create="group" type="button">创建工具组<svg class="icon"><use href="#i-arrow"/></svg></button></div></article>
+          <div class="metric-strip" aria-label="运行概览">
+            <a href="#backends"><svg class="icon"><use href="#i-server"/></svg><span>MCP 后端</span><strong id="metric-total">—</strong></a>
+            <a href="#backends"><svg class="icon"><use href="#i-pulse"/></svg><span>已连接</span><strong id="metric-ready">—</strong></a>
+            <a href="#tool-groups"><svg class="icon"><use href="#i-braces"/></svg><span>HTTP 工具组</span><strong id="metric-groups">—</strong></a>
+            <a href="#tool-groups"><svg class="icon"><use href="#i-grid"/></svg><span>可用 HTTP 工具</span><strong id="metric-tools">—</strong></a>
           </div>
-          <ol class="setup-steps"><li><span>01</span><div><strong>接入服务</strong><p>填写地址与上游凭证</p></div></li><li><span>02</span><div><strong>设置访问权限</strong><p>用 Scope 控制哪些客户端可以调用</p></div></li><li><span>03</span><div><strong>测试并启用</strong><p>验证连接后向客户端提供工具</p></div></li></ol>
-          <div class="overview-bottom"><section class="recent-panel"><div class="section-inline"><h2>最近变更</h2><a href="#activity">查看全部<svg class="icon"><use href="#i-arrow"/></svg></a></div><ol class="event-list compact-events" id="recent-event-list"><li class="event-empty">正在读取配置…</li></ol></section><aside class="permission-note"><svg class="icon"><use href="#i-info"/></svg><div><h3>理解两种权限</h3><p><strong>上游认证</strong><span>：MCPHub 如何连接你的服务。</span></p><p><strong>访问权限</strong><span>：哪些客户端可以通过 MCPHub 调用工具。</span></p></div></aside></div>
-          <p class="page-footnote"><svg class="icon"><use href="#i-info"/></svg><span>客户端身份与远程管理权限由 OIDC 服务提供。</span></p>
+          <div class="overview-grid">
+            <section class="overview-panel services-panel" aria-labelledby="services-title">
+              <div class="section-inline"><h2 id="services-title">服务状态</h2><a href="#backends">管理服务<svg class="icon"><use href="#i-arrow"/></svg></a></div>
+              <p id="service-summary" class="section-description">检查连接状态与已发布能力。</p>
+              <div class="service-table-wrap"><table class="service-table"><thead><tr><th scope="col">名称</th><th scope="col">类型</th><th scope="col">状态</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead><tbody id="service-status-list"></tbody></table></div>
+              <div class="empty-state" id="overview-empty" hidden><span class="empty-symbol"><svg class="icon"><use href="#i-network"/></svg></span><h3>接入第一个 MCP 服务</h3><p>添加 MCP 后端或 HTTP 工具组，再发布工具并配置访问权限。</p><button class="primary" data-create="backend" type="button">添加 MCP 后端</button></div>
+            </section>
+            <section class="overview-panel governance-panel" aria-labelledby="governance-title">
+              <h2 id="governance-title">访问与治理</h2>
+              <a class="governance-link" href="#tool-policies"><svg class="icon"><use href="#i-shield"/></svg><span><strong>工具权限</strong><small>明确发布范围与读写策略</small></span><svg class="icon arrow"><use href="#i-chevron"/></svg></a>
+              <a class="governance-link" href="#identities"><svg class="icon"><use href="#i-users"/></svg><span><strong>用户与组织</strong><small>管理角色与业务资源授权</small></span><svg class="icon arrow"><use href="#i-chevron"/></svg></a>
+              <a class="governance-link" href="#client-grants"><svg class="icon"><use href="#i-monitor"/></svg><span><strong>客户端授权</strong><small>查看并撤销客户端授权</small></span><svg class="icon arrow"><use href="#i-chevron"/></svg></a>
+            </section>
+          </div>
+          <section class="overview-panel recent-panel"><div class="section-inline"><h2>最近变更</h2><a href="#activity">查看全部<svg class="icon"><use href="#i-arrow"/></svg></a></div><ol class="event-list compact-events" id="recent-event-list"><li class="event-empty">正在读取配置…</li></ol></section>
+          <section class="overview-panel onboarding-band"><div><h2>接入新的服务</h2><p>添加 MCP 后端或创建工具组，开始统一管理。</p></div><div class="page-actions"><button class="primary" data-create="backend" type="button"><svg class="icon"><use href="#i-plus"/></svg><span>添加 MCP 后端</span></button><button class="secondary" data-create="group" type="button">创建工具组</button></div></section>
         </section>
 
         <section data-page="backends" aria-label="MCP 后端" hidden>
@@ -76,11 +109,86 @@
           <div class="list-panel"><div class="list-columns" aria-hidden="true"><span>工具组 / API 地址</span><span>工具 / 上游认证</span><span>访问权限</span><span>状态 / 操作</span></div><div class="backend-list" id="tool-group-list" aria-busy="true"></div><div class="empty-state" id="tool-group-empty" hidden><span class="empty-symbol"><svg class="icon"><use href="#i-braces"/></svg></span><h2>把已有 API 变成 AI 工具</h2><p>先创建工具组，再手工添加接口或从 OpenAPI 文档导入。</p><button class="primary" id="empty-group-button" type="button">创建工具组</button></div><div class="empty-state" id="group-no-results" hidden><h3>没有找到匹配的工具组</h3><p>试试其他关键词，或清除筛选条件。</p><button class="secondary" id="clear-group-search" type="button">清除筛选</button></div></div>
         </section>
 
+        <section data-page="tool-policies" aria-label="工具权限" hidden>
+          <p class="context-note">先确认发布范围，再标记读写类型。未分类工具需要审批；所有匹配规则共同生效，写规则优先。</p>
+          <div class="policy-toolbar">
+            <label class="field"><span>目标服务</span><select id="policy-endpoint"><option value="">选择 endpoint</option></select></label>
+            <label class="field"><span>搜索工具</span><input id="policy-search" type="search" placeholder="原始工具名或描述"></label>
+            <label class="field"><span>筛选</span><select id="policy-filter"><option value="all">全部工具</option><option value="unknown">未分类</option><option value="unpublished">未发布</option><option value="read">只读</option><option value="write">写入</option></select></label>
+            <button class="secondary" id="policy-reload" type="button">刷新工具</button>
+          </div>
+          <p id="policy-feedback" role="status"></p>
+          <div id="policy-list" class="policy-list" aria-live="polite"></div>
+          <p class="field-note">目录来自当前运行状态，不执行工具。服务停用或连接异常时，目录可能不完整。</p>
+          <details class="policy-help"><summary>客户端接入与排障</summary><p>登录 → 登记客户端入口 → 浏览器确认范围 → 将生成的 MCP 配置添加到客户端。</p><pre>mcphub-cli doctor --profile work --client ci_example</pre><p>doctor 检查凭证、客户端授权、Broker 和 MCP 目录，不调用工具、不自动打开浏览器。省略 --client 可检查普通连接。</p></details>
+        </section>
+
+        <section data-page="identities" aria-label="用户与组织" hidden>
+          <p class="field-note">外部 SSO 只确认身份。用户首次登录默认待授权；部门和用户组权限与用户直接权限合并，写操作仍需审批。</p>
+          <div class="policy-toolbar">
+            <label class="field">搜索用户或组织<input id="identity-search" type="search"></label>
+            <label class="field">类型<select id="identity-kind"><option value="">全部</option><option value="user">用户</option><option value="group">用户组</option><option value="department">部门</option></select></label>
+          </div>
+          <p id="identity-feedback" role="status"></p>
+          <datalist id="identity-endpoints"></datalist>
+          <div id="identity-list" class="identity-list"></div>
+          <div class="pagination"><button id="identity-prev" class="secondary" type="button" disabled>上一页</button><button id="identity-next" class="secondary" type="button" disabled>下一页</button></div>
+        </section>
+
+        <section data-page="client-grants" aria-label="客户端授权" hidden>
+          <p class="context-note">授权 Scope 是用户批准的上限。实际调用还受当前 Token、工具策略、资源范围和审批约束。</p>
+          <form id="grant-filters" class="policy-toolbar">
+            <label class="field"><span>用户 Subject</span><input name="subject" maxlength="1024" placeholder="精确匹配，留空显示全部"></label>
+            <label class="field"><span>客户端 ID</span><input name="client" maxlength="128"></label>
+            <label class="field"><span>目标服务</span><input name="endpoint" maxlength="32"></label>
+            <label class="field"><span>授权状态</span><select name="status"><option value="">全部</option><option value="active">授权有效</option><option value="pending">等待用户确认</option><option value="confirmed">等待客户端接收</option><option value="reconfirmation_required">需要重新确认</option><option value="expired">已过期</option><option value="revoked">已撤销</option><option value="denied">已拒绝</option></select></label>
+            <div class="filter-actions"><button class="primary" type="submit">筛选</button><button class="secondary" id="grant-reset" type="button">清除筛选</button></div>
+          </form>
+          <p id="grant-feedback" role="status"></p>
+          <div id="grant-list" class="policy-list" aria-live="polite"></div>
+          <div class="pagination"><button id="grant-prev" class="secondary" type="button" disabled>上一页</button><button id="grant-next" class="secondary" type="button" disabled>下一页</button></div>
+          <p class="field-note">显示查询时的授权状态；点击刷新获取最新结果。撤销不会回滚已执行的操作。</p>
+        </section>
+
+        <section data-page="requests" aria-label="请求诊断" hidden>
+          <p class="context-note">仅展示最近 30 分钟内最多 2,000 条已完成 MCP POST 请求，重启后清空。不记录参数、结果或 Token；长期审计请使用审计日志。</p>
+          <form id="request-filters" class="policy-toolbar">
+            <label class="field"><span>请求 ID</span><input name="request_id" maxlength="128"></label>
+            <label class="field"><span>用户 Subject</span><input name="subject" maxlength="1024"></label>
+            <label class="field"><span>客户端 ID</span><input name="client" maxlength="128"></label>
+            <label class="field"><span>目标服务</span><input name="endpoint" maxlength="32"></label>
+            <label class="field"><span>原始工具名</span><input name="tool" maxlength="128"></label>
+            <label class="field"><span>执行结果</span><select name="outcome"><option value="">全部</option><option value="success">成功</option><option value="auth_denied">身份认证失败</option><option value="scope_denied">缺少 Scope</option><option value="grant_denied">客户端授权拒绝</option><option value="policy_denied">策略拒绝</option><option value="rate_limited">触发限流</option><option value="approval_pending">等待审批或恢复</option><option value="tool_error">工具返回错误</option><option value="protocol_error">协议错误</option><option value="cancelled">已取消</option><option value="unavailable">服务不可用</option></select></label>
+            <div class="filter-actions"><button class="primary" type="submit">筛选</button><button class="secondary" id="request-reset" type="button">清除筛选</button></div>
+          </form>
+          <div id="request-stats" class="diagnostic-stats" aria-live="polite"></div>
+          <p class="field-note">统计覆盖当前筛选下的整个窗口。审批等待为申请创建到恢复执行的时间，不含人工审核中的请求；点击刷新获取最新结果。</p>
+          <p id="request-feedback" role="status"></p>
+          <div id="request-list" class="policy-list" aria-live="polite"></div>
+          <div class="pagination"><button id="request-prev" class="secondary" type="button" disabled>上一页</button><button id="request-next" class="secondary" type="button" disabled>下一页</button></div>
+        </section>
+
+        <section data-page="approvals" aria-label="审批中心" hidden>
+          <p class="context-note">批准仅针对当前请求。等待审核与批准后的执行期限分别计算；参数、目标或策略变更后需要重新申请。</p>
+          <p class="page-error" id="approval-disabled" hidden>写工具审批需要远程管理员登录，本地免登录模式不可审批</p>
+          <p class="field-note">仅展示你有权查看的申请。结果不确定时请先核查目标系统，核查记录不会重新执行写操作。</p>
+          <form id="approval-filter" class="approval-filter">
+            <label>审批状态<select name="status"><option value="">全部</option><option value="pending">待审批</option><option value="approved">已批准，等待恢复</option><option value="executing">执行中</option><option value="unknown">结果不确定，需人工核查</option><option value="succeeded">已完成</option><option value="failed">执行返回错误</option><option value="rejected">已拒绝</option><option value="revoked">已撤销</option><option value="cancelled">已取消</option><option value="expired">已过期</option></select></label>
+            <label>工具名<input name="tool" placeholder="db.update" maxlength="128"></label>
+            <label>申请人<input name="subject" maxlength="256"></label>
+            <button class="secondary" type="submit">筛选</button>
+          </form>
+          <p id="approval-delivery" role="status" hidden></p><p id="approval-feedback" role="status"></p>
+          <div id="approval-list" aria-live="polite"></div>
+          <div class="pagination"><button id="approval-prev" class="secondary" type="button">上一页</button><button id="approval-next" class="secondary" type="button">下一页</button></div>
+        </section>
+
         <section data-page="activity" aria-label="变更记录" hidden><div class="section-inline activity-heading"><h2>最近 50 条变更</h2><span>敏感值不会出现在活动记录中。</span></div><div class="list-panel"><ol class="event-list" id="event-list"><li class="event-empty">正在读取配置…</li></ol></div></section>
       </div>
     </main>
   </div>
 
+  <dialog id="navigation-dialog" class="navigation-dialog" aria-label="主导航"></dialog>
   <div class="scrim" id="scrim" hidden></div>
   <section class="inspector" id="inspector" role="dialog" aria-modal="true" aria-labelledby="inspector-title" hidden>
     <div class="drag-handle" id="drag-handle" aria-hidden="true"></div>
@@ -116,7 +224,8 @@
           <div class="section-heading"><span>03</span><div><h3>客户端访问权限</h3><p>控制哪些客户端可以通过 MCPHub 调用此后端。</p></div></div>
           <label class="field full"><span>所需 Scope</span><textarea id="field-scopes" rows="2" placeholder="mcp:primary.read, mcp:primary.write"></textarea><small>使用逗号、空格或换行分隔</small></label>
           <p class="field-note">留空允许所有已认证客户端访问；填写多个时必须全部满足。</p>
-          <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">按工具名称匹配，为敏感操作追加所需 Scope。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="field-rules" rows="5" spellcheck="false" placeholder='[{"match":"admin.*","required_scopes":["mcp:admin"]}]'></textarea></label></details>
+          <label class="field full"><span>已发布工具</span><textarea id="field-published-tools" rows="3" placeholder="search, get_project"></textarea><small>填写原始工具名，逗号、空格或换行分隔；不支持通配符。留空不发布任何工具，新增工具需手动发布。</small></label>
+          <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">匹配规则全部生效。effect 填 read 或 write；未分类也需要审批，write 优先。资源参数使用 JSON Pointer 和精确允许值。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="field-rules" rows="5" spellcheck="false" placeholder='[{"match":"search","effect":"read","required_scopes":["mcp:read"],"resource_rules":[{"argument":"/project","allowed_values":["work"]}]}]'></textarea></label></details>
         </section>
         <details class="advanced"><summary><span>限流策略</span><small>默认不限流</small></summary>
           <p class="field-note">所有用户共享此 endpoint 的额度；HTTP 工具组内的工具共用额度。超限请求立即拒绝，不排队。</p>
@@ -128,6 +237,7 @@
         </details>
         <details class="advanced"><summary><span>高级连接设置</span><small>超时、关键后端、本地 HTTP</small></summary><div class="field-grid">
           <label class="field"><span>请求超时</span><input id="field-timeout" name="request_timeout" value="60s" placeholder="60s"></label>
+          <label class="switch-row"><input id="field-client-grant" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>要求客户端授权</strong><small>仅接受携带有效 ClientGrant 的连接；需要启用用户授权门户。</small></span></label>
           <label class="switch-row"><input id="field-required" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>设为关键后端</strong><small>连接失败会使网关未就绪；普通后端会在后台重连。</small></span></label>
           <label class="switch-row"><input id="field-insecure" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>允许本地 HTTP</strong><small>仅限 localhost 或回环 IP 的开发服务。</small></span></label>
         </div></details>
@@ -160,6 +270,7 @@
             <div class="field-grid">
               <label class="field full"><span>工具组标识</span><input id="group-id" required pattern="[A-Za-z0-9_-]{1,32}" placeholder="crm" autocomplete="off"><small>例如 crm.search；创建后不可修改。</small></label>
               <label class="field full"><span>API 基础地址</span><input id="group-base-url" type="url" required placeholder="https://api.example.com/v1"><small>仅支持 HTTPS；不要包含查询参数或凭证。</small></label>
+              <label class="switch-row"><input id="group-client-grant" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>要求客户端授权</strong><small>仅接受携带有效 ClientGrant 的连接；需要启用用户授权门户。</small></span></label>
               <label class="switch-row"><input id="group-enabled" type="checkbox" checked><span class="switch" aria-hidden="true"></span><span><strong>启用工具组</strong><small>停用后整组工具不可见，配置仍会保留</small></span></label>
             </div>
           </section>
@@ -177,7 +288,7 @@
           <section class="form-section">
             <div class="section-heading"><span>03</span><div><h3>客户端访问权限</h3><p>组内所有工具统一要求这些 Scope。</p></div></div>
             <label class="field"><span>所需 Scope</span><input id="group-scopes" placeholder="crm.read, crm.write"><small>留空允许所有已认证客户端访问；填写多个时必须全部满足。</small></label>
-            <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">按工具名称匹配，为敏感操作追加所需 Scope。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="group-rules" rows="4" spellcheck="false" placeholder='[{"match":"delete_*","required_scopes":["crm.write"]}]'></textarea></label></details>
+            <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">匹配规则全部生效。effect 填 read 或 write；未分类也需要审批，write 优先。资源参数使用 JSON Pointer 和精确允许值。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="group-rules" rows="4" spellcheck="false" placeholder='[{"match":"lookup","effect":"read","required_scopes":["crm.read"],"resource_rules":[{"argument":"/project","allowed_values":["work"]}]}]'></textarea></label></details>
           </section>
           <details class="advanced"><summary><span>限流策略</span><small>默认不限流</small></summary>
           <p class="field-note">所有用户共享此 endpoint 的额度；HTTP 工具组内的工具共用额度。超限请求立即拒绝，不排队。</p>
@@ -205,7 +316,7 @@
           <label class="field"><span>请求方法</span><select id="tool-method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option></select></label>
           <label class="field full"><span>相对路径</span><input id="tool-path" required placeholder="/users/{id}"></label>
           <label class="field full"><span>描述</span><input id="tool-description"></label>
-          <label class="switch-row"><input id="tool-enabled" type="checkbox" checked><span class="switch" aria-hidden="true"></span><span><strong>启用 Tool</strong></span></label>
+          <label class="switch-row"><input id="tool-enabled" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>发布并启用 Tool</strong><small>默认不开放；确认访问规则后再启用。</small></span></label>
         </div>
 	        <div class="subpanel-header"><div><h3>参数</h3><p>path/query/header 映射为顶层 MCP 参数。</p></div><button class="text-button pressable" id="add-parameter" type="button">＋ 添加参数</button></div>
 	        <div class="parameter-list" id="parameter-list"></div>
@@ -239,6 +350,48 @@
     </form>
   </dialog>
 
+  <dialog id="policy-editor" class="policy-dialog" aria-labelledby="policy-editor-title">
+    <form id="policy-edit-form">
+      <header><h2 id="policy-editor-title">编辑工具规则</h2><button class="icon-button" type="button" data-policy-close>×</button></header>
+      <div class="policy-dialog-body">
+        <p id="policy-inherited" class="context-note"></p>
+        <label class="switch-row" id="policy-publish-label"><input type="checkbox" id="policy-published"><span class="switch" aria-hidden="true"></span><span>发布此工具</span></label>
+        <div class="field-grid">
+          <label class="field"><span>本工具的读写标记</span><select id="policy-effect"><option value="">继承规则／未分类</option><option value="read">只读</option><option value="write">写入</option></select></label>
+          <label class="field"><span>本工具追加的 Scope</span><input id="policy-scopes" placeholder="projects:read, projects:write"></label>
+        </div>
+        <h3>业务资源范围</h3><p class="field-note">参数使用 JSON Pointer。每行一个精确允许值；多条规则全部满足。</p>
+        <div id="policy-resources"></div><button class="text-button" id="policy-add-resource" type="button">＋ 添加资源条件</button>
+        <label class="switch-row"><input type="checkbox" id="policy-custom-approval"><span class="switch" aria-hidden="true"></span><span>自定义审批要求</span></label>
+        <div id="policy-approval-fields" class="field-grid" hidden>
+          <label class="field"><span>操作摘要</span><input id="policy-action" maxlength="256"></label>
+          <label class="field"><span>审批人数</span><select id="policy-quorum"><option value="1">1</option><option value="2">2</option></select></label>
+          <label class="field full"><span>审批人 Subject</span><textarea id="policy-reviewers" rows="2" placeholder="每行一个；留空沿用审批 scope 授权"></textarea></label>
+          <label class="switch-row"><input type="checkbox" id="policy-different"><span class="switch" aria-hidden="true"></span><span>禁止申请人自审</span></label>
+          <label class="switch-row"><input type="checkbox" id="policy-step-up"><span class="switch" aria-hidden="true"></span><span>要求加强身份验证</span></label>
+        </div>
+        <p id="policy-reviewer-note" class="field-note" hidden>已有审批人资源条件将保留；请在服务的高级 JSON 编辑器修改审批人。</p>
+        <p class="field-note">其他匹配规则仍然生效。高级审批配置会保留；保存沿用版本检查和配置审批。</p>
+        <p id="policy-edit-error" role="alert"></p>
+      </div>
+      <footer><button class="secondary" type="button" data-policy-close>取消</button><button class="primary" id="policy-save" type="submit">保存规则</button></footer>
+    </form>
+  </dialog>
+  <dialog id="access-check-dialog" class="policy-dialog" aria-labelledby="access-check-title">
+    <form id="access-check-form">
+      <header><h2 id="access-check-title">权限检查</h2><button class="icon-button" type="button" data-policy-close>×</button></header>
+      <div class="policy-dialog-body">
+        <p id="access-check-target"></p>
+        <p class="context-note">输入的 Scope 是管理员假设条件，不代表已验证的用户权限。检查不执行工具，也不创建审批或占用执行额度。</p>
+        <label class="field"><span>假设调用者拥有的 Scope</span><textarea id="access-check-scopes" rows="2" placeholder="多个 Scope 用空格或逗号分隔"></textarea></label>
+        <div class="field-grid"><label class="field"><span>用户 Subject（检查 Grant 时必填）</span><input id="access-check-subject" maxlength="1024"></label><p class="field-note">SSO 模式需填写用户与组织页面中的 MCPHub 用户 ID。</p><label class="field"><span>Grant ID（可选）</span><input id="access-check-grant" maxlength="128"></label></div>
+        <label class="field"><span>工具调用参数（JSON）</span><textarea id="access-check-arguments" rows="5" spellcheck="false">{}</textarea></label>
+        <p class="field-note">结果仅代表当前配置下的检查，不授予执行权。参数 Schema、实时限流、预览、资源版本和上游权限仍在实际执行时检查。</p>
+        <div id="access-check-result" aria-live="polite"></div>
+      </div>
+      <footer><button class="secondary" type="button" data-policy-close>关闭</button><button class="primary" id="access-check-run" type="submit">检查权限</button></footer>
+    </form>
+  </dialog>
   <div class="live-region" id="live-region" aria-live="polite"></div>
   <script type="module" src="/app.js"></script>
 </body>

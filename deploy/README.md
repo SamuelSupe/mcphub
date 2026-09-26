@@ -1,6 +1,8 @@
 # Remote administration and database deployment
 
-MCPHub v1.4.0 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes. [中文](README.zh-CN.md)
+MCPHub v2.0.0 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes. [中文](README.zh-CN.md)
+
+v2.0.0 includes explicit publication, approvals, Broker, setup, SSO user permissions and the redesigned console. The database schema is 7; retain the single-instance boundary and follow the [upgrade and rollback procedure](../RELEASE_NOTES_v2.0.0.md) before replacing v1.4.0. SSO/user-directory storage migrates schema 6 to 7. See [SSO deployment](../docs/sso-and-user-management.md).
 
 | Deployment | Configuration |
 | --- | --- |

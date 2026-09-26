@@ -94,13 +94,23 @@ func Login(ctx context.Context, store *Store, opts LoginOptions) error {
 	if opts.Admin {
 		p.Kind = "admin"
 	}
-	if err := store.locked(ctx, opts.Profile, func() error { return store.save(opts.Profile, p) }); err != nil {
+	var previous *profile
+	if err := store.locked(ctx, opts.Profile, func() error {
+		previous, _ = store.load(opts.Profile)
+		rememberRevocation(p, previous)
+		return store.save(opts.Profile, p)
+	}); err != nil {
 		return err
 	}
 	if opts.Admin {
 		fmt.Fprintf(opts.Output, "Logged in as administrator to profile %q. Use: mcphub-cli admin --profile %s get /overview\n", opts.Profile, opts.Profile)
 	} else {
 		fmt.Fprintf(opts.Output, "Logged in to profile %q. Configure your MCP client to run: mcphub-cli connect --profile %s\n", opts.Profile, opts.Profile)
+	}
+	if err := revokeLoginSnapshot(ctx, previous, opts.HTTPClient); err == nil {
+		_ = store.forgetRevocation(ctx, opts.Profile, previous)
+	} else {
+		fmt.Fprintln(opts.Output, "Previous broker session revocation is pending. Review your sessions in the MCPHub client authorization portal.")
 	}
 	if token.RefreshToken == "" {
 		fmt.Fprintln(opts.Output, "No refresh token was issued; run login again when this access token expires.")

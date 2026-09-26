@@ -3,6 +3,7 @@ package httptool
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,8 +19,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/backend"
-	"github.com/SamuelSupe/mcphub/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 )
 
 type Manager struct {
@@ -37,10 +39,16 @@ type groupRuntime struct {
 }
 
 type Definition struct {
-	GroupID        string
-	Original       string
-	Tool           *mcp.Tool
-	RequiredScopes []string
+	GrantPolicy       string
+	ConfigurationHash string
+	ApprovalRules     []config.ToolApprovalPolicy
+	Effect            string
+	Target            string
+	GroupID           string
+	Original          string
+	Tool              *mcp.Tool
+	RequiredScopes    []string
+	ResourceRules     []config.ResourceRule
 }
 
 type StatusDetail struct {
@@ -237,6 +245,9 @@ func (m *Manager) Call(ctx context.Context, groupID, toolName string, arguments 
 	if err != nil {
 		return nil, err
 	}
+	if config.ToolEffect(runtime.config.ToolRules, tool.Name) != "read" {
+		request = request.WithContext(backend.WithoutReplay(request.Context()))
+	}
 	started := time.Now()
 	response, err := runtime.client.Do(request)
 	if err != nil {
@@ -286,7 +297,28 @@ func buildDefinition(group GroupConfig, tool ToolConfig) (Definition, error) {
 	if len(tool.OutputSchema) > 0 {
 		definition.OutputSchema = cloneMap(tool.OutputSchema)
 	}
-	return Definition{GroupID: group.ID, Original: tool.Name, Tool: definition, RequiredScopes: group.RequiredToolScopes(tool.Name)}, nil
+	group.Tools = nil
+	encoded, err := json.Marshal([]any{group, tool})
+	if err != nil {
+		return Definition{}, err
+	}
+	grantTool := AuthorizationToolConfig(tool)
+	grantData, err := json.Marshal(grantTool)
+	if err != nil {
+		return Definition{}, err
+	}
+	return Definition{GrantPolicy: fmt.Sprintf("%x", sha256.Sum256(grantData)), ConfigurationHash: fmt.Sprintf("%x", sha256.Sum256(encoded)), GroupID: group.ID, Original: tool.Name, Tool: definition, RequiredScopes: group.RequiredToolScopes(tool.Name), ResourceRules: config.ToolResourceRules(group.ToolRules, tool.Name), ApprovalRules: config.ToolApprovalPolicies(group.ToolRules, tool.Name), Effect: config.ToolEffect(group.ToolRules, tool.Name), Target: tool.Method + " " + group.BaseURL + tool.Path}, nil
+}
+
+// AuthorizationToolConfig excludes display text when comparing consent scopes.
+func AuthorizationToolConfig(tool ToolConfig) ToolConfig {
+	grantTool := tool
+	grantTool.Description = ""
+	grantTool.Parameters = slices.Clone(tool.Parameters)
+	for i := range grantTool.Parameters {
+		grantTool.Parameters[i].Description = ""
+	}
+	return grantTool
 }
 
 func buildRequest(ctx context.Context, group GroupConfig, tool ToolConfig, args map[string]any) (*http.Request, error) {
@@ -423,7 +455,8 @@ func responseResult(status int, contentType string, body []byte, group GroupConf
 }
 
 func errorResult(message string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: message}}, IsError: true}
+	// Transport and response decoding failures cannot establish whether a write happened.
+	return &mcp.CallToolResult{Meta: mcp.Meta{"io.mcphub/executionOutcome": "unknown"}, Content: []mcp.Content{&mcp.TextContent{Text: message}}, IsError: true}
 }
 
 type responseRedaction struct {
@@ -548,7 +581,7 @@ func hasScopes(granted map[string]struct{}, required []string) bool {
 func cloneGroup(group GroupConfig) GroupConfig {
 	result := group
 	result.RequiredScopes = slices.Clone(group.RequiredScopes)
-	result.ToolRules = slices.Clone(group.ToolRules)
+	result.ToolRules = config.CloneToolRules(group.ToolRules)
 	result.Headers = make(map[string]string, len(group.Headers))
 	for name, value := range group.Headers {
 		result.Headers[name] = value
@@ -585,4 +618,9 @@ func cloneMap(value map[string]any) map[string]any {
 	decoded, _ := decodeJSONValue(encoded)
 	result, _ := decoded.(map[string]any)
 	return result
+}
+
+func (m *Manager) RequiresClientGrant(id string) bool {
+	group := m.aliases[strings.ToLower(id)]
+	return group != nil && group.config.RequireClientGrant
 }

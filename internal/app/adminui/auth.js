@@ -3,8 +3,18 @@ import { t, translateDOM } from "./i18n.js";
 let session = null;
 let ready = () => {};
 
-export function canManage() { return session?.authenticated === true; }
+export function isAuthenticated() { return session?.authenticated === true; }
+export function canManage() { return isAuthenticated() && (session.mode === "local" || session.can_configure === true); }
+export function canInspectDelivery() { return isAuthenticated() && (session.can_configure || session.can_review_configuration); }
+export function canApprove() { return isAuthenticated() && session.can_view_approvals === true; }
 export function authHeaders() { return session?.csrf ? { "X-MCPHub-CSRF": session.csrf } : {}; }
+
+export function renderManagementMode() {
+  if (!session) return;
+  const remote = session.mode === "remote";
+  document.querySelector("#management-mode").textContent = t(remote ? "远程管理" : "本地管理");
+  document.querySelector("#management-boundary").textContent = t(remote ? (canManage() ? "需要管理员权限" : "审批人访问") : "仅在本机访问");
+}
 
 export function requireLogin(status = 401) {
   session = null;
@@ -27,7 +37,7 @@ async function loadSession() {
     const response = await fetch("/auth/session", { cache: "no-store" });
     if (!response.ok) throw new Error(t("暂时无法检查登录状态，请稍后重试。"));
     session = await response.json();
-    if (!canManage()) {
+    if (!isAuthenticated()) {
       const reason = new URLSearchParams(location.search).get("login_error");
       requireLogin(session.forbidden || reason === "forbidden" ? 403 : 401);
       if (reason && reason !== "forbidden") document.querySelector("#auth-message").textContent = t("登录未完成。请重试，或检查身份服务的客户端配置。" );
@@ -36,12 +46,16 @@ async function loadSession() {
     }
     document.querySelector("#auth-panel").hidden = true;
     document.querySelector(".app-shell").hidden = false;
+    document.body.dataset.canConfigure = String(canManage());
+    document.body.dataset.canApprove = String(canApprove());
+    for (const link of document.querySelectorAll(".nav-item")) link.hidden = link.hash === "#approvals" ? !canApprove() : !canManage();
+    if (!canManage()) location.hash = "approvals";
+    else if (!canApprove() && location.hash === "#approvals") location.hash = "overview";
     const remote = session.mode === "remote";
     document.querySelector("#admin-identity").hidden = !remote;
     document.querySelector("#admin-subject").textContent = session.subject;
     document.querySelector("#admin-subject").title = session.subject;
-    document.querySelector("#management-mode").textContent = t(remote ? "远程管理" : "本地管理");
-    document.querySelector("#management-boundary").textContent = t(remote ? "需要管理员权限" : "仅在本机访问");
+    renderManagementMode();
     await ready();
   } catch (error) {
     requireLogin();

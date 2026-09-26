@@ -9,8 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/SamuelSupe/mcphub/internal/app"
-	"github.com/SamuelSupe/mcphub/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/app"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
 )
 
 func main() {
@@ -22,13 +22,15 @@ func main() {
 
 func run(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: mcphub <serve|validate> --config PATH")
+		return fmt.Errorf("usage: mcphub <serve|validate> --config PATH; mcphub verify-audit --file PATH --key ID=BASE64_PUBLIC_KEY")
 	}
 	switch args[1] {
 	case "validate":
 		return validateCommand(args[2:])
 	case "serve":
 		return serveCommand(args[2:])
+	case "verify-audit":
+		return verifyAuditCommand(args[2:])
 	default:
 		return fmt.Errorf("unknown command %q", args[1])
 	}

@@ -10,13 +10,13 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 
-	"github.com/SamuelSupe/mcphub/internal/mcpcompat"
+	"github.com/SamuelSupe/mcphub/v2/internal/mcpcompat"
 )
 
 type requestMetadata struct{ version, method, name string }
 type requestMetadataKey struct{}
 
-type permissionError struct{ scopes string }
+type permissionError struct{ scopes, code string }
 
 type rateLimitError struct{ retryAfter int }
 
@@ -28,6 +28,9 @@ func (e *rateLimitError) Error() string {
 }
 
 func (e *permissionError) Error() string {
+	if e.code != "" {
+		return e.code + "; run mcphub-cli client authorize for this entry; token refresh cannot grant client permissions"
+	}
 	if e.scopes == "" {
 		return "MCPHub denied this request; check the profile's permissions"
 	}
@@ -35,6 +38,7 @@ func (e *permissionError) Error() string {
 }
 
 type authenticatedTransport struct {
+	grant       func(context.Context) (string, error)
 	base        http.RoundTripper
 	credentials *credentials
 }
@@ -61,6 +65,13 @@ func (t *authenticatedTransport) RoundTrip(req *http.Request) (*http.Response, e
 			copy.Body = body
 		}
 		copy.Header.Set("Authorization", "Bearer "+token)
+		if t.grant != nil {
+			secret, err := t.grant(req.Context())
+			if err != nil {
+				return nil, err
+			}
+			copy.Header.Set("MCPHub-Grant", secret)
+		}
 		meta, _ := req.Context().Value(requestMetadataKey{}).(requestMetadata)
 		if copy.Header.Get("Mcp-Protocol-Version") == "" && meta.version != "" {
 			copy.Header.Set("Mcp-Protocol-Version", meta.version)
@@ -108,7 +119,11 @@ func (t *authenticatedTransport) RoundTrip(req *http.Request) (*http.Response, e
 		if len(scopes) > 1024 {
 			scopes = ""
 		}
-		return nil, &permissionError{scopes: scopes}
+		code := resp.Header.Get("MCPHub-Authorization-Error")
+		if !strings.HasPrefix(code, "client_") || len(code) > 128 {
+			code = ""
+		}
+		return nil, &permissionError{scopes: scopes, code: code}
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
 		resp.Body.Close()

@@ -70,9 +70,9 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Check admin JavaScript syntax
+      - name: Check browser JavaScript syntax
         run: |
-          for script in internal/app/adminui/*.js; do
+          for script in internal/app/adminui/*.js internal/app/clientportal/*.js; do
             node --input-type=module --check < "$script"
           done
 
@@ -98,7 +98,8 @@ jobs:
                 -o "$stage/$binary" \
                 "./cmd/$binary"
               cp LICENSE README.md README.zh-CN.md SECURITY.md "RELEASE_NOTES_${GITHUB_REF_NAME}.md" "$stage/"
-              files=(LICENSE README.md README.zh-CN.md SECURITY.md "RELEASE_NOTES_${GITHUB_REF_NAME}.md" "$binary")
+              cp -R docs "$stage/"
+              files=(LICENSE README.md README.zh-CN.md SECURITY.md "RELEASE_NOTES_${GITHUB_REF_NAME}.md" docs "$binary")
               if [ "$binary" = mcphub ]; then
                 cp config.example.yaml "$stage/"
                 cp -R deploy "$stage/"
@@ -123,10 +124,11 @@ jobs:
               -trimpath -ldflags="-s -w" \
               -o "$stage/mcphub-cli.exe" ./cmd/mcphub-cli
             cp LICENSE README.md README.zh-CN.md SECURITY.md "RELEASE_NOTES_${GITHUB_REF_NAME}.md" "$stage/"
-            touch -d "@$source_date_epoch" "$stage/"*
+            cp -R docs "$stage/"
+            find "$stage" -exec touch -d "@$source_date_epoch" {} +
             (
               cd "$stage"
-              TZ=UTC zip -X -q "$GITHUB_WORKSPACE/dist/$archive" LICENSE README.md README.zh-CN.md SECURITY.md "RELEASE_NOTES_${GITHUB_REF_NAME}.md" mcphub-cli.exe
+              TZ=UTC zip -X -q -r "$GITHUB_WORKSPACE/dist/$archive" LICENSE README.md README.zh-CN.md SECURITY.md "RELEASE_NOTES_${GITHUB_REF_NAME}.md" docs mcphub-cli.exe
             )
             rm -rf "$stage"
           done
@@ -148,14 +150,14 @@ jobs:
             sha256sum --check SHA256SUMS
             for archive in *.tar.gz; do
               case "$archive" in
-                mcphub-cli_*) expected="LICENSE README.md README.zh-CN.md RELEASE_NOTES_${GITHUB_REF_NAME}.md SECURITY.md mcphub-cli " ;;
-                mcphub_*) expected="LICENSE README.md README.zh-CN.md RELEASE_NOTES_${GITHUB_REF_NAME}.md SECURITY.md config.example.yaml deploy/ deploy/Caddyfile deploy/README.md deploy/README.zh-CN.md deploy/compose.postgres.yaml deploy/config.remote-postgres.yaml deploy/config.remote-sqlite.yaml mcphub " ;;
+                mcphub-cli_*) expected="LICENSE README.md README.zh-CN.md RELEASE_NOTES_${GITHUB_REF_NAME}.md SECURITY.md docs/ docs/broker-authorization-design.zh-CN.md docs/sso-and-user-management.md docs/sso-and-user-management.zh-CN.md mcphub-cli " ;;
+                mcphub_*) expected="LICENSE README.md README.zh-CN.md RELEASE_NOTES_${GITHUB_REF_NAME}.md SECURITY.md config.example.yaml deploy/ deploy/Caddyfile deploy/README.md deploy/README.zh-CN.md deploy/compose.postgres.yaml deploy/config.remote-postgres.yaml deploy/config.remote-sqlite.yaml docs/ docs/broker-authorization-design.zh-CN.md docs/sso-and-user-management.md docs/sso-and-user-management.zh-CN.md mcphub " ;;
                 *) exit 1 ;;
               esac
               test "$(tar -tzf "$archive" | sort | tr '\n' ' ')" = "$expected"
             done
             for archive in *.zip; do
-              test "$(unzip -Z1 "$archive" | sort | tr '\n' ' ')" = "LICENSE README.md README.zh-CN.md RELEASE_NOTES_${GITHUB_REF_NAME}.md SECURITY.md mcphub-cli.exe "
+              test "$(unzip -Z1 "$archive" | sort | tr '\n' ' ')" = "LICENSE README.md README.zh-CN.md RELEASE_NOTES_${GITHUB_REF_NAME}.md SECURITY.md docs/ docs/broker-authorization-design.zh-CN.md docs/sso-and-user-management.md docs/sso-and-user-management.zh-CN.md mcphub-cli.exe "
             done
           )
 

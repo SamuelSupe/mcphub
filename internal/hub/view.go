@@ -10,12 +10,15 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/version"
+	"github.com/SamuelSupe/mcphub/v2/internal/version"
 )
 
 type view struct {
+	identity    *configstore.EffectiveIdentity
+	grant       *configstore.ClientGrant
 	hub         *Hub
 	server      *mcp.Server
 	allowed     map[string]struct{}
@@ -136,7 +139,25 @@ func newView(h *Hub, ids []string, profiles ...[]string) *view {
 			URITemplate: uriTemplate,
 		}, v.issuedResourceHandler(id))
 	}
-	v.server.AddReceivingMiddleware(v.timeoutMiddleware, v.loggingMiddleware, v.catalogBarrierMiddleware, v.privateCacheMiddleware)
+	v.server.AddReceivingMiddleware(v.identityMiddleware, v.grantMiddleware, v.timeoutMiddleware, v.loggingMiddleware, v.catalogBarrierMiddleware, v.privateCacheMiddleware)
+	if h.approvalStore != nil {
+		v.server.AddTool(&mcp.Tool{
+			Name:        statusApprovalTool,
+			Description: "Read your approval status and saved result without starting execution. Set query_upstream=true to ask the configured read-only operation status tool. Never retries a write.",
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{"approval_id": map[string]any{"type": "string"}, "query_upstream": map[string]any{"type": "boolean"}}, "required": []string{"approval_id"}, "additionalProperties": false},
+		}, v.statusApproval)
+		v.server.AddTool(&mcp.Tool{
+			Name:        resumeApprovalTool,
+			Description: "Resume an approved MCPHub write using its saved request. Also returns pending status or the cached execution result. Never approves a request. Do not retry the original write to resume it.",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{"approval_id": map[string]any{"type": "string"}}, "required": []string{"approval_id"}, "additionalProperties": false},
+		}, v.resumeApproval)
+		v.server.AddTool(&mcp.Tool{
+			Name:        cancelApprovalTool,
+			Description: "Cancel your pending or approved MCPHub request before execution starts. Cannot undo an admitted write.",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{"approval_id": map[string]any{"type": "string"}, "reason": map[string]any{"type": "string"}}, "required": []string{"approval_id"}, "additionalProperties": false},
+		}, v.cancelApproval)
+	}
 	return v
 }
 
@@ -153,9 +174,12 @@ func (v *view) allows(id string) bool {
 }
 
 func (v *view) allowsHTTPGroup(id string) bool {
+	if v.identity != nil && !v.identity.Permissions.AllowsEndpoint(id) {
+		return false
+	}
 	if v.dynamicHTTP {
 		ids, _ := v.hub.currentHTTPTools().AllowedProfile(v.granted)
-		return slices.Contains(ids, id)
+		return slices.Contains(v.hub.filterGrantEndpoints(ids, v.grant), id)
 	}
 	_, ok := v.allowedHTTP[id]
 	return ok
@@ -182,7 +206,7 @@ func (v *view) reconcile() {
 			continue
 		}
 		for exposed, definition := range v.hub.toolDefinitions(id, client.Config(), catalog, true) {
-			if !hasRequiredScopes(v.toolScopes, definition.requiredScopes) {
+			if !v.grantAllowsDefinition(definition) || !hasRequiredScopes(v.toolScopes, definition.requiredScopes) {
 				continue
 			}
 			if _, collision := toolDefs[exposed]; collision {
@@ -192,6 +216,9 @@ func (v *view) reconcile() {
 			toolDefs[exposed] = definition
 		}
 		for _, prompt := range catalog.Prompts {
+			if v.identity != nil && !v.identity.Permissions.AllowsCapability(id, "prompts") {
+				continue
+			}
 			if prompt == nil {
 				continue
 			}
@@ -212,6 +239,9 @@ func (v *view) reconcile() {
 			promptDefs[exposed] = promptDefinition{id, prompt.Name, &copyPrompt, fingerprint}
 		}
 		for _, resource := range catalog.Resources {
+			if v.identity != nil && !v.identity.Permissions.AllowsCapability(id, "resources") {
+				continue
+			}
 			if resource == nil || resource.URI == "" {
 				continue
 			}
@@ -225,6 +255,9 @@ func (v *view) reconcile() {
 			resourceDefs[exposed] = resourceDefinition{id, resource.URI, &copyResource, fingerprint}
 		}
 		for _, resourceTemplate := range catalog.ResourceTemplates {
+			if v.identity != nil && !v.identity.Permissions.AllowsCapability(id, "resources") {
+				continue
+			}
 			if resourceTemplate == nil || resourceTemplate.URITemplate == "" {
 				continue
 			}
@@ -247,7 +280,10 @@ func (v *view) reconcile() {
 	if v.dynamicHTTP {
 		ids, scopes := v.hub.currentHTTPTools().AllowedProfile(v.granted)
 		httpGroups = make(map[string]struct{}, len(ids))
-		for _, id := range ids {
+		for _, id := range v.hub.filterGrantEndpoints(ids, v.grant) {
+			if v.identity != nil && !v.identity.Permissions.AllowsEndpoint(id) {
+				continue
+			}
 			httpGroups[id] = struct{}{}
 		}
 		toolScopes = maps.Clone(v.toolScopes)
@@ -257,7 +293,7 @@ func (v *view) reconcile() {
 	}
 	for id := range httpGroups {
 		for exposed, definition := range v.hub.httpToolDefinitions(id) {
-			if !hasRequiredScopes(toolScopes, definition.requiredScopes) {
+			if !v.grantAllowsDefinition(definition) || !hasRequiredScopes(toolScopes, definition.requiredScopes) {
 				continue
 			}
 			if _, collision := toolDefs[exposed]; collision {
@@ -268,6 +304,15 @@ func (v *view) reconcile() {
 		}
 	}
 
+	if v.grant != nil {
+		if !v.grant.Capabilities.Prompts {
+			clear(promptDefs)
+		}
+		if !v.grant.Capabilities.Resources {
+			clear(resourceDefs)
+			clear(templateDefs)
+		}
+	}
 	v.reconcileMu.Lock()
 	defer v.reconcileMu.Unlock()
 	v.applyTools(toolDefs)

@@ -14,9 +14,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/configstore"
-	"github.com/SamuelSupe/mcphub/internal/httptool"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
+	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
 )
 
 func TestAdminToolGroupAndHTTPToolETagsPreserveSecretsAndRejectStaleWrites(t *testing.T) {
@@ -89,6 +90,11 @@ func TestAdminToolGroupAndHTTPToolETagsPreserveSecretsAndRejectStaleWrites(t *te
 	}
 	if toolView.Name != "lookup" || toolView.Origin != "manual" || toolView.Revision != 1 {
 		t.Fatalf("created HTTP tool view = %#v", toolView)
+	}
+	policyResponse := serveAdminJSON(t, application, http.MethodGet, "/api/v1/tool-policies?endpoint=payments", nil, "")
+	var policy endpointPolicies
+	if policyResponse.Code != 200 || json.Unmarshal(policyResponse.Body.Bytes(), &policy) != nil || policy.Kind != "tool-group" || len(policy.Tools) != 1 || policy.Tools[0].Published || policy.Tools[0].Effect != "unknown" {
+		t.Fatalf("disabled HTTP tool policy: %s", policyResponse.Body.String())
 	}
 
 	response = serveAdminJSON(t, application, http.MethodPut, "/api/v1/tool-groups/payments/tools/lookup", []byte(`{"name":"lookup","description":"stale","enabled":false,"method":"GET","path":"/stale"}`), `"2"`)
@@ -290,7 +296,7 @@ paths: {}
 	t.Cleanup(func() { http.DefaultTransport = previousTransport })
 
 	application := newAdminTestApp(t)
-	groupBody := []byte(`{"id":"catalog","base_url":"` + upstream.URL + `","enabled":true,"request_timeout":"2s"}`)
+	groupBody := []byte(`{"id":"catalog","base_url":"` + upstream.URL + `","enabled":true,"tool_rules":[{"match":"*","effect":"read"}],"request_timeout":"2s"}`)
 	response := serveAdminJSON(t, application, http.MethodPost, "/api/v1/tool-groups", groupBody, "")
 	if response.Code != http.StatusCreated {
 		t.Fatalf("tool group create status = %d; body=%s", response.Code, response.Body.String())
@@ -339,6 +345,40 @@ paths: {}
 	if names := runtimeToolNames(t, application.currentRuntime()); len(names) != 0 {
 		t.Fatalf("runtime tools after deleted operation refresh = %v, want empty", names)
 	}
+
+	// Automatic refresh is a proposal when configuration governance is enabled.
+	refreshed.Config.Selected = record.Config.Selected
+	refreshed, _, err = application.store.ReplaceOpenAPIImport(t.Context(), refreshed, refreshed.Revision, nil, "update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	application.currentConfig().Admin.Approvals.PolicyChanges.Enabled = true
+	document.Store(documentV1)
+	if err := application.refreshOpenAPIImport(refreshed); err != nil {
+		t.Fatal(err)
+	}
+	if err := application.refreshOpenAPIImport(refreshed); err != nil {
+		t.Fatal(err)
+	}
+	unchanged, _ := application.store.GetOpenAPIImport(t.Context(), "catalog", "catalog-v1")
+	if unchanged.Revision != refreshed.Revision || len(runtimeToolNames(t, application.currentRuntime())) != 0 {
+		t.Fatal("unreviewed automatic refresh changed configuration")
+	}
+	proposals, err := application.store.ListApprovals(t.Context(), configstore.ApprovalQuery{Status: "pending", Subject: "system:openapi-refresh"})
+	if err != nil || len(proposals) != 1 || proposals[0].Intent.Kind != "configuration" {
+		t.Fatalf("refresh proposals: %d %v", len(proposals), err)
+	}
+	document.Store(documentV2)
+	if err := application.store.DecideApproval(t.Context(), proposals[0].ID, "approved", "security-reviewer", configstore.ApprovalDetail{Reason: "Reviewed imported definitions"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := application.applyConfigurationApproval(t.Context(), proposals[0]); err != nil {
+		t.Fatal(err)
+	}
+	applied, _ := application.store.GetOpenAPIImport(t.Context(), "catalog", "catalog-v1")
+	if string(applied.Document) != documentV1 || len(runtimeToolNames(t, application.currentRuntime())) != 1 {
+		t.Fatal("approval fetched a different specification instead of applying the reviewed snapshot")
+	}
 }
 
 func TestAdminToolGroupDeleteAndOtherUpdateKeepRuntimeAndStoreConsistent(t *testing.T) {
@@ -367,7 +407,7 @@ func TestAdminToolGroupDeleteAndOtherUpdateKeepRuntimeAndStoreConsistent(t *test
 		t.Fatalf("runtime tools before serialized changes = %v, want alpha.echo and beta.lookup", names)
 	}
 
-	updateBeta := []byte(`{"id":"beta","base_url":"https://beta.example.com","enabled":true,"request_timeout":"2s"}`)
+	updateBeta := []byte(`{"id":"beta","base_url":"https://beta.example.com","enabled":true,"tool_rules":[{"match":"*","effect":"read"}],"request_timeout":"2s"}`)
 	response := serveAdminJSON(t, application, http.MethodPut, "/api/v1/tool-groups/beta", updateBeta, `"1"`)
 	if response.Code != http.StatusOK || response.Header().Get("ETag") != `"2"` {
 		t.Fatalf("beta update status/ETag = %d/%q; body=%s", response.Code, response.Header().Get("ETag"), response.Body.String())
@@ -523,7 +563,7 @@ func TestAdminHTTPToolCatalogHotUpdatesAndCallsUpstreamWithoutReconnect(t *testi
 		t.Fatalf("initial HTTP tool catalog = %#v, want empty", initial.Tools)
 	}
 
-	groupBody := []byte(`{"id":"payments","base_url":"` + upstream.URL + `","enabled":true,"request_timeout":"2s"}`)
+	groupBody := []byte(`{"id":"payments","base_url":"` + upstream.URL + `","enabled":true,"tool_rules":[{"match":"*","effect":"read"}],"request_timeout":"2s"}`)
 	response := serveAdminJSON(t, application, http.MethodPost, "/api/v1/tool-groups", groupBody, "")
 	if response.Code != http.StatusCreated {
 		t.Fatalf("enabled tool group create status = %d; body=%s", response.Code, response.Body.String())
@@ -640,10 +680,29 @@ func TestAdminHTTPToolRuleScopeHotUpdatesExistingSessions(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("scoped tool group create status = %d; body=%s", response.Code, response.Body.String())
 	}
-	createTool := []byte(`{"name":"lookup","description":"Look up an item","enabled":true,"method":"GET","path":"/items"}`)
+	createTool := []byte(`{"name":"lookup","description":"Look up an item","method":"GET","path":"/items","parameters":[{"name":"project","argument":"project","in":"query","schema":{"type":"string"}}]}`)
 	response = serveAdminJSON(t, application, http.MethodPost, "/api/v1/tool-groups/payments/tools", createTool, "")
 	if response.Code != http.StatusCreated || response.Header().Get("ETag") != `"1"` {
 		t.Fatalf("scoped HTTP tool create status/ETag = %d/%q; body=%s", response.Code, response.Header().Get("ETag"), response.Body.String())
+	}
+	for _, token := range []string{"allowed", "privileged"} {
+		list := rateLimitedMCPRequest(application, ctx, token, "tools/list", "")
+		if strings.Contains(list.Body.String(), "payments.lookup") {
+			t.Fatal("new HTTP tool was published by default")
+		}
+		call := rateLimitedMCPRequest(application, ctx, token, "tools/call", "payments.lookup")
+		if !strings.Contains(call.Body.String(), `"error"`) || calls.Load() != 0 {
+			t.Fatalf("unpublished HTTP call: %s", call.Body.String())
+		}
+		page := application.requests.Query(diagnostics.Query{RequestID: call.Header().Get("X-Request-Id")})
+		if len(page.Records) != 1 || page.Records[0].Tool != "" {
+			t.Fatalf("unpublished tool recorded as a known target: %+v", page.Records)
+		}
+	}
+	createTool = []byte(strings.Replace(string(createTool), `"method":"GET"`, `"enabled":true,"method":"GET"`, 1))
+	response = serveAdminJSON(t, application, http.MethodPut, "/api/v1/tool-groups/payments/tools/lookup", createTool, `"1"`)
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Body.String())
 	}
 	waitHTTPToolListChanged(t, ctx, allowedChanged)
 	waitHTTPToolListChanged(t, ctx, privilegedChanged)
@@ -654,7 +713,7 @@ func TestAdminHTTPToolRuleScopeHotUpdatesExistingSessions(t *testing.T) {
 		}
 	}
 
-	updateGroup := []byte(`{"id":"payments","base_url":"` + upstream.URL + `","enabled":true,"required_scopes":["mcp:alpha"],"tool_rules":[{"match":"lookup","required_scopes":["mcp:alpha:audit"]}],"request_timeout":"2s"}`)
+	updateGroup := []byte(`{"id":"payments","base_url":"` + upstream.URL + `","enabled":true,"required_scopes":["mcp:alpha"],"tool_rules":[{"match":"lookup","effect":"read","required_scopes":["mcp:alpha:audit"],"resource_rules":[{"argument":"/project","allowed_values":["work"]}]}],"request_timeout":"2s"}`)
 	response = serveAdminJSON(t, application, http.MethodPut, "/api/v1/tool-groups/payments", updateGroup, `"1"`)
 	if response.Code != http.StatusOK || response.Header().Get("ETag") != `"2"` {
 		t.Fatalf("scoped tool group update status/ETag = %d/%q; body=%s", response.Code, response.Header().Get("ETag"), response.Body.String())
@@ -671,6 +730,11 @@ func TestAdminHTTPToolRuleScopeHotUpdatesExistingSessions(t *testing.T) {
 	if _, err := allowed.CallTool(ctx, &mcp.CallToolParams{Name: "payments.lookup"}); err == nil {
 		t.Fatal("session without required tool scope unexpectedly called HTTP tool")
 	}
+	denied := rateLimitedMCPRequest(application, ctx, "allowed", "tools/call", "payments.lookup")
+	page := application.requests.Query(diagnostics.Query{RequestID: denied.Header().Get("X-Request-Id")})
+	if denied.Code != http.StatusForbidden || len(page.Records) != 1 || page.Records[0].Outcome != "scope_denied" || page.Records[0].Endpoint != "payments" || page.Records[0].Tool != "lookup" {
+		t.Fatalf("scoped HTTP tool diagnostics: status=%d records=%+v", denied.Code, page.Records)
+	}
 	privilegedTools, err := privileged.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatalf("privileged ListTools() after scope update: %v", err)
@@ -678,13 +742,45 @@ func TestAdminHTTPToolRuleScopeHotUpdatesExistingSessions(t *testing.T) {
 	if len(privilegedTools.Tools) != 1 || privilegedTools.Tools[0].Name != "payments.lookup" {
 		t.Fatalf("catalog for session with new scope = %#v, want payments.lookup", privilegedTools.Tools)
 	}
-	result, err := privileged.CallTool(ctx, &mcp.CallToolParams{Name: "payments.lookup"})
+	for _, args := range []map[string]any{nil, {"project": "other"}} {
+		if result, err := privileged.CallTool(ctx, &mcp.CallToolParams{Name: "payments.lookup", Arguments: args}); err == nil && !result.IsError {
+			t.Fatal("HTTP resource restriction bypassed")
+		}
+	}
+	if calls.Load() != 0 {
+		t.Fatal("denied HTTP calls reached upstream")
+	}
+	result, err := privileged.CallTool(ctx, &mcp.CallToolParams{Name: "payments.lookup", Arguments: map[string]any{"project": "work"}})
 	if err != nil {
 		t.Fatalf("privileged CallTool() after scope update: %v", err)
 	}
 	if result.IsError || len(result.Content) != 1 || result.Content[0].(*mcp.TextContent).Text != `{"ok":true}` || calls.Load() != 1 {
 		t.Fatalf("privileged HTTP call result/calls = %#v/%d", result, calls.Load())
 	}
+	updateGroup = []byte(strings.Replace(string(updateGroup), `["work"]`, `["ops"]`, 1))
+	response = serveAdminJSON(t, application, http.MethodPut, "/api/v1/tool-groups/payments", updateGroup, `"2"`)
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Body.String())
+	}
+	if result, err := privileged.CallTool(ctx, &mcp.CallToolParams{Name: "payments.lookup", Arguments: map[string]any{"project": "work"}}); err == nil && !result.IsError {
+		t.Fatal("old resource policy survived update")
+	}
+	result, err = privileged.CallTool(ctx, &mcp.CallToolParams{Name: "payments.lookup", Arguments: map[string]any{"project": "ops"}})
+	if err != nil || result.IsError || calls.Load() != 2 {
+		t.Fatalf("updated policy: %#v, %v, calls=%d", result, err, calls.Load())
+	}
+	createTool = []byte(strings.Replace(string(createTool), `"enabled":true`, `"enabled":false`, 1))
+	response = serveAdminJSON(t, application, http.MethodPut, "/api/v1/tool-groups/payments/tools/lookup", createTool, `"2"`)
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Body.String())
+	}
+	if _, err := privileged.CallTool(ctx, &mcp.CallToolParams{Name: "payments.lookup", Arguments: map[string]any{"project": "ops"}}); err == nil {
+		t.Fatal("disabled HTTP tool was callable")
+	}
+	if calls.Load() != 2 {
+		t.Fatal("revoked HTTP tool reached upstream")
+	}
+
 }
 
 func waitHTTPToolListChanged(t *testing.T, ctx context.Context, events <-chan struct{}) {

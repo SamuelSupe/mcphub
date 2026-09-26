@@ -40,6 +40,7 @@ func prepareToken(token *oauth2.Token) error {
 }
 
 type credentials struct {
+	control                 bool
 	store                   *Store
 	name, session, endpoint string
 	kind                    string

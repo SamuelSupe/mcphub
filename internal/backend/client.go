@@ -10,9 +10,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/SamuelSupe/mcphub/internal/config"
-	"github.com/SamuelSupe/mcphub/internal/mcpcompat"
-	"github.com/SamuelSupe/mcphub/internal/version"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/mcpcompat"
+	"github.com/SamuelSupe/mcphub/v2/internal/version"
 )
 
 type Client struct {

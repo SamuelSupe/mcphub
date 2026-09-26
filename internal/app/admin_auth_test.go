@@ -19,11 +19,11 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 	"golang.org/x/oauth2"
 
-	"github.com/SamuelSupe/mcphub/internal/authn"
-	"github.com/SamuelSupe/mcphub/internal/client"
+	"github.com/SamuelSupe/mcphub/v2/internal/authn"
+	"github.com/SamuelSupe/mcphub/v2/internal/client"
 )
 
-type adminGrant struct{ scope, resource, challenge, redirect string }
+type adminGrant struct{ scope, resource, challenge, redirect, nonce, subject string }
 type adminLoginFixture struct {
 	app            *App
 	server, issuer *httptest.Server
@@ -35,11 +35,15 @@ type adminLoginFixture struct {
 	refreshFailure atomic.Bool
 	wrongAudience  atomic.Bool
 	denyScope      atomic.Bool
+	stepUpFailure  atomic.Value
+	loginSubject   atomic.Value
 }
 
 func newAdminLoginFixture(t *testing.T) *adminLoginFixture {
 	t.Helper()
 	f := &adminLoginFixture{app: newAdminTestApp(t), codes: map[string]adminGrant{}, refresh: map[string]adminGrant{}}
+	f.stepUpFailure.Store("")
+	f.loginSubject.Store("administrator-123")
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +55,7 @@ func newAdminLoginFixture(t *testing.T) *adminLoginFixture {
 	f.issuer = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration", "/.well-known/oauth-authorization-server":
-			writeJSON(w, 200, map[string]any{"issuer": f.issuer.URL, "authorization_endpoint": f.issuer.URL + "/authorize", "token_endpoint": f.issuer.URL + "/token", "jwks_uri": f.issuer.URL + "/jwks", "code_challenge_methods_supported": []string{"S256"}, "response_types_supported": []string{"code"}, "subject_types_supported": []string{"public"}, "id_token_signing_alg_values_supported": []string{"RS256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": []string{"mcphub:admin", "offline_access"}, "authorization_response_iss_parameter_supported": true})
+			writeJSON(w, 200, map[string]any{"issuer": f.issuer.URL, "authorization_endpoint": f.issuer.URL + "/authorize", "token_endpoint": f.issuer.URL + "/token", "jwks_uri": f.issuer.URL + "/jwks", "code_challenge_methods_supported": []string{"S256"}, "response_types_supported": []string{"code"}, "subject_types_supported": []string{"public"}, "id_token_signing_alg_values_supported": []string{"RS256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": []string{"mcphub:admin", "mcphub:approve", "mcphub:security", "openid", "offline_access"}, "authorization_response_iss_parameter_supported": true})
 		case "/jwks":
 			writeJSON(w, 200, map[string]any{"keys": []any{jose.JSONWebKey{Key: &key.PublicKey, KeyID: "admin-test", Algorithm: "RS256", Use: "sig"}}})
 		case "/authorize":
@@ -62,7 +66,7 @@ func newAdminLoginFixture(t *testing.T) *adminLoginFixture {
 			}
 			code := rand.Text()
 			f.mu.Lock()
-			f.codes[code] = adminGrant{scope: q.Get("scope"), resource: q.Get("resource"), challenge: q.Get("code_challenge"), redirect: q.Get("redirect_uri")}
+			f.codes[code] = adminGrant{scope: q.Get("scope"), resource: q.Get("resource"), challenge: q.Get("code_challenge"), redirect: q.Get("redirect_uri"), nonce: q.Get("nonce"), subject: f.loginSubject.Load().(string)}
 			f.mu.Unlock()
 			u, _ := url.Parse(q.Get("redirect_uri"))
 			u.RawQuery = url.Values{"code": {code}, "state": {q.Get("state")}, "iss": {f.issuer.URL}}.Encode()
@@ -103,7 +107,11 @@ func newAdminLoginFixture(t *testing.T) *adminLoginFixture {
 }
 
 func (f *adminLoginFixture) signed(scope, audience string) string {
-	token, err := jwt.Signed(f.signer).Claims(map[string]any{"iss": f.issuer.URL, "aud": audience, "sub": "administrator-123", "scope": scope, "exp": time.Now().Add(time.Hour).Unix()}).Serialize()
+	return f.signedSubject(scope, audience, "administrator-123")
+}
+
+func (f *adminLoginFixture) signedSubject(scope, audience, subject string) string {
+	token, err := jwt.Signed(f.signer).Claims(map[string]any{"iss": f.issuer.URL, "aud": audience, "sub": subject, "scope": scope, "exp": time.Now().Add(time.Hour).Unix()}).Serialize()
 	if err != nil {
 		panic(err)
 	}
@@ -150,7 +158,28 @@ func (f *adminLoginFixture) token(w http.ResponseWriter, r *http.Request) {
 	if r.Form.Get("grant_type") == "authorization_code" {
 		expires = 2
 	}
-	writeJSON(w, 200, map[string]any{"access_token": f.signed(scope, audience), "token_type": "Bearer", "refresh_token": refresh, "expires_in": expires, "scope": scope})
+	response := map[string]any{"access_token": f.signedSubject(scope, audience, grant.subject), "token_type": "Bearer", "refresh_token": refresh, "expires_in": expires, "scope": scope}
+	if grant.nonce != "" {
+		claims := map[string]any{"iss": f.issuer.URL, "sub": grant.subject, "aud": "admin-cli", "iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(), "auth_time": time.Now().Unix(), "nonce": grant.nonce, "acr": "urn:mcphub:test:mfa"}
+		switch f.stepUpFailure.Load().(string) {
+		case "acr":
+			claims["acr"] = "password"
+		case "old":
+			claims["auth_time"] = time.Now().Add(-time.Hour).Unix()
+		case "nonce":
+			claims["nonce"] = "wrong"
+		case "subject":
+			claims["sub"] = "another-user"
+		case "audience":
+			claims["aud"] = "another-client"
+		}
+		raw, err := jwt.Signed(f.signer).Claims(claims).Serialize()
+		if err != nil {
+			panic("invalid test ID token")
+		}
+		response["id_token"] = raw
+	}
+	writeJSON(w, 200, response)
 }
 
 func (f *adminLoginFixture) request(t *testing.T, c *http.Client, method, path, token, csrf string, body []byte) *http.Response {
@@ -176,6 +205,14 @@ func (f *adminLoginFixture) request(t *testing.T, c *http.Client, method, path, 
 
 func TestRemoteAdminAuthorizationAndCLI(t *testing.T) {
 	f := newAdminLoginFixture(t)
+	for _, route := range []struct{ method, path string }{{"GET", "/api/v1/tool-policies?endpoint=alpha"}, {"POST", "/api/v1/access-check"}, {"GET", "/api/v1/client-grants"}, {"GET", "/api/v1/requests"}} {
+		for _, scope := range []string{"mcp:read", "mcphub:approve"} {
+			resp := f.request(t, f.client, route.method, route.path, f.signed(scope, f.server.URL), "", []byte(`{}`))
+			if resp.StatusCode != http.StatusForbidden {
+				t.Fatalf("%s exposed administrator policies to %s: %d", route.path, scope, resp.StatusCode)
+			}
+		}
+	}
 	for _, tc := range []struct {
 		token  string
 		status int

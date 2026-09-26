@@ -13,6 +13,41 @@ MCPHub v2.1.0 新增 Vault 共享/个人上游账号、OIDC 凭证刷新，以�
 
 **从 v1.x 升级：** 后端工具现在默认不发布，写工具和未分类工具需经审批。数据库迁移前，请备份数据库与匹配的加密密钥，逐项审核发布范围及读写策略，并遵循[升级与回滚流程](RELEASE_NOTES_v2.1.0.md#upgrade-and-rollback--升级与回滚)。Go 安装路径新增 `/v2`。
 
+## 界面预览
+
+以下为 MCPHub v2.1.0 在 OrbStack 运行、使用本机 Chrome 截取的真实界面，内容均为演示数据。控制台支持中英文切换，截图展示本地管理模式。详见[截图说明](docs/screenshots/README.md)。
+
+**服务概览**：集中查看连接状态、可用工具、权限管理入口和最近配置变更。
+
+![MCPHub 服务概览，展示三个已连接的演示后端](docs/screenshots/overview.zh-CN.jpg)
+
+<details>
+<summary><strong>工具权限</strong>：Scope、业务资源范围与写审批</summary>
+
+在 Agent 执行前，检查已发布写工具的最终 Scope、允许访问的项目以及审批人数要求。
+
+![MCPHub 写工具权限，展示 Scope、项目范围和审批要求](docs/screenshots/tool-policies.zh-CN.jpg)
+
+</details>
+
+<details>
+<summary><strong>Vault 账号</strong>：按用户身份连接上游服务</summary>
+
+选择个人账号，配置浏览器授权、上游 Scope 和回调地址。截图展示配置界面，未连接真实外部账号。
+
+![MCPHub Vault 个人账号配置，展示 OIDC 授权与上游 Scope](docs/screenshots/vault-accounts.zh-CN.jpg)
+
+</details>
+
+<details>
+<summary><strong>HTTP 工具组</strong>：管理 REST 接口与 OpenAPI 来源</summary>
+
+将 HTTP 接口组织为同一 MCP 命名空间内的工具，共享连接配置和访问策略。
+
+![MCPHub HTTP 工具组，展示三个示例接口和 OpenAPI 导入入口](docs/screenshots/http-tools.zh-CN.jpg)
+
+</details>
+
 ## 企业 SSO 与用户权限
 
 支持通用 OIDC / OAuth2 机密客户端身份桥接，向 `mcphub-cli` 签发 MCPHub 自己的凭证；无需把企业应用密钥放到用户电脑。管理员在「用户与组织」管理用户启停、管理员/审批员角色、Scope、endpoint、精确工具和业务资源范围。首次登录默认待授权，写权限仍受逐次审批保护。

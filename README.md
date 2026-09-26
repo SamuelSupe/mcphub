@@ -13,6 +13,41 @@ MCPHub v2.1.0 adds Vault-backed shared and personal upstream accounts, OIDC cred
 
 **Upgrading from v1.x:** backend tools now default to unpublished, and writes or unclassified tools require approval. Back up the database and matching encryption key before the schema migration, review every published tool and its read/write policy, and follow the [upgrade and rollback guide](RELEASE_NOTES_v2.1.0.md#upgrade-and-rollback--升级与回滚). Go installation paths now include `/v2`.
 
+## Screenshots
+
+Captured from MCPHub v2.1.0 running in OrbStack, using local Chrome and demonstration data. The console supports English and Chinese; these captures show local administration. See [capture details](docs/screenshots/README.md).
+
+**Service overview** — connection health, available tools, access controls and recent configuration changes.
+
+![MCPHub service overview with three connected demo backends](docs/screenshots/overview.en.jpg)
+
+<details>
+<summary><strong>Tool permissions</strong> — scopes, business resources and write approval</summary>
+
+Inspect a published write tool's effective scopes, allowed project values and required reviewer count before an Agent can execute it.
+
+![MCPHub write tool permissions showing scopes, project restrictions and approval requirements](docs/screenshots/tool-policies.en.jpg)
+
+</details>
+
+<details>
+<summary><strong>Vault accounts</strong> — connect upstream services with each user's own account</summary>
+
+Choose personal credentials and configure browser authorization, upstream scopes and the callback URL. This capture shows the configuration interface, without connecting a real external account.
+
+![MCPHub Vault personal account settings with OIDC authorization and upstream scopes](docs/screenshots/vault-accounts.en.jpg)
+
+</details>
+
+<details>
+<summary><strong>HTTP tool groups</strong> — manage REST endpoints and OpenAPI sources</summary>
+
+Group HTTP endpoints under one MCP namespace, with shared connections and access policies.
+
+![MCPHub HTTP tool group with three example endpoints and OpenAPI import controls](docs/screenshots/http-tools.en.jpg)
+
+</details>
+
 ## Enterprise SSO and user permissions
 
 Bridge a confidential OIDC/OAuth2 identity provider and issue MCPHub credentials to `mcphub-cli`, keeping upstream application secrets off user computers. **Users & organization** manages account enablement, administrative roles, scopes, endpoints, exact tools and business-resource conditions. New users await authorization; write permission still requires per-operation approval.

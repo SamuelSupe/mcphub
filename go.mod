@@ -6,7 +6,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/pb33f/libopenapi v0.38.7
 	github.com/yosida95/uritemplate/v3 v3.0.2
 	golang.org/x/oauth2 v0.36.0

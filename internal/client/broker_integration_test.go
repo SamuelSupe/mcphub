@@ -26,11 +26,13 @@ import (
 
 func TestSetupSelectsNarrowClientAndPrintsConfiguration(t *testing.T) {
 	f := newLoginFixture(t, true)
-	dir, err := os.MkdirTemp("", "mh-setup-")
+	root, err := os.MkdirTemp("", "mh-setup-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer os.RemoveAll(root)
+	// Store must create the credential directory with its owner-only Windows ACL.
+	dir := filepath.Join(root, "credentials")
 	f.store = &Store{Dir: dir}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
@@ -164,11 +166,12 @@ func TestBrokerClientAuthorizationIsolationAndRevocation(t *testing.T) {
 	f := newLoginFixture(t, true)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	dir, err := os.MkdirTemp("", "mh-")
+	root, err := os.MkdirTemp("", "mh-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer os.RemoveAll(root)
+	dir := filepath.Join(root, "credentials")
 	f.store = &Store{Dir: dir}
 	if err := f.login(ctx, nil); err != nil {
 		t.Fatal(err)

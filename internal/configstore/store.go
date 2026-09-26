@@ -59,19 +59,20 @@ type Event struct {
 }
 
 type storedConfig struct {
-	EndpointUID        string             `json:"endpoint_uid"`
-	RequireClientGrant bool               `json:"require_client_grant"`
-	RateLimit          ratelimit.Config   `json:"rate_limit"`
-	ID                 string             `json:"id"`
-	URL                string             `json:"url"`
-	Required           bool               `json:"required"`
-	RequiredScopes     []string           `json:"required_scopes,omitempty"`
-	PublishedTools     []string           `json:"published_tools,omitempty"`
-	ToolRules          []config.ToolRule  `json:"tool_rules,omitempty"`
-	RequestTimeoutNS   int64              `json:"request_timeout_ns"`
-	AllowInsecureHTTP  bool               `json:"allow_insecure_http"`
-	HeaderNames        []string           `json:"header_names,omitempty"`
-	OAuth              *storedOAuthConfig `json:"oauth,omitempty"`
+	Credentials        *config.CredentialConfig `json:"credentials,omitempty"`
+	EndpointUID        string                   `json:"endpoint_uid"`
+	RequireClientGrant bool                     `json:"require_client_grant"`
+	RateLimit          ratelimit.Config         `json:"rate_limit"`
+	ID                 string                   `json:"id"`
+	URL                string                   `json:"url"`
+	Required           bool                     `json:"required"`
+	RequiredScopes     []string                 `json:"required_scopes,omitempty"`
+	PublishedTools     []string                 `json:"published_tools,omitempty"`
+	ToolRules          []config.ToolRule        `json:"tool_rules,omitempty"`
+	RequestTimeoutNS   int64                    `json:"request_timeout_ns"`
+	AllowInsecureHTTP  bool                     `json:"allow_insecure_http"`
+	HeaderNames        []string                 `json:"header_names,omitempty"`
+	OAuth              *storedOAuthConfig       `json:"oauth,omitempty"`
 }
 
 type storedOAuthConfig struct {
@@ -362,6 +363,7 @@ func (s *Store) encodeRecord(record Record) ([]byte, []byte, error) {
 	}
 	slices.Sort(headerNames)
 	public := storedConfig{
+		Credentials: config.CloneCredentials(record.Config.Credentials),
 		EndpointUID: record.Config.EndpointUID, RequireClientGrant: record.Config.RequireClientGrant,
 		RateLimit:         record.Config.RateLimit,
 		ID:                record.Config.ID,
@@ -428,6 +430,7 @@ func (s *Store) scanRecord(row rowScanner) (Record, error) {
 		return Record{}, fmt.Errorf("decode backend %q secrets: %w", id, err)
 	}
 	record.Config = config.BackendConfig{
+		Credentials: config.CloneCredentials(public.Credentials),
 		EndpointUID: public.EndpointUID, RequireClientGrant: public.RequireClientGrant,
 		RateLimit: public.RateLimit,
 		ID:        public.ID, URL: public.URL, Required: public.Required,

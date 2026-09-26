@@ -18,12 +18,15 @@ func (v *view) subscribe(ctx context.Context, req *mcp.SubscribeRequest) error {
 	backendKey := backendSubscription{backendID: backendID, original: original}
 	sessionKey := sessionSubscription{backend: backendKey, exposed: req.Params.URI}
 
+	client, err := v.backendClient(ctx, backendID)
+	if err != nil {
+		return publicBackendError(backendID, err)
+	}
 	v.subscriptionMu.Lock()
 	if _, subscribed := v.bySession[req.Session][sessionKey]; subscribed {
 		v.subscriptionMu.Unlock()
 		return nil
 	}
-	client, _ := v.hub.manager.Client(backendID)
 	if err := client.Subscribe(ctx, original); err != nil {
 		v.subscriptionMu.Unlock()
 		return publicBackendError(backendID, err)
@@ -83,7 +86,10 @@ func (v *view) unsubscribe(ctx context.Context, req *mcp.UnsubscribeRequest) err
 		}
 	}
 	v.subscriptionMu.Unlock()
-	client, _ := v.hub.manager.Client(sessionKey.backend.backendID)
+	client, ok := v.catalogClient(sessionKey.backend.backendID)
+	if !ok {
+		return nil
+	}
 	if err := client.Unsubscribe(ctx, sessionKey.backend.original); err != nil {
 		return publicBackendError(sessionKey.backend.backendID, err)
 	}
@@ -111,7 +117,7 @@ func (v *view) watchSession(session *mcp.ServerSession) {
 	v.subscriptionMu.Unlock()
 
 	for subscription := range subscriptions {
-		if client, ok := v.hub.manager.Client(subscription.backend.backendID); ok {
+		if client, ok := v.catalogClient(subscription.backend.backendID); ok {
 			_ = client.Unsubscribe(context.Background(), subscription.backend.original)
 		}
 	}
@@ -127,7 +133,7 @@ func (v *view) resolveResource(exposed string, requireListedConcrete bool) (stri
 			v.reconcileMu.RLock()
 			_, listed := v.resources[exposed]
 			v.reconcileMu.RUnlock()
-			if !listed && !v.hub.wasResourceIssued(backendID, original) {
+			if !listed && !v.resourceRegistryFor(backendID).wasResourceIssued(backendID, original) {
 				return "", "", false
 			}
 		}

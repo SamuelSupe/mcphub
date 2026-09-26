@@ -1,18 +1,19 @@
 # 远程管理与数据库部署
 
-本目录对应 MCPHub v2.0.0 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
+本目录对应 MCPHub v2.1.0 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
 
-v2.0.0 包含显式发布、审批、Broker、接入向导、SSO 用户权限和新版控制台，使用 schema 7。部署仍限单实例；替换 v1.4.0 前请按[升级与回滚流程](../RELEASE_NOTES_v2.0.0.md)备份并检查兼容性。SSO/用户目录将 schema 6 升级到 7；参见 [SSO 部署与组织同步](../docs/sso-and-user-management.zh-CN.md)。
+v2.1.0 新增 Vault 共享与个人上游账号，SQLite / PostgreSQL 升级到 schema 8。部署仍限单实例；替换旧版前请按[升级与回滚流程](../RELEASE_NOTES_v2.1.0.md)备份并检查兼容性。参见 [Vault 配置](../docs/vault-accounts.zh-CN.md)、[SSO 部署与组织同步](../docs/sso-and-user-management.zh-CN.md)，以及[企业接入架构与最佳实践](../docs/feishu-vault-agent-architecture.zh-CN.md)和 [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf)。
 
 | 方式 | 用途 | 配置 |
 | --- | --- | --- |
+| 飞书 SSO + Vault + 个人 MCP 账号 | 联调起点，须完成真实租户验收 | [配置示例](config.feishu-vault.example.yaml) |
 | 本地管理 + SQLite | 本机开发、单机运维；不需要管理员登录 | 主 README 的本地管理示例 |
 | 远程管理 + SQLite | 单机网关，经 HTTPS 访问管理 UI/API | [config.remote-sqlite.yaml](config.remote-sqlite.yaml) |
 | 远程管理 + PostgreSQL | 企业单实例部署，数据库独立运维 | [config.remote-postgres.yaml](config.remote-postgres.yaml)、[Compose](compose.postgres.yaml) |
 
 ## 身份服务配置
 
-MCPHub 使用已有 `auth.issuer`。在该 OIDC 服务中配置：
+外部身份服务模式使用已有 `auth.issuer`；Hub 身份桥接及本地用户权限参见 [SSO 指南](../docs/sso-and-user-management.zh-CN.md)。外部 OIDC 服务需配置：
 
 1. 浏览器管理员客户端：授权码 + PKCE S256；回调为 `https://admin.example.com/auth/callback`。默认是公开客户端。如需机密客户端，设置 `admin.client_secret_env`，支持 `client_secret_basic` 和 `client_secret_post`。
 2. CLI 管理员客户端：预先注册的公开客户端，无 client secret；回调为 `http://127.0.0.1:PORT/oauth/callback`。身份服务不接受随机端口时，注册固定端口并使用 `--callback-port`。
@@ -42,7 +43,7 @@ mcphub validate --config deploy/config.remote-sqlite.yaml
 mcphub serve --config deploy/config.remote-sqlite.yaml
 ```
 
-相对数据库路径以 YAML 所在目录为准。保留原来的 `admin.database_path` 和密钥即可继续使用现有 SQLite 数据，无需转换表结构。要沿用本地管理模式，保留 `mode: local`（默认值）；该模式无登录，仍只允许数字回环地址，禁止通过代理对外暴露。
+相对数据库路径以 YAML 所在目录为准。保留原来的 `admin.database_path` 和密钥即可继续使用现有 SQLite 数据，`serve` 会执行所需 schema 迁移；旧二进制不能写入 schema 8 数据库。要沿用本地管理模式，保留 `mode: local`（默认值）；该模式无登录，仍只允许数字回环地址，禁止通过代理对外暴露。
 
 外部 PostgreSQL：
 
@@ -110,6 +111,6 @@ PUT 使用完整输入对象；保留 Header 时提供名称并省略 `value`，
 
 两种数据库都以事务保存配置和审计，Header/OAuth secret 使用相同 AES-256-GCM 加密；SQLite 文件保持 0600。审计 actor 为远程管理员 JWT `sub`；本地操作为 `local`，后台刷新为 `system`。审计是配置变更历史，不是不可篡改的合规日志或所有 HTTP 请求日志。
 
-备份数据库并单独保管 `MCPHUB_CONFIG_KEY`。更换 `database_driver` 不会自动迁移原数据，尤其工具组和 OpenAPI 不存在于 YAML 中。切换存储需要单独的数据迁移；不要把空 PostgreSQL 当作已有 SQLite 的副本。多实例协调、跨库迁移工具、集中会话撤销及第三方后端的交互授权不在本版范围内。退出不会撤销已签发的 JWT；权限撤销依赖短期 access token、刷新授权及身份服务策略。
+备份数据库并单独保管 `MCPHUB_CONFIG_KEY`。更换 `database_driver` 不会自动迁移原数据，尤其工具组和 OpenAPI 不存在于 YAML 中。切换存储需要单独的数据迁移；不要把空 PostgreSQL 当作已有 SQLite 的副本。多实例协调与跨库迁移工具仍不在本版范围内。远程 MCP endpoint 支持[个人上游账号](../docs/vault-accounts.zh-CN.md)。外部身份服务签发的 JWT 撤销依赖供应商；Hub 自管 SSO 还会校验当前本地会话与用户权限。退出 Hub 不等于撤销上游业务账号或身份服务的全局会话。
 
 MCP backend 和 HTTP 工具组可在管理 UI 的“限流策略”中设置 `requests_per_second`、`burst`、`max_concurrent`，也可通过管理 API 的 `rate_limit` 对象保存。默认全为 0、不限流；所有用户共享 endpoint 额度。策略保存在所选数据库，实时计数在当前进程内。详见[限流语义](../README.zh-CN.md#endpoint-限流)。

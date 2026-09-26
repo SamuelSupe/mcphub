@@ -15,6 +15,8 @@ import (
 )
 
 const schema = `
+CREATE TABLE IF NOT EXISTS credential_cleanup (id TEXT PRIMARY KEY, due_at BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS credential_bindings (id TEXT PRIMARY KEY, owner TEXT NOT NULL, revision BIGINT NOT NULL, data BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS metadata (
   key TEXT PRIMARY KEY,
   value BLOB NOT NULL
@@ -297,7 +299,7 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 	}
 	if err == nil {
 		version, parseErr := strconv.Atoi(string(versionRaw))
-		if parseErr != nil || version < 1 || version > 7 {
+		if parseErr != nil || version < 1 || version > 8 {
 			return fmt.Errorf("unsupported configuration schema version %q", string(versionRaw))
 		}
 	}
@@ -307,7 +309,7 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureEventSourceColumns(ctx, tx); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key, value) VALUES('schema_version', '7')
+	if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key, value) VALUES('schema_version', '8')
 ON CONFLICT(key) DO UPDATE SET value=excluded.value`); err != nil {
 		return fmt.Errorf("record configuration schema version: %w", err)
 	}

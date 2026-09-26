@@ -14,22 +14,24 @@ const Retention = 30 * time.Minute
 // Records contain routing and outcome metadata only. Never add arguments,
 // resource values, response bodies, tokens or arbitrary error strings here.
 type Record struct {
-	Sequence       uint64    `json:"sequence"`
-	RequestID      string    `json:"request_id"`
-	StartedAt      time.Time `json:"started_at"`
-	CompletedAt    time.Time `json:"completed_at"`
-	DurationMS     int64     `json:"duration_ms"`
-	Method         string    `json:"method"`
-	Endpoint       string    `json:"endpoint"`
-	Tool           string    `json:"tool"`
-	Subject        string    `json:"subject"`
-	ClientID       string    `json:"client_id"`
-	GrantID        string    `json:"grant_id"`
-	Outcome        string    `json:"outcome"`
-	Reason         string    `json:"reason,omitempty"`
-	HTTPStatus     int       `json:"http_status"`
-	ApprovalID     string    `json:"approval_id,omitempty"`
-	ApprovalWaitMS int64     `json:"approval_wait_ms,omitempty"`
+	CredentialID    string    `json:"credential_id,omitempty"`
+	UpstreamAccount string    `json:"upstream_account,omitempty"`
+	Sequence        uint64    `json:"sequence"`
+	RequestID       string    `json:"request_id"`
+	StartedAt       time.Time `json:"started_at"`
+	CompletedAt     time.Time `json:"completed_at"`
+	DurationMS      int64     `json:"duration_ms"`
+	Method          string    `json:"method"`
+	Endpoint        string    `json:"endpoint"`
+	Tool            string    `json:"tool"`
+	Subject         string    `json:"subject"`
+	ClientID        string    `json:"client_id"`
+	GrantID         string    `json:"grant_id"`
+	Outcome         string    `json:"outcome"`
+	Reason          string    `json:"reason,omitempty"`
+	HTTPStatus      int       `json:"http_status"`
+	ApprovalID      string    `json:"approval_id,omitempty"`
+	ApprovalWaitMS  int64     `json:"approval_wait_ms,omitempty"`
 }
 
 type state struct {

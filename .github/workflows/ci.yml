@@ -19,6 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
+      vault:
+        image: hashicorp/vault:1.21
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: mcphub-vault-test-only
+          VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        ports: ["8200:8200"]
       postgres:
         image: postgres:17
         env:
@@ -30,6 +36,8 @@ jobs:
           --health-cmd "pg_isready -U mcphub_test"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
+      MCPHUB_TEST_VAULT_ADDR: http://127.0.0.1:8200
+      MCPHUB_TEST_VAULT_TOKEN: mcphub-vault-test-only
       MCPHUB_TEST_POSTGRES_DSN: postgres://mcphub_test:ci_test_only@localhost:5432/mcphub_test?sslmode=disable
     steps:
       - name: Check out repository

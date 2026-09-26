@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.0.0)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.1.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,17 +9,29 @@
 
 MCPHub is an aggregation gateway for remote MCP Servers. It exposes one Streamable HTTP entry point, connects to multiple backends, builds a per-request backend view from JWT permissions, and routes tools, prompts, resources, and resource templates to the correct backend.
 
-MCPHub v2.0.0 adds explicit tool publication, per-operation write approval, client grants with a local Broker, and enterprise SSO with permissions managed in MCPHub. The redesigned bilingual console organizes service connections, access control and audit workflows. Deploy one gateway with SQLite or PostgreSQL; install the separate `mcphub-cli` on user computers.
+MCPHub v2.1.0 adds Vault-backed shared and personal upstream accounts, OIDC credential refresh, and account-aware authorization revocation. Explicit tool publication, per-operation write approval, client grants with a local Broker, and enterprise SSO remain centrally enforced. The redesigned bilingual console organizes service connections, access control and audit workflows. Deploy one gateway with SQLite or PostgreSQL; install the separate `mcphub-cli` on user computers.
 
-**Upgrading from v1.x:** backend tools now default to unpublished, and writes or unclassified tools require approval. Back up the database and matching encryption key before the schema 7 migration, review every published tool and its read/write policy, and follow the [upgrade and rollback guide](RELEASE_NOTES_v2.0.0.md#upgrade-and-rollback--升级与回滚). Go installation paths now include `/v2`.
+**Upgrading from v1.x:** backend tools now default to unpublished, and writes or unclassified tools require approval. Back up the database and matching encryption key before the schema migration, review every published tool and its read/write policy, and follow the [upgrade and rollback guide](RELEASE_NOTES_v2.1.0.md#upgrade-and-rollback--升级与回滚). Go installation paths now include `/v2`.
 
 ## Enterprise SSO and user permissions
 
 Bridge a confidential OIDC/OAuth2 identity provider and issue MCPHub credentials to `mcphub-cli`, keeping upstream application secrets off user computers. **Users & organization** manages account enablement, administrative roles, scopes, endpoints, exact tools and business-resource conditions. New users await authorization; write permission still requires per-operation approval.
 
-Department/group membership can synchronize from verified login claims or an authenticated directory snapshot feed. Synchronization never assigns local permissions. SQLite and single-instance PostgreSQL migrate to schema 7. See the [configuration, synchronization contract and security boundaries](docs/sso-and-user-management.md). No Feishu tenant is connected, and no Feishu directory adapter or SCIM implementation is included; generic enterprise OAuth2 response mapping and tenant restrictions are available.
+Department/group membership can synchronize from verified login claims or an authenticated directory snapshot feed. Synchronization never assigns local permissions. SQLite and single-instance PostgreSQL migrate to schema 8 in v2.1.0. See the [configuration, synchronization contract and security boundaries](docs/sso-and-user-management.md). No Feishu tenant is connected, and no Feishu directory adapter or SCIM implementation is included; generic enterprise OAuth2 response mapping and tenant restrictions are available.
+
+## Vault and personal accounts
+
+Administrators select **Vault → Shared service account / Each user’s own account** on an MCP backend. Users select **Connect account** in the personal portal; existing MCP client configuration stays unchanged. Upstream tokens remain in Vault, with OIDC refresh, account isolation and grant revocation on replacement/disconnection. Write approvals still apply.
+
+Available in v2.1.0. SQLite and single-instance PostgreSQL migrate to **schema 8** (v2.0.0 uses schema 7). See [setup, user workflow and security boundaries](docs/vault-accounts.md).
 
 ## Architecture
+
+Enterprise deployment guide: [Feishu SSO, Vault, Codex and Claude Code architecture and best practices (Chinese)](docs/feishu-vault-agent-architecture.zh-CN.md). Start with [the documentation index](docs/README.md), or download the [27-page PDF](docs/feishu-vault-agent-architecture.zh-CN.pdf) and [example configuration](deploy/config.feishu-vault.example.yaml).
+
+![Feishu SSO, MCPHub, Vault and Agent architecture](docs/diagrams/feishu-vault-agents.svg)
+
+Feishu supplies identity, MCPHub enforces user/client/tool/resource policies and write approvals, and Vault holds upstream credentials. The guide marks the unverified Feishu tenant integration, directory adapter and MFA requirements. The PDF preserves the 2026-09-26 architecture review snapshot; use the online guide for current release status.
 
 ```mermaid
 flowchart LR
@@ -42,9 +54,9 @@ flowchart LR
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Apache License 2.0](LICENSE) (copyright 2026 SamuelSupe)
-- [v2.0.0 release notes](RELEASE_NOTES_v2.0.0.md), [v1.4.0 historical release notes](RELEASE_NOTES_v1.4.0.md), [v2.0.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.0.0), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v2.1.0 release notes](RELEASE_NOTES_v2.1.0.md), [v2.0.0 historical release notes](RELEASE_NOTES_v2.0.0.md), [v1.4.0 historical release notes](RELEASE_NOTES_v1.4.0.md), [v2.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.1.0), and [all GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-MCPHub v2.0.0 is the latest release. v1.4.0 and earlier versions remain available as historical references.
+MCPHub v2.1.0 is the latest release. v2.0.0 and earlier versions remain available as historical references.
 
 ## Capabilities and boundaries
 
@@ -68,11 +80,11 @@ When a backend connection fails, MCPHub retries and retains its last-known catal
 
 ## Quick start
 
-Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the v2.0.0 server and optional CLI with Go:
+Go 1.26 is required (`go.mod` declares `go 1.26.0`). To install the v2.1.0 server and optional CLI with Go:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.0.0
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.0.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.1.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.1.0
 ```
 
 For a source build, copy the example and set its environment variables:
@@ -151,7 +163,7 @@ Only the **local connector** uses stdio. MCPHub's server and backend connections
 
 ### Client authorization and embedded Broker
 
-Enable `client_authorization.enabled`, configure its portal `client_id`, and enable the managed database. SQLite and a **single MCPHub instance with PostgreSQL** use the same authorization lifecycle. Back up the database and encryption key before upgrading to schema 7.
+Enable `client_authorization.enabled`, configure its portal `client_id`, and enable the managed database. SQLite and a **single MCPHub instance with PostgreSQL** use the same authorization lifecycle. Back up the database and encryption key before upgrading to schema 8.
 
 Register the portal callback `https://hub.example.com/client-auth/auth/callback`. The portal is served on the MCP gateway origin, separately from the administration listener. The CLI and portal must receive JWT access tokens for the full MCP resource URL with the same `issuer + sub`. Pairwise subjects from different OIDC clients require an identity-provider configuration that gives these clients a consistent subject; email matching is not used. An optional portal client secret stays on the server through `client_secret_env`.
 
@@ -216,7 +228,7 @@ mcphub-cli doctor --profile work --client ci_example --json --timeout 30s
 
 ### Guided setup and administration
 
-Install the v2.0.0 CLI and run this on the user's computer:
+Install the v2.1.0 CLI and run this on the user's computer:
 
 ```bash
 mcphub-cli setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work > mcphub-mcp.json
@@ -241,30 +253,30 @@ mcphub-cli admin --profile ops get '/client-grants?subject=alice&status=active&l
 mcphub-cli admin --profile ops get '/requests?endpoint=database-prod&outcome=scope_denied&limit=25'
 ```
 
-Both return `next_cursor`; pass it back as `cursor` with unchanged filters. Grant filters also accept `client` and `endpoint`; request filters also accept `request_id`, `subject`, `client` and original `tool`. Limits are 1–100. Revoke with `POST /api/v1/client-grants/{grant_id}/revoke` and `{"subject":"alice"}`. Setup and diagnostics add no migration themselves; SSO and the user directory use schema 7 in v2.0.0. See [v2.0.0 changes and upgrade procedure](RELEASE_NOTES_v2.0.0.md).
+Both return `next_cursor`; pass it back as `cursor` with unchanged filters. Grant filters also accept `client` and `endpoint`; request filters also accept `request_id`, `subject`, `client` and original `tool`. Limits are 1–100. Revoke with `POST /api/v1/client-grants/{grant_id}/revoke` and `{"subject":"alice"}`. Setup and diagnostics add no migration themselves; SSO and the user directory were introduced in schema 7; v2.1.0 adds credential storage in schema 8. See [v2.1.0 changes and upgrade procedure](RELEASE_NOTES_v2.1.0.md).
 
-### Prebuilt v2.0.0 downloads
+### Prebuilt v2.1.0 downloads
 
-The [v2.0.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.0.0) provides separate server and client archives. Install `mcphub` on the gateway host and `mcphub-cli` on the user’s computer.
+The [v2.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.1.0) provides separate server and client archives after its release workflow succeeds. The architecture PDF is also published as a separate release asset. Install `mcphub` on the gateway host and `mcphub-cli` on the user’s computer.
 
 | Platform | Server | Login CLI and local connector |
 | --- | --- | --- |
-| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub_v2.0.0_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub-cli_v2.0.0_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub_v2.0.0_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub-cli_v2.0.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub_v2.0.0_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub-cli_v2.0.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub_v2.0.0_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub-cli_v2.0.0_linux_arm64.tar.gz) |
-| Windows x64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub-cli_v2.0.0_windows_amd64.zip) |
-| Windows ARM64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/mcphub-cli_v2.0.0_windows_arm64.zip) |
+| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub_v2.1.0_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub_v2.1.0_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub_v2.1.0_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub_v2.1.0_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_linux_arm64.tar.gz) |
+| Windows x64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_windows_amd64.zip) |
+| Windows ARM64 | — | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_windows_arm64.zip) |
 
-Before extracting, compare the archive’s SHA-256 with its entry in [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.0.0/SHA256SUMS), then place the executable on your PATH. All archives contain the license, English/Chinese READMEs, security policy, release notes and `docs/` guides. Server archives also include `config.example.yaml` and the `deploy/` guides, configuration and proxy examples. The Compose example builds from source: use a checkout of the v2.0.0 tag for that workflow.
+Before extracting, compare the archive’s SHA-256 with its entry in [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/SHA256SUMS), then place the executable on your PATH. All archives contain the license, English/Chinese READMEs, security policy, release notes and `docs/` guides. Server archives also include `config.example.yaml` and the `deploy/` guides, configuration and proxy examples. The Compose example builds from source: use a checkout of the v2.1.0 tag for that workflow.
 
 ### Windows CLI quick start
 
 Choose the x64 ZIP for Intel/AMD PCs or the ARM64 ZIP for Windows on Arm. The CLI follows [Go’s Windows requirements](https://go.dev/wiki/MinimumRequirements#windows) (Windows 10 or later); server downloads remain macOS/Linux. After comparing the archive hash with `SHA256SUMS`, extract it and run it from PowerShell:
 
 ```powershell
-Get-FileHash .\mcphub-cli_v2.0.0_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcphub-cli_v2.0.0_windows_amd64.zip -DestinationPath .\mcphub-cli
+Get-FileHash .\mcphub-cli_v2.1.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcphub-cli_v2.1.0_windows_amd64.zip -DestinationPath .\mcphub-cli
 .\mcphub-cli\mcphub-cli.exe login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
 .\mcphub-cli\mcphub-cli.exe status --profile work
 ```
@@ -282,7 +294,7 @@ Use the issuer registration described above. Login opens the default Windows bro
 }
 ```
 
-Basic login/connect remain compatible with v1.x gateways; client grants, Broker setup and SSO permission management require a v2.0.0 gateway.
+Basic login/connect remain compatible with v1.x gateways; client grants, Broker setup and SSO permission management require a v2.0.0 or newer gateway; Vault-backed accounts require v2.1.0.
 
 ## Local management UI
 
@@ -416,9 +428,9 @@ Group, manual-tool, and import resources return an `ETag`. Updates and deletes r
 
 Group base URLs and OpenAPI source URLs must use HTTPS; group HTTP requests and source fetches do not follow redirects. A source fetched from another origin never receives the group's static headers or OAuth secret. OpenAPI documents are capped at 5 MiB, requests carrying a document at 6 MiB, and HTTP-tool responses at 1 MiB by default; the response limit is configurable from 64 KiB through 16 MiB. A URL-backed import refreshes automatically every 15 minutes by default (allowed range 1 minute to 24 hours); a failed refresh keeps the last-known-good document/tools and retries with backoff.
 
-#### Upgrade notes for v2.0.0
+#### Upgrade notes for v2.1.0
 
-Review the [complete backup, upgrade and rollback procedure](RELEASE_NOTES_v2.0.0.md#upgrade-and-rollback--升级与回滚) before replacing v1.x. `serve` migrates managed SQLite/PostgreSQL databases to schema 7; `validate` is read-only. Keep the matching `MCPHUB_CONFIG_KEY`. Rolling back requires the old database, key/configuration and binary together.
+Review the [complete backup, upgrade and rollback procedure](RELEASE_NOTES_v2.1.0.md#upgrade-and-rollback--升级与回滚) before replacing v2.0.0 or v1.x. `serve` migrates managed SQLite/PostgreSQL databases to schema 8; `validate` is read-only. Keep the matching `MCPHUB_CONFIG_KEY`. Rolling back requires the old database, key/configuration and binary together.
 
 Explicitly populate `published_tools` for each backend and classify allowed tools as read or write. Empty publication lists expose no tools; writes and unclassified tools require remote browser approval. Local unauthenticated or YAML-only deployments can execute only published, explicitly read-only tools. Existing HTTP tools keep their enabled state; new manual tools default to disabled. Client grants and SSO are opt-in; new SSO users await local authorization.
 
@@ -564,7 +576,7 @@ SQLite/PostgreSQL atomically consume each approval once; concurrent resumes cann
 
 Limits: 20 active requests per issuer/subject; 60 KiB execution request; 32 KiB preview; 64 KiB complete intent including policies; 16 MiB saved result. Requests, previews, results, reasons and investigation details are encrypted. A minute-based maintenance loop removes terminal records and detailed history past retention in bounded batches; general activity logs retain argument/reason-free state events. Already admitted writes may finish after policy changes. Approved writes use fresh HTTP/1 connections to prevent transparent retries, so upstreams must support HTTP/1.1. Reads retain connection pooling.
 
-v2.0.0 uses **schema 7** (approval governance first introduced schema 5). Back up the database and encryption key; older binaries cannot open the upgraded writable database. Local unauthenticated management and YAML-only deployments cannot execute writes/unclassified tools. MCP and management API bearer tokens cannot approve. Isolate reviewer browsers, configuration/database access and upstream write credentials from agents. With configuration governance disabled, configuration administrators can change classifications directly; enable independent security review to guard those changes. Strong authentication does not replace reviewing the operation or downstream least privilege.
+v2.1.0 uses **schema 8** (approval governance first introduced schema 5). Back up the database and encryption key; older binaries cannot open the upgraded writable database. Local unauthenticated management and YAML-only deployments cannot execute writes/unclassified tools. MCP and management API bearer tokens cannot approve. Isolate reviewer browsers, configuration/database access and upstream write credentials from agents. With configuration governance disabled, configuration administrators can change classifications directly; enable independent security review to guard those changes. Strong authentication does not replace reviewing the operation or downstream least privilege.
 
 
 #### Configuration governance, quorum and operation identity
@@ -741,7 +753,8 @@ SQLite administration needs a writable database volume; both stores need `MCPHUB
 ## Known limits and troubleshooting
 
 - Administration persists backend/tool-group configuration and write approvals with their audit history. There is still no metrics endpoint, persistent MCP catalog, cross-instance subscription state, or high-availability coordination; each process owns its backend connections, catalogs, and token views.
-- This release does not provide built-in accounts, stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The local `connect` command provides stdio access to the HTTP gateway. TLS and external rate limiting belong at the reverse proxy.
+- This release does not provide built-in accounts, stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The local `connect` command provides stdio access to the HTTP gateway. TLS and external rate limiting belong at the reverse proxy.
+- Personal credentials currently cover remote MCP endpoints; HTTP tool groups, dynamic cloud/database credentials and provider-specific SaaS OAuth adapters are outside this release.
 - The aggregator advertises and implements only tools, prompts, resources (including subscriptions), and completions. Other backend capabilities do not automatically become gateway capabilities. Invalid names, URI templates, and SDK-rejected metadata are omitted.
 - A disconnected backend keeps its last-known-good catalog, but calls require a live connection. A required backend makes `/readyz` return 503; an optional backend does not block overall readiness.
 - `server.refresh_interval` is the maximum refresh period; a shorter backend TTL refreshes sooner. There is no forced-refresh API.

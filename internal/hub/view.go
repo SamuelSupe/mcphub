@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/SamuelSupe/mcphub/v2/internal/backend"
 	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -17,17 +18,21 @@ import (
 )
 
 type view struct {
-	identity    *configstore.EffectiveIdentity
-	grant       *configstore.ClientGrant
-	hub         *Hub
-	server      *mcp.Server
-	allowed     map[string]struct{}
-	allowedHTTP map[string]struct{}
-	dynamicHTTP bool
-	granted     []string
-	byHost      map[string]string
-	ids         []string
-	toolScopes  map[string]struct{}
+	credentialMu      sync.Mutex
+	personalClients   map[string]*personalBackend
+	credentialsClosed bool
+	personalResources resourceRegistry
+	identity          *configstore.EffectiveIdentity
+	grant             *configstore.ClientGrant
+	hub               *Hub
+	server            *mcp.Server
+	allowed           map[string]struct{}
+	allowedHTTP       map[string]struct{}
+	dynamicHTTP       bool
+	granted           []string
+	byHost            map[string]string
+	ids               []string
+	toolScopes        map[string]struct{}
 
 	reconcileMu sync.RWMutex
 	tools       map[string]string
@@ -89,6 +94,8 @@ func newView(h *Hub, ids []string, profiles ...[]string) *view {
 		httpGroupIDs, toolScopes = profiles[0], profiles[1]
 	}
 	v := &view{
+		personalClients:   map[string]*personalBackend{},
+		personalResources: resourceRegistry{issuedResources: map[string]*issuedResourceSet{}},
 		hub:               h,
 		allowed:           make(map[string]struct{}, len(ids)),
 		allowedHTTP:       make(map[string]struct{}, len(httpGroupIDs)),
@@ -197,11 +204,18 @@ func (v *view) reconcile() {
 	templateDefs := make(map[string]templateDefinition)
 
 	for _, id := range v.ids {
-		client, ok := v.hub.manager.Client(id)
+		client, ok := v.catalogClient(id)
+		privateCatalog := ok
+		if !ok {
+			client, ok = v.hub.manager.Client(id)
+		}
 		if !ok {
 			continue
 		}
 		catalog := client.Catalog()
+		if v.personalEndpoint(id) && !privateCatalog && catalog != nil {
+			catalog = &backend.Catalog{Tools: catalog.Tools}
+		}
 		if catalog == nil {
 			continue
 		}
@@ -435,6 +449,7 @@ func shortHash(value string) string {
 }
 
 func (v *view) close() {
+	v.closeCredentials()
 	for session := range v.server.Sessions() {
 		_ = session.Close()
 	}

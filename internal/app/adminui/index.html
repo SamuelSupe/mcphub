@@ -209,7 +209,7 @@
         <section class="form-section">
           <div class="section-heading"><span>02</span><div><h3>上游认证</h3><p>MCPHub 连接此服务时使用的凭证。</p></div></div>
           <div class="segmented" role="group" aria-label="认证方式">
-            <button type="button" data-auth="headers" class="active" aria-pressed="true">Header 凭证</button><button type="button" data-auth="oauth" aria-pressed="false">OAuth 2.0</button><button type="button" data-auth="both" aria-pressed="false">组合</button><button type="button" data-auth="none" aria-pressed="false">无需认证</button>
+            <button type="button" data-auth="headers" class="active" aria-pressed="true">Header 凭证</button><button type="button" data-auth="oauth" aria-pressed="false">OAuth 2.0</button><button type="button" data-auth="both" aria-pressed="false">组合</button><button type="button" data-auth="vault" aria-pressed="false">Vault</button><button type="button" data-auth="none" aria-pressed="false">无需认证</button>
           </div>
           <div id="headers-panel"><div class="header-labels" aria-hidden="true"><span>Header 名称</span><span>凭证值</span></div><div class="repeat-list" id="headers-list"></div><button class="text-button" id="add-header" type="button">＋ 添加 Header</button></div>
           <div id="oauth-panel" hidden><div class="field-grid">
@@ -218,7 +218,29 @@
             <label class="field"><span>Client Secret</span><input id="oauth-secret" type="password" autocomplete="new-password" placeholder="留空保留现有值"></label>
             <label class="field full"><span>OAuth Scopes</span><input id="oauth-scopes" placeholder="crm.mcp"><small>向上游申请的权限，与客户端访问权限分别配置。</small></label>
           </div></div>
-          <p class="field-note">凭证加密保存；编辑时留空保留原值。</p>
+          <div id="credentials-panel" hidden>
+            <div class="credential-service"><p id="credential-status" role="status"></p><button type="button" id="credential-check" class="text-button">验证连接</button></div>
+            <label class="field full"><span>访问此服务时使用</span><select id="credential-mode"><option value="shared">共享服务账号</option><option value="personal">每个用户自己的账号</option></select></label>
+            <div id="credential-shared"><label class="field full"><span>Vault 凭证路径</span><input id="credential-path" placeholder="services/example"><small>填写 KV v2 挂载点内的相对路径，无需添加 data/。</small></label></div>
+            <div id="credential-personal" hidden>
+              <p class="field-note">用户在个人门户连接一次账号，客户端调用时自动使用；写操作仍需审批。</p>
+              <label class="field full"><span>用户连接方式</span><select id="credential-login"><option value="oauth">浏览器授权（推荐）</option><option value="token">个人 Token</option></select></label>
+              <div id="credential-oauth" class="field-grid">
+                <label class="field full"><span>上游授权服务 Issuer</span><input id="credential-issuer" type="url" placeholder="https://identity.example.com"><small>支持 OIDC 和 PKCE S256 的授权服务。</small></label>
+                <label class="field"><span>Client ID</span><input id="credential-client" autocomplete="off"></label>
+                <label class="field"><span>上游 OAuth Scopes</span><input id="credential-scopes" placeholder="repo:read"></label>
+                <label class="field full"><span>回调地址</span><input id="credential-callback" readonly><small>在上游授权服务中注册此地址。</small></label>
+                <label class="field full"><span>Client Secret 的 Vault 路径（可选）</span><input id="credential-secret" placeholder="oauth/example"><small>公开客户端留空；机密客户端从 client_secret 字段读取。</small></label>
+              </div>
+              <label class="field full"><span>目录发现凭证（可选）</span><input id="credential-discovery" placeholder="discovery/example"><small>仅用于管理员发现和发布工具，用户调用始终使用个人凭证。目录无需认证时留空。</small></label>
+            </div>
+            <details id="credential-mapping"><summary>高级：凭证字段与请求头</summary><div class="field-grid">
+              <label class="field"><span>Vault 字段</span><input id="credential-field" value="token"></label>
+              <label class="field"><span>请求头</span><input id="credential-header" value="Authorization"></label>
+              <label class="field"><span>认证前缀</span><input id="credential-scheme" value="Bearer" placeholder="Bearer"></label>
+            </div></details>
+          </div>
+          <p class="field-note" id="stored-credential-note">凭证加密保存；编辑时留空保留原值。</p>
         </section>
         <section class="form-section">
           <div class="section-heading"><span>03</span><div><h3>客户端访问权限</h3><p>控制哪些客户端可以通过 MCPHub 调用此后端。</p></div></div>
@@ -277,7 +299,7 @@
           <section class="form-section">
             <div class="section-heading"><span>02</span><div><h3>上游认证</h3><p>连接 API 服务的共享凭证，不需要认证时可留空。</p></div></div>
             <div class="header-labels" aria-hidden="true"><span>Header 名称</span><span>凭证值</span></div><div class="repeat-list" id="group-headers-list"></div><button class="text-button" id="add-group-header" type="button">＋ 添加 Header</button>
-            <p class="field-note">凭证加密保存；编辑时留空保留原值。</p>
+          <p class="field-note">凭证加密保存；编辑时留空保留原值。</p>
             <details class="advanced" id="group-oauth-config"><summary><span>OAuth client_credentials</span><small>可选</small></summary><div class="field-grid">
               <label class="field full"><span>Issuer</span><input id="group-oauth-issuer" type="url" placeholder="https://idp.example.com"></label>
               <label class="field"><span>Client ID</span><input id="group-oauth-client-id" autocomplete="off"></label>

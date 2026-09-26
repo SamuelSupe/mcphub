@@ -139,6 +139,8 @@ export function renderRequestDiagnostics() {
     ];
     if (record.reason) rows.push(["原因代码", record.reason]);
     if (record.grant_id) rows.push(["Grant ID", record.grant_id]);
+    if (record.credential_id) rows.push(["凭证关联 ID", record.credential_id]);
+    if (record.upstream_account) rows.push(["上游账号", record.upstream_account]);
     if (record.approval_id) rows.push(["审批 ID", record.approval_id]);
     if (record.approval_wait_ms)
       rows.push([

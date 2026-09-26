@@ -4,7 +4,7 @@
 
 ## English
 
-Repository: [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · documented release: v2.0.0 · module: `github.com/SamuelSupe/mcphub/v2` · [release notes](RELEASE_NOTES_v2.0.0.md) · license: [Apache License 2.0](LICENSE)
+Repository: [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · documented release: v2.1.0 · module: `github.com/SamuelSupe/mcphub/v2` · [release notes](RELEASE_NOTES_v2.1.0.md) · license: [Apache License 2.0](LICENSE)
 
 ### Scope
 
@@ -19,7 +19,7 @@ MCPHub's security boundary includes:
 - the optional local/remote administration listener, encrypted SQLite/PostgreSQL backend configuration, bootstrap import, and runtime replacement API;
 - admin-managed tool groups, hand-authored HTTP tools, OpenAPI 3.0/3.1 imports, source refresh, and the response/body limits on those paths.
 
-The current published release explicitly does not provide stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, or MCP Apps. Local mode is loopback-only; authenticated remote mode is described below. TLS termination, external rate limiting, and edge access policy must be supplied by the deployment's reverse proxy or network layer.
+The current published release explicitly does not provide stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants, opaque-token introspection, Tasks, or MCP Apps. Personal upstream credentials cover remote MCP endpoints through Vault; HTTP tool groups and dynamic cloud/database credentials are outside that integration. Local mode is loopback-only; authenticated remote mode is described below. TLS termination, external rate limiting, and edge access policy must be supplied by the deployment's reverse proxy or network layer.
 
 The release also provides a separate `mcphub-cli` executable with `login/connect/status/logout` for external OIDC user login. The server executable `mcphub` provides `serve/validate`. Only the local CLI connector speaks stdio; it sends user access tokens to its saved HTTP gateway, never to backend servers. Login uses a public client, PKCE S256, state/issuer validation and a loopback callback, and saves credentials only after the gateway accepts an authenticated handshake. Discovery and token requests require HTTPS and do not follow redirects. The callback listener is temporary and binds only `127.0.0.1`.
 
@@ -110,7 +110,7 @@ Security-sensitive changes should include a focused behavior-boundary test and e
 
 ## 中文
 
-仓库：[SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · 当前文档版本：v2.0.0 · module：`github.com/SamuelSupe/mcphub/v2` · [发行说明](RELEASE_NOTES_v2.0.0.md) · 许可证：[Apache License 2.0](LICENSE)
+仓库：[SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · 当前文档版本：v2.1.0 · module：`github.com/SamuelSupe/mcphub/v2` · [发行说明](RELEASE_NOTES_v2.1.0.md) · 许可证：[Apache License 2.0](LICENSE)
 
 ### 范围
 
@@ -125,7 +125,7 @@ MCPHub 的安全边界包括：
 - 可选的本地/远程管理监听器、加密 SQLite/PostgreSQL backend 配置、首次导入和 runtime 替换 API；
 - admin 管理的工具组、手工 HTTP tool、OpenAPI 3.0/3.1 import、source 刷新以及这些路径上的响应/body 上限。
 
-当前正式发布版明确不提供 stdio 后端接入、独立旧式 GET SSE 端点、原生 TLS、动态租户或按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本地模式只允许回环访问，认证远程模式见下文。TLS 终止、外部限流和边缘访问策略必须由部署使用的反向代理或网络层提供。
+当前正式发布版明确不提供 stdio 后端接入、独立旧式 GET SSE 端点、原生 TLS、动态租户、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。Vault 个人上游凭证覆盖远程 MCP endpoint，尚未覆盖 HTTP 工具组及动态云/数据库凭证。本地模式只允许回环访问，认证远程模式见下文。TLS 终止、外部限流和边缘访问策略必须由部署使用的反向代理或网络层提供。
 
 本版本还提供独立的 `mcphub-cli` 可执行程序，提供 `login/connect/status/logout`，供用户通过外部 OIDC 身份服务登录；服务端程序 `mcphub` 提供 `serve/validate`。只有本地 CLI 连接器使用 stdio；用户 access token 仅发往保存的 HTTP 网关地址，不会发给后端。登录使用公开客户端、PKCE S256、state/issuer 校验和回环回调，只有网关接受认证握手后才保存凭证。Discovery 和 Token 请求必须使用 HTTPS，且不跟随重定向；临时回调监听器仅绑定 `127.0.0.1`。
 
@@ -226,3 +226,9 @@ Local users are isolated by provider connection (issuer, protocol, client ID and
 Ten-minute signed access tokens also require a live local session and current permissions on each request. Rotating refresh families last at most eight hours; replay of a consumed credential revokes the family. Upstream refresh credentials are not retained or periodically checked. Signing keys are encrypted with the existing configuration key; refresh credentials are hashed. Permission changes cancel affected admitted requests and reject stale cached views, but cannot undo writes already accepted by a backend. Pending login codes are process-local; deployment remains single instance for both database engines. Local identity and membership records contain operational personal data; protect database backups and administrator access. See [deployment contract](docs/sso-and-user-management.md).
 
 开启 `auth.sso` 后，MCPHub 自己签发凭证；上游应用密钥留在服务端，上游 Token 不透传给 MCP 客户端或后端。身份校验与本地授权分离，用户首次登录待授权；引导管理员只在首次创建时赋权，不能在后续登录覆盖管理员的撤权。部门/组同步不能修改本地授权；完整目录快照需先核验所有分页，不能在上游失败时用空快照覆盖。声明模式只在登录时更新成员关系，离职实时性需要目录推送；本实现没有上游全局退出联动。管理员修改角色/用户授权会审计并立即影响新请求；既有工具配置审批与写审批边界继续保留。配置接口是管理员权限，不是审批动作本身。详细配置见[中文说明](docs/sso-and-user-management.zh-CN.md)。
+
+## Vault-backed upstream accounts
+
+Vault KV v2 integration stores personal upstream tokens outside the managed database. It is opt-in and currently covers remote MCP endpoints. Personal connections require a valid user identity and ClientGrant; upstream credentials do not bypass scopes, resource restrictions or per-action write approvals. Tokens are never returned to a Broker or Agent. Changing or disconnecting an upstream account invalidates its owner’s existing endpoint grants and cancels admitted work; completed downstream writes are not reversible. Vault outages fail closed, and disconnected secrets are queued for deletion. Provider-side OAuth revocation remains a separate operation.
+
+Protect Vault policies, the Hub process and configuration administration. Use a separate Vault prefix per deployment, retain coordinated database/key/Vault backups, and review restored authorization state. Single-instance refresh serialization does not provide distributed transactions or multi-instance coordination. See [Vault setup and operational limitations](docs/vault-accounts.md).

@@ -1,0 +1,114 @@
+# Integration starting point, not a verified Feishu tenant configuration.
+# See docs/feishu-vault-agent-architecture.zh-CN.md before deploying.
+# Replace every example domain and REPLACE_ME value with reviewed settings.
+# Verify the authorization/token endpoint pair with positive and negative PKCE tests.
+# SSO/Vault strings below are literal config fields; do not assume ${ENV} expansion.
+server:
+  listen: "127.0.0.1:8080"
+  public_url: https://hub.example.com/mcp
+  request_timeout: 60s
+
+auth:
+  issuer: https://hub.example.com/sso
+  sso:
+    upstream:
+      protocol: oauth2
+      issuer: https://accounts.feishu.cn
+      authorization_url: https://accounts.feishu.cn/open-apis/authen/v1/authorize
+      token_url: https://accounts.feishu.cn/oauth/v3/token
+      userinfo_url: https://open.feishu.cn/open-apis/authen/v1/user_info
+      client_id: cli_REPLACE_ME
+      client_secret_env: MCPHUB_FEISHU_APP_SECRET
+      token_auth_method: client_secret_post
+      scopes: [auth:user.id:read]
+      subject_claim: data.open_id
+      name_claim: data.name
+      tenant_claim: data.tenant_key
+      tenant_value: REPLACE_ME_TENANT
+      success_claim: code
+      success_value: '0'
+    bootstrap_subjects: [ou_REPLACE_ME_INITIAL_ADMIN]
+    # Enable after the bootstrap admin has logged in and the adapter is ready.
+    # directory_token_env: MCPHUB_DIRECTORY_TOKEN
+    clients:
+      - id: mcphub-cli
+        redirect_uris: [http://127.0.0.1/oauth/callback]
+        resources: [https://hub.example.com/mcp]
+      - id: mcphub-portal
+        redirect_uris: [https://hub.example.com/client-auth/auth/callback]
+        resources: [https://hub.example.com/mcp]
+      - id: mcphub-admin
+        redirect_uris: [https://admin.example.com/auth/callback]
+        resources: [https://admin.example.com]
+
+admin:
+  enabled: true
+  mode: remote
+  listen: "127.0.0.1:8081"
+  public_url: https://admin.example.com
+  client_id: mcphub-admin
+  required_scopes: [mcphub:admin]
+  database_driver: sqlite
+  database_path: ./data/mcphub-feishu-example.db
+  encryption_key_env: MCPHUB_CONFIG_KEY
+  approvals:
+    required_scopes: [mcphub:approve]
+    pending_ttl: 30m
+    execution_ttl: 5m
+    retention: 720h
+
+client_authorization:
+  enabled: true
+  require_client_grant: true
+  max_grant_ttl: 4h
+  client_id: mcphub-portal
+
+vault:
+  address: https://vault.example.com
+  mount: secret
+  prefix: mcphub-prod
+  role_id_env: MCPHUB_VAULT_ROLE_ID
+  secret_id_env: MCPHUB_VAULT_SECRET_ID
+  # ca_file: /etc/mcphub/vault-ca.pem
+
+backends:
+  - id: projects
+    url: https://projects.example.com/mcp
+    required: false
+    require_client_grant: true
+    required_scopes: [projects:access]
+    published_tools: [get_project]
+    rate_limit:
+      requests_per_second: 5
+      burst: 10
+      max_concurrent: 4
+    tool_rules:
+      - match: get_project
+        effect: read
+        required_scopes: [projects:read]
+        resource_rules:
+          - argument: /project
+            allowed_values: [project-a]
+      # This write remains unpublished. Configure reviewers before publishing.
+      # Production writes requiring MFA also need an OIDC step-up identity source.
+      - match: update_project
+        effect: write
+        required_scopes: [projects:write]
+        resource_rules:
+          - argument: /project
+            allowed_values: [project-a]
+        approval:
+          action: 更新项目
+          environment: production
+          resource_arguments: [/project]
+          require_different_reviewer: true
+          approvers:
+            - subjects: [REPLACE_ME_HUB_REVIEWER_SUBJECT]
+    credentials:
+      mode: personal
+      discovery_path: discovery/projects
+      oauth:
+        issuer: https://project-identity.example.com
+        client_id: REPLACE_ME_PROJECT_OIDC_CLIENT
+        scopes: [project.read]
+        # client_secret_path: oauth/projects

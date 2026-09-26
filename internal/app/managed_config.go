@@ -125,6 +125,7 @@ func configWithRecords(base *config.Config, records []configstore.Record) *confi
 
 func cloneBackendConfig(value config.BackendConfig) config.BackendConfig {
 	result := value
+	result.Credentials = config.CloneCredentials(value.Credentials)
 	result.RequiredScopes = slices.Clone(value.RequiredScopes)
 	result.PublishedTools = slices.Clone(value.PublishedTools)
 	result.Headers = maps.Clone(value.Headers)

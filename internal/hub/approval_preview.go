@@ -94,7 +94,7 @@ func (v *view) approvalPreview(ctx context.Context, req *mcp.CallToolRequest, de
 // continuation input that could turn an observation into a resumed operation.
 func (v *view) approvalRead(ctx context.Context, req *mcp.CallToolRequest, def toolDefinition, tool string, arguments json.RawMessage) (*mcp.CallToolResult, toolDefinition, error) {
 	name := def.backendID + "." + tool
-	preview, ok := v.hub.backendToolDefinitions(def.backendID, false)[name]
+	preview, ok := v.backendToolDefinitions(def.backendID)[name]
 	if def.httpTool {
 		preview, ok = v.hub.httpToolDefinitions(def.backendID)[name]
 	}

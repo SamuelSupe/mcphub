@@ -8,8 +8,7 @@ import (
 )
 
 func TestRewriteToolResultChangesOnlyBackendResourceURIs(t *testing.T) {
-	h := &Hub{
-		views:           make(map[string]*view),
+	h := &resourceRegistry{
 		issuedResources: make(map[string]*issuedResourceSet),
 	}
 	annotations := &mcp.Annotations{Audience: []mcp.Role{mcp.Role("user")}, Priority: 0.8}

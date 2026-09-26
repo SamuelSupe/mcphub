@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,6 +17,8 @@ import (
 )
 
 type Client struct {
+	Authorize func(context.Context) (http.Header, error)
+
 	cfg               config.BackendConfig
 	refreshMaximum    time.Duration
 	logger            *slog.Logger
@@ -115,6 +118,9 @@ func (c *Client) ConnectOnce(ctx context.Context) error {
 	httpClient, err := newHTTPClient(sessionCtx, c.cfg)
 	if err != nil {
 		return err
+	}
+	if c.Authorize != nil {
+		httpClient.Transport = &credentialTransport{base: httpClient.Transport, authorize: c.Authorize}
 	}
 	httpClient.Transport = &progressRoundTripper{
 		base:   &mcpcompat.RoundTripper{Base: httpClient.Transport},

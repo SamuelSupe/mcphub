@@ -134,3 +134,12 @@ backends:
   #   url: http://127.0.0.1:9000/mcp
   #   allow_insecure_http: true
   #   required: false
+
+# Optional Vault KV v2 credentials for remote MCP backends (requires admin.enabled).
+# See docs/vault-accounts.md for personal account setup and least-privilege policy.
+# vault:
+#   address: https://vault.example.com
+#   mount: secret
+#   prefix: mcphub
+#   role_id_env: MCPHUB_VAULT_ROLE_ID
+#   secret_id_env: MCPHUB_VAULT_SECRET_ID

@@ -1,6 +1,14 @@
 package hub
 
-import "crypto/sha256"
+import (
+	"crypto/sha256"
+	"sync"
+)
+
+type resourceRegistry struct {
+	issuedMu        sync.RWMutex
+	issuedResources map[string]*issuedResourceSet
+}
 
 const issuedResourceLimit = 16_384
 
@@ -13,7 +21,7 @@ type issuedResourceSet struct {
 	present map[[sha256.Size]byte]struct{}
 }
 
-func (h *Hub) rememberResource(backendID, originalURI string) {
+func (h *resourceRegistry) rememberResource(backendID, originalURI string) {
 	if originalURI == "" {
 		return
 	}
@@ -39,7 +47,7 @@ func (h *Hub) rememberResource(backendID, originalURI string) {
 	h.issuedMu.Unlock()
 }
 
-func (h *Hub) wasResourceIssued(backendID, originalURI string) bool {
+func (h *resourceRegistry) wasResourceIssued(backendID, originalURI string) bool {
 	digest := sha256.Sum256([]byte(originalURI))
 	h.issuedMu.RLock()
 	resources := h.issuedResources[backendID]

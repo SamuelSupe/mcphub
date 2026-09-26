@@ -166,7 +166,7 @@ func (v *view) resumeApproval(ctx context.Context, req *mcp.CallToolRequest) (*m
 	if err != nil || subject == "" || a.Intent.Subject != subject || a.Intent.Issuer != issuer || a.Intent.Kind == "configuration" || !v.ownsApproval(a) {
 		return toolFailure("Approval not found for this caller."), nil
 	}
-	def, ok := v.hub.backendToolDefinitions(a.Intent.BackendID, false)[a.Intent.Tool]
+	def, ok := v.backendToolDefinitions(a.Intent.BackendID)[a.Intent.Tool]
 	if !ok {
 		def, ok = v.hub.httpToolDefinitions(a.Intent.BackendID)[a.Intent.Tool]
 	}

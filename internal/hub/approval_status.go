@@ -26,7 +26,7 @@ func (v *view) statusApproval(ctx context.Context, req *mcp.CallToolRequest) (*m
 		return toolFailure("Approval not found for this caller."), nil
 	}
 	value := map[string]any{"approval_id": a.ID, "status": a.Status, "operation_id": a.Intent.OperationID, "required_approvals": config.ApprovalQuorum(a.Intent.Rules), "approved_by": a.ApprovedBy, "expires_at": a.ExpiresAt}
-	def, ok := v.hub.backendToolDefinitions(a.Intent.BackendID, false)[a.Intent.Tool]
+	def, ok := v.backendToolDefinitions(a.Intent.BackendID)[a.Intent.Tool]
 	if !ok {
 		def, ok = v.hub.httpToolDefinitions(a.Intent.BackendID)[a.Intent.Tool]
 	}

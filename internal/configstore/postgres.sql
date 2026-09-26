@@ -142,3 +142,7 @@ CREATE TABLE IF NOT EXISTS sso_refresh (
  used INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sso_refresh_session ON sso_refresh(session_id);
+
+CREATE TABLE IF NOT EXISTS credential_bindings (id TEXT PRIMARY KEY, owner TEXT NOT NULL, revision BIGINT NOT NULL, data BYTEA NOT NULL);
+
+CREATE TABLE IF NOT EXISTS credential_cleanup (id TEXT PRIMARY KEY, due_at BIGINT NOT NULL);

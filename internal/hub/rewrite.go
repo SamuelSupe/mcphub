@@ -2,7 +2,7 @@ package hub
 
 import "github.com/modelcontextprotocol/go-sdk/mcp"
 
-func (h *Hub) rewriteToolResult(backendID string, result *mcp.CallToolResult) *mcp.CallToolResult {
+func (h *resourceRegistry) rewriteToolResult(backendID string, result *mcp.CallToolResult) *mcp.CallToolResult {
 	if result == nil {
 		return nil
 	}
@@ -11,7 +11,7 @@ func (h *Hub) rewriteToolResult(backendID string, result *mcp.CallToolResult) *m
 	return &copyResult
 }
 
-func (h *Hub) rewritePromptResult(backendID string, result *mcp.GetPromptResult) *mcp.GetPromptResult {
+func (h *resourceRegistry) rewritePromptResult(backendID string, result *mcp.GetPromptResult) *mcp.GetPromptResult {
 	if result == nil {
 		return nil
 	}
@@ -29,7 +29,7 @@ func (h *Hub) rewritePromptResult(backendID string, result *mcp.GetPromptResult)
 	return &copyResult
 }
 
-func (h *Hub) rewriteResourceResult(backendID string, result *mcp.ReadResourceResult) *mcp.ReadResourceResult {
+func (h *resourceRegistry) rewriteResourceResult(backendID string, result *mcp.ReadResourceResult) *mcp.ReadResourceResult {
 	if result == nil {
 		return nil
 	}
@@ -50,7 +50,7 @@ func (h *Hub) rewriteResourceResult(backendID string, result *mcp.ReadResourceRe
 	return &copyResult
 }
 
-func (h *Hub) rewriteContents(backendID string, contents []mcp.Content) []mcp.Content {
+func (h *resourceRegistry) rewriteContents(backendID string, contents []mcp.Content) []mcp.Content {
 	if contents == nil {
 		return nil
 	}
@@ -61,7 +61,7 @@ func (h *Hub) rewriteContents(backendID string, contents []mcp.Content) []mcp.Co
 	return result
 }
 
-func (h *Hub) rewriteContent(backendID string, content mcp.Content) mcp.Content {
+func (h *resourceRegistry) rewriteContent(backendID string, content mcp.Content) mcp.Content {
 	switch value := content.(type) {
 	case *mcp.ResourceLink:
 		if value == nil {

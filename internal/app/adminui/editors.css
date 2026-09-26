@@ -35,7 +35,7 @@ input::placeholder, textarea::placeholder { color: #a0a8b8; opacity: 1; }
 .switch-row input:focus-visible + .switch { outline: 3px solid #435ad850; outline-offset: 3px; }
 .switch-row strong { display: block; font-size: 12px; font-weight: 550; }
 .switch-row small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-.segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #dce1eb; border-radius: 6px; overflow: hidden; margin-bottom: 18px; }
+.segmented { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid #dce1eb; border-radius: 6px; overflow: hidden; margin-bottom: 18px; }
 .segmented button { padding: 9px 3px; min-height: 37px; font-size: 12px; border: 0; border-right: 1px solid #dce1eb; background: #fff; color: #64708a; }
 .segmented button:last-child { border-right: 0; }
 .segmented button.active { color: #fff; background: var(--blue); }
@@ -142,3 +142,10 @@ input::placeholder, textarea::placeholder { color: #a0a8b8; opacity: 1; }
   .mini-row { padding: 11px; }
   .mini-row > div:last-child .text-button { padding: 4px; }
 }
+
+.credential-service { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; margin-bottom:16px; background:var(--bg-soft, #f5f7fa); border-radius:8px; }
+.credential-service p { margin:0; font-size:12px; overflow-wrap:anywhere; }
+#credentials-panel .field { margin-top:12px; }
+#credential-mapping { margin-top:16px; }
+#credential-mapping summary { cursor:pointer; font-size:13px; color:var(--text-muted, #64748b); }
+#credentials-panel input[readonly] { font-size:12px; }

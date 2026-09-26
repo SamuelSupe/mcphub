@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>MCPHub · Client access</title>
     <link rel="stylesheet" href="/client-auth/styles.css" />
+    <script defer src="/client-auth/accounts.js"></script>
     <script defer src="/client-auth/app.js"></script>
   </head>
   <body>
@@ -19,8 +20,10 @@
       <section id="identity"></section>
       <p id="message" role="status" aria-live="polite"></p>
       <section id="request"></section>
+      <section id="accounts" hidden></section>
       <section id="grants"></section>
     </main>
+    <dialog id="account-dialog" aria-labelledby="account-dialog-title"></dialog>
     <footer id="footer"></footer>
   </body>
 </html>

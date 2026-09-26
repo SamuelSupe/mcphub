@@ -20,9 +20,12 @@ import (
 	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
 	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 	"github.com/SamuelSupe/mcphub/v2/internal/sso"
+	"github.com/SamuelSupe/mcphub/v2/internal/upstream"
 )
 
 type Hub struct {
+	credentials         *upstream.Manager
+	credentialContext   context.Context
 	identityStore       *configstore.Store
 	grantStore          *configstore.Store
 	approvalStore       *configstore.Store
@@ -42,8 +45,7 @@ type Hub struct {
 	toolDefinitionsMu    sync.Mutex
 	toolDefinitionCaches map[string]*toolDefinitionCache
 
-	issuedMu        sync.RWMutex
-	issuedResources map[string]*issuedResourceSet
+	resourceRegistry
 }
 
 func New(cfg *config.Config, manager *backend.Manager, logger *slog.Logger) *Hub {
@@ -61,7 +63,7 @@ func NewWithHTTPTools(cfg *config.Config, manager *backend.Manager, httpTools *h
 		logger:               logger,
 		views:                make(map[string]*view),
 		toolDefinitionCaches: make(map[string]*toolDefinitionCache),
-		issuedResources:      make(map[string]*issuedResourceSet),
+		resourceRegistry:     resourceRegistry{issuedResources: make(map[string]*issuedResourceSet)},
 	}
 }
 
@@ -122,6 +124,7 @@ func (h *Hub) ServerForRequest(req *http.Request) *mcp.Server {
 	candidate := newViewWithHTTP(h, backendIDs, groupIDs, toolScopes, scopes)
 	candidate.grant = grant
 	candidate.identity = identity
+	candidate.preparePersonalClients(req.Context())
 	if identity != nil {
 		for _, id := range backendIDs {
 			if !identity.Permissions.AllowsCapability(id, "resources") {
@@ -190,7 +193,7 @@ func (h *Hub) ResourceUpdated(backendID, originalURI string) {
 	h.viewsMu.RLock()
 	views := make([]*view, 0, len(h.views))
 	for _, candidate := range h.views {
-		if candidate.allows(backendID) {
+		if candidate.allows(backendID) && !candidate.personalEndpoint(backendID) {
 			views = append(views, candidate)
 		}
 	}

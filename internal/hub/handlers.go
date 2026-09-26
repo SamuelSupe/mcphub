@@ -12,6 +12,7 @@ import (
 
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
 	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
+	"github.com/SamuelSupe/mcphub/v2/internal/upstream"
 )
 
 func (v *view) toolHandler(definition toolDefinition) mcp.ToolHandler {
@@ -36,6 +37,15 @@ func (v *view) toolHandler(definition toolDefinition) mcp.ToolHandler {
 			failure := &mcp.CallToolResult{}
 			failure.SetError(err)
 			return failure, nil
+		}
+		if v.personalEndpoint(definition.backendID) {
+			if v.grant == nil {
+				return v.accountRequired(definition.backendID, upstream.ErrConnect), nil
+			}
+			c, _ := v.hub.cfg.Backend(definition.backendID)
+			if _, err := v.hub.credentials.Binding(ctx, credentialEndpoint(c), v.grant.Issuer, v.grant.Subject); err != nil {
+				return v.accountRequired(definition.backendID, err), nil
+			}
 		}
 		if definition.effect != "read" {
 			return v.requestApproval(ctx, req, definition, arguments), nil
@@ -75,7 +85,14 @@ func (v *view) forwardTool(ctx context.Context, req *mcp.CallToolRequest, defini
 		}
 		return result, nil
 	}
-	client, _ := v.hub.manager.Client(definition.backendID)
+	client, err := v.backendClient(ctx, definition.backendID)
+	if err != nil {
+		if errors.Is(err, upstream.ErrConnect) || errors.Is(err, upstream.ErrReconnect) {
+			return v.accountRequired(definition.backendID, err), nil
+		}
+		return nil, publicBackendError(definition.backendID, err)
+	}
+	v.credentialDiagnostics(ctx, definition.backendID)
 	params := &mcp.CallToolParams{
 		Meta:           req.Params.Meta,
 		Name:           definition.original,
@@ -85,6 +102,9 @@ func (v *view) forwardTool(ctx context.Context, req *mcp.CallToolRequest, defini
 	}
 	result, err := client.CallTool(ctx, req.Session, params)
 	if err != nil {
+		if errors.Is(err, upstream.ErrConnect) || errors.Is(err, upstream.ErrReconnect) || errors.Is(err, upstream.ErrUnavailable) {
+			return v.accountRequired(definition.backendID, err), nil
+		}
 		publicError := publicBackendError(definition.backendID, err)
 		var protocolError *jsonrpc.Error
 		if errors.As(publicError, &protocolError) {
@@ -95,7 +115,7 @@ func (v *view) forwardTool(ctx context.Context, req *mcp.CallToolRequest, defini
 		failure.Meta = mcp.Meta{"io.mcphub/executionOutcome": "unknown"}
 		return failure, nil
 	}
-	return v.hub.rewriteToolResult(definition.backendID, result), nil
+	return v.resourceRegistryFor(definition.backendID).rewriteToolResult(definition.backendID, result), nil
 }
 
 func (v *view) canCallTool(req *mcp.CallToolRequest, definition toolDefinition) bool {
@@ -110,7 +130,7 @@ func (v *view) canCallTool(req *mcp.CallToolRequest, definition toolDefinition) 
 			return false
 		}
 	} else {
-		current, ok := v.hub.backendToolDefinitions(definition.backendID, false)[definition.tool.Name]
+		current, ok := v.backendToolDefinitions(definition.backendID)[definition.tool.Name]
 		if !v.allows(definition.backendID) || !ok || current.fingerprint != definition.fingerprint {
 			return false
 		}
@@ -138,14 +158,18 @@ func (v *view) canCallTool(req *mcp.CallToolRequest, definition toolDefinition) 
 
 func (v *view) promptHandler(definition promptDefinition) mcp.PromptHandler {
 	return func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		client, _ := v.hub.manager.Client(definition.backendID)
+		client, err := v.backendClient(ctx, definition.backendID)
+		if err != nil {
+			return nil, publicBackendError(definition.backendID, err)
+		}
+		v.credentialDiagnostics(ctx, definition.backendID)
 		params := *req.Params
 		params.Name = definition.original
 		result, err := client.GetPrompt(ctx, req.Session, &params)
 		if err != nil {
 			return nil, publicBackendError(definition.backendID, err)
 		}
-		return v.hub.rewritePromptResult(definition.backendID, result), nil
+		return v.resourceRegistryFor(definition.backendID).rewritePromptResult(definition.backendID, result), nil
 	}
 }
 
@@ -158,7 +182,7 @@ func (v *view) resourceHandler(backendID, original string) mcp.ResourceHandler {
 func (v *view) issuedResourceHandler(backendID string) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		resolvedBackend, original, ok := decodeResource(req.Params.URI)
-		if !ok || !strings.EqualFold(resolvedBackend, backendID) || !v.hub.wasResourceIssued(backendID, original) {
+		if !ok || !strings.EqualFold(resolvedBackend, backendID) || !v.resourceRegistryFor(backendID).wasResourceIssued(backendID, original) {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		return v.forwardResource(ctx, req.Session, backendID, original, req.Params)
@@ -166,14 +190,17 @@ func (v *view) issuedResourceHandler(backendID string) mcp.ResourceHandler {
 }
 
 func (v *view) forwardResource(ctx context.Context, upstream *mcp.ServerSession, backendID, original string, params *mcp.ReadResourceParams) (*mcp.ReadResourceResult, error) {
-	client, _ := v.hub.manager.Client(backendID)
+	client, err := v.backendClient(ctx, backendID)
+	if err != nil {
+		return nil, publicBackendError(backendID, err)
+	}
 	forwarded := *params
 	forwarded.URI = original
 	result, err := client.ReadResource(ctx, upstream, &forwarded)
 	if err != nil {
 		return nil, publicBackendError(backendID, err)
 	}
-	return v.hub.rewriteResourceResult(backendID, result), nil
+	return v.resourceRegistryFor(backendID).rewriteResourceResult(backendID, result), nil
 }
 
 func (v *view) templateHandler(route *templateRoute) mcp.ResourceHandler {
@@ -182,14 +209,17 @@ func (v *view) templateHandler(route *templateRoute) mcp.ResourceHandler {
 		if err != nil {
 			return nil, err
 		}
-		client, _ := v.hub.manager.Client(route.backendID)
+		client, err := v.backendClient(ctx, route.backendID)
+		if err != nil {
+			return nil, publicBackendError(route.backendID, err)
+		}
 		params := *req.Params
 		params.URI = original
 		result, err := client.ReadResource(ctx, req.Session, &params)
 		if err != nil {
 			return nil, publicBackendError(route.backendID, err)
 		}
-		return v.hub.rewriteResourceResult(route.backendID, result), nil
+		return v.resourceRegistryFor(route.backendID).rewriteResourceResult(route.backendID, result), nil
 	}
 }
 
@@ -224,7 +254,10 @@ func (v *view) complete(ctx context.Context, req *mcp.CompleteRequest) (*mcp.Com
 	default:
 		return nil, fmt.Errorf("unsupported completion reference %q", ref.Type)
 	}
-	client, _ := v.hub.manager.Client(backendID)
+	client, err := v.backendClient(ctx, backendID)
+	if err != nil {
+		return nil, publicBackendError(backendID, err)
+	}
 	result, err := client.Complete(ctx, req.Session, &params)
 	if err != nil {
 		return nil, publicBackendError(backendID, err)
@@ -241,6 +274,11 @@ func (e *backendUnavailableError) Error() string {
 }
 
 func publicBackendError(backendID string, err error) error {
+	for _, public := range []error{upstream.ErrConnect, upstream.ErrReconnect, upstream.ErrUnavailable} {
+		if errors.Is(err, public) {
+			return &jsonrpc.Error{Code: -32004, Message: public.Error()}
+		}
+	}
 	var protocolError *jsonrpc.Error
 	if errors.As(err, &protocolError) {
 		return protocolError

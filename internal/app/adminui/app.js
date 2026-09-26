@@ -1,3 +1,4 @@
+import { initCredentials, fillCredentials, collectCredentials, showCredentials } from "./credentials.js";
 import { initIdentities, refreshIdentities, renderIdentities } from "./identities.js";
 import { renderOverview } from "./overview.js";
 import { fillRateLimit, collectRateLimit } from "./rate-limits.js";
@@ -146,7 +147,7 @@ function renderBackends() {
     const capTitle = document.createElement("strong");
     capTitle.textContent = t("{tools} 工具 · {resources} 资源", backend.runtime);
     const capLabel = document.createElement("small");
-    capLabel.textContent = backend.oauth ? "OAuth client_credentials" : backend.headers?.length ? t("静态 Headers") : t("无需后端认证");
+    capLabel.textContent = backend.credentials ? t(backend.credentials.mode === "personal" ? "个人账号 · Vault" : "共享凭证 · Vault") : backend.oauth ? "OAuth client_credentials" : backend.headers?.length ? t("静态 Headers") : t("无需后端认证");
     capabilities.append(capTitle, capLabel);
 
     const policy = document.createElement("div");
@@ -318,6 +319,7 @@ function closeInspector() {
 
 function resetForm() {
   elements.form.reset();
+  fillCredentials(null);
   $("#oauth-secret").required = false;
   $("#field-timeout").value = "60s";
   $("#field-enabled").checked = true;
@@ -329,6 +331,7 @@ function resetForm() {
 }
 
 function fillForm(backend) {
+  fillCredentials(backend.credentials);
   fillRateLimit("field", backend.rate_limit);
   $("#field-id").value = backend.id;
   $("#field-url").value = backend.url;
@@ -342,7 +345,9 @@ function fillForm(backend) {
   $("#field-rules").value = backend.tool_rules?.length ? JSON.stringify(backend.tool_rules, null, 2) : "";
   $("#headers-list").replaceChildren();
   for (const header of backend.headers || []) addHeaderRow(header.name, "", true);
-	if (backend.oauth) {
+	if (backend.credentials) {
+    setAuthMode("vault");
+	} else if (backend.oauth) {
 		setAuthMode(backend.headers?.length ? "both" : "oauth");
     $("#oauth-issuer").value = backend.oauth.issuer;
     $("#oauth-client-id").value = backend.oauth.client_id;
@@ -357,6 +362,7 @@ function fillForm(backend) {
 
 function setAuthMode(mode) {
   state.authMode = mode;
+  void showCredentials(mode === "vault");
   for (const button of $$("[data-auth]")) {
     button.classList.toggle("active", button.dataset.auth === mode);
     button.setAttribute("aria-pressed", String(button.dataset.auth === mode));
@@ -416,6 +422,11 @@ function collectInput() {
     allow_insecure_http: $("#field-insecure").checked,
     headers: [],
   };
+  if (state.authMode === "vault") {
+    input.credentials = collectCredentials();
+    if (input.credentials.mode === "personal") input.require_client_grant = true;
+    if (state.editing?.credentials) input.headers = (state.editing.headers || []).map((h) => ({name:h.name}));
+  }
   if (state.authMode === "headers" || state.authMode === "both") {
     input.headers = $$(".header-row", $("#headers-list")).filter((row) => $(".header-name", row).value.trim()).map((row) => {
       const value = $(".header-value", row).value;
@@ -439,6 +450,7 @@ function collectInput() {
 
 function inputFromBackend(backend, enabled) {
   const input = {
+    credentials: backend.credentials,
     id: backend.id,
     url: backend.url,
     enabled,
@@ -1204,3 +1216,5 @@ initRequestDiagnostics(api);
 window.addEventListener("hashchange", refreshManagementPage);
 initializeAuth(() => { renderPage(); return refreshAll(); });
 setInterval(() => { if (!state.busy) refresh(); }, 5000);
+
+initCredentials(api);

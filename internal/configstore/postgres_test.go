@@ -221,5 +221,6 @@ func TestPostgresConfigurationLifecycle(t *testing.T) {
 		testClientGrantLifecycle(t, migrated)
 		testIdentityLifecycle(t, migrated)
 		testClientGrantAdministratorQuery(t, migrated)
+		testCredentialBindingLifecycle(t, migrated)
 	})
 }

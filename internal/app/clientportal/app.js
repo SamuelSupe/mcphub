@@ -1,9 +1,9 @@
 const messages = {
   zh: {
     eyebrow: "个人授权中心",
-    title: "管理客户端的访问范围",
+    title: "管理账号与客户端授权",
     intro:
-      "登录与授权分开管理。你可以确认客户端能访问的工具、权限与业务资源，也可以随时撤销。",
+      "连接服务账号，确认每个客户端可访问的工具与数据。所有授权都可以随时撤销。",
     login: "登录以查看并确认",
     logout: "退出网页会话",
     loading: "正在读取授权…",
@@ -42,9 +42,9 @@ const messages = {
   },
   en: {
     eyebrow: "Personal authorization",
-    title: "Control client access",
+    title: "Manage accounts and client access",
     intro:
-      "Review the tools, scopes and business resources each client may access. Revoke access at any time.",
+      "Connect service accounts and choose the tools and data each client may access. Revoke access at any time.",
     login: "Sign in to review",
     logout: "Sign out of portal",
     loading: "Loading authorizations…",
@@ -89,7 +89,7 @@ let language =
     (navigator.language.startsWith("zh") ? "zh" : "en"),
   session;
 const byId = (id) => document.getElementById(id),
-  t = (key) => messages[language][key] || key;
+  t = (key) => messages[language][key] || accountMessages[language][key] || key;
 const requestId = new URLSearchParams(location.search).get("request");
 if (requestId && /^gr_[A-Za-z0-9_-]+$/.test(requestId))
   sessionStorage.setItem("mcphub-client-request", requestId);
@@ -99,18 +99,19 @@ function element(tag, text, className) {
   if (className) node.className = className;
   return node;
 }
-async function api(path, method = "GET") {
+async function api(path, method = "GET", body) {
   const response = await fetch("/client-auth/" + path, {
     method,
     credentials: "same-origin",
-    headers: method === "GET" ? {} : { "X-MCPHub-CSRF": session?.csrf || "" },
+    headers: method === "GET" ? {} : { "X-MCPHub-CSRF": session?.csrf || "", ...(body ? {"Content-Type":"application/json"} : {}) },
+    body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
     let code = "";
     try {
       code = (await response.json()).error?.code || "";
     } catch {}
-    throw new Error(t("error") + (code ? " (" + code + ")" : ""));
+    throw new Error(code && t(code) !== code ? t(code) : t("error"));
   }
   return response.status === 204 ? null : response.json();
 }
@@ -216,6 +217,8 @@ async function load(showLoading = true) {
   byId("identity").replaceChildren();
   byId("request").replaceChildren();
   byId("grants").replaceChildren();
+  byId("accounts").replaceChildren();
+  byId("accounts").hidden = true;
   try {
     session = await api("auth/session");
     if (!session.authenticated) {
@@ -236,6 +239,7 @@ async function load(showLoading = true) {
         "secondary",
       ),
     );
+    await loadAccounts();
     const id = sessionStorage.getItem("mcphub-client-request");
     if (id) {
       const grant = await api(
@@ -253,6 +257,11 @@ async function load(showLoading = true) {
       if (grant.grant_id !== id) byId("grants").append(card(grant, false));
     }
     if (showLoading) byId("message").textContent = "";
+    const outcome = new URLSearchParams(location.search).get("connection");
+    if (["connected","reconnected","cancelled","expired","changed","rejected","failed"].includes(outcome)) {
+      byId("message").textContent = t("connection_" + outcome);
+      history.replaceState(null,"",location.pathname + "#accounts");
+    }
   } catch (error) {
     byId("message").textContent = error.message;
   }

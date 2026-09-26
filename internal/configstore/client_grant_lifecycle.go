@@ -284,7 +284,9 @@ func clientBackendPolicy(cfg config.BackendConfig) string {
 		Headers   any
 		OAuth     any
 		Published []string
-	}{cfg.URL, cfg.RequiredScopes, cfg.ToolRules, cfg.Headers, cfg.OAuth, cfg.PublishedTools})
+		// Omit absent credentials to preserve existing persisted grant hashes.
+		Credentials *config.CredentialConfig `json:"Credentials,omitempty"`
+	}{cfg.URL, cfg.RequiredScopes, cfg.ToolRules, cfg.Headers, cfg.OAuth, cfg.PublishedTools, cfg.Credentials})
 }
 func clientGroupPolicy(cfg httptool.GroupConfig) string {
 	return policyHash(struct {

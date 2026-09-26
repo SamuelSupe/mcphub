@@ -17,6 +17,7 @@ import (
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
 	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
 	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
+	"github.com/SamuelSupe/mcphub/v2/internal/upstream"
 	"github.com/SamuelSupe/mcphub/v2/internal/version"
 )
 
@@ -25,19 +26,20 @@ const maximumAdminBodyBytes = 1 << 20
 var errRuntimeApply = errors.New("runtime changed before configuration commit")
 
 type backendInput struct {
-	RequireClientGrant bool              `json:"require_client_grant"`
-	RateLimit          ratelimit.Config  `json:"rate_limit"`
-	ID                 string            `json:"id"`
-	URL                string            `json:"url"`
-	Enabled            *bool             `json:"enabled,omitempty"`
-	Required           bool              `json:"required"`
-	RequiredScopes     []string          `json:"required_scopes"`
-	PublishedTools     []string          `json:"published_tools"`
-	ToolRules          []config.ToolRule `json:"tool_rules"`
-	RequestTimeout     string            `json:"request_timeout"`
-	AllowInsecureHTTP  bool              `json:"allow_insecure_http"`
-	Headers            []headerInput     `json:"headers"`
-	OAuth              *oauthInput       `json:"oauth,omitempty"`
+	Credentials        *config.CredentialConfig `json:"credentials,omitempty"`
+	RequireClientGrant bool                     `json:"require_client_grant"`
+	RateLimit          ratelimit.Config         `json:"rate_limit"`
+	ID                 string                   `json:"id"`
+	URL                string                   `json:"url"`
+	Enabled            *bool                    `json:"enabled,omitempty"`
+	Required           bool                     `json:"required"`
+	RequiredScopes     []string                 `json:"required_scopes"`
+	PublishedTools     []string                 `json:"published_tools"`
+	ToolRules          []config.ToolRule        `json:"tool_rules"`
+	RequestTimeout     string                   `json:"request_timeout"`
+	AllowInsecureHTTP  bool                     `json:"allow_insecure_http"`
+	Headers            []headerInput            `json:"headers"`
+	OAuth              *oauthInput              `json:"oauth,omitempty"`
 }
 
 type headerInput struct {
@@ -54,26 +56,27 @@ type oauthInput struct {
 }
 
 type backendView struct {
-	RequireClientGrant bool               `json:"require_client_grant"`
-	RateLimit          ratelimit.Config   `json:"rate_limit"`
-	ID                 string             `json:"id"`
-	URL                string             `json:"url"`
-	Enabled            bool               `json:"enabled"`
-	Required           bool               `json:"required"`
-	RequiredScopes     []string           `json:"required_scopes"`
-	PublishedTools     []string           `json:"published_tools"`
-	ToolRules          []config.ToolRule  `json:"tool_rules"`
-	RequestTimeout     string             `json:"request_timeout"`
-	AllowInsecureHTTP  bool               `json:"allow_insecure_http"`
-	Headers            []headerView       `json:"headers"`
-	OAuth              *oauthView         `json:"oauth,omitempty"`
-	Revision           int64              `json:"revision"`
-	CreatedAt          time.Time          `json:"created_at"`
-	UpdatedAt          time.Time          `json:"updated_at"`
-	LastProbeAt        *time.Time         `json:"last_probe_at,omitempty"`
-	LastProbeOK        *bool              `json:"last_probe_ok,omitempty"`
-	LastProbe          json.RawMessage    `json:"last_probe,omitempty"`
-	Runtime            backendRuntimeView `json:"runtime"`
+	Credentials        *config.CredentialConfig `json:"credentials,omitempty"`
+	RequireClientGrant bool                     `json:"require_client_grant"`
+	RateLimit          ratelimit.Config         `json:"rate_limit"`
+	ID                 string                   `json:"id"`
+	URL                string                   `json:"url"`
+	Enabled            bool                     `json:"enabled"`
+	Required           bool                     `json:"required"`
+	RequiredScopes     []string                 `json:"required_scopes"`
+	PublishedTools     []string                 `json:"published_tools"`
+	ToolRules          []config.ToolRule        `json:"tool_rules"`
+	RequestTimeout     string                   `json:"request_timeout"`
+	AllowInsecureHTTP  bool                     `json:"allow_insecure_http"`
+	Headers            []headerView             `json:"headers"`
+	OAuth              *oauthView               `json:"oauth,omitempty"`
+	Revision           int64                    `json:"revision"`
+	CreatedAt          time.Time                `json:"created_at"`
+	UpdatedAt          time.Time                `json:"updated_at"`
+	LastProbeAt        *time.Time               `json:"last_probe_at,omitempty"`
+	LastProbeOK        *bool                    `json:"last_probe_ok,omitempty"`
+	LastProbe          json.RawMessage          `json:"last_probe,omitempty"`
+	Runtime            backendRuntimeView       `json:"runtime"`
 }
 
 type headerView struct {
@@ -134,6 +137,8 @@ func (a *App) serveAdmin(w http.ResponseWriter, req *http.Request) {
 	}
 	path := strings.TrimPrefix(req.URL.Path, "/api/v1/")
 	switch {
+	case path == "vault":
+		a.serveVault(w, req)
 	case path == "requests":
 		a.serveRequestDiagnostics(w, req)
 	case path == "tool-policies":
@@ -515,7 +520,7 @@ func (a *App) probeStoredBackend(w http.ResponseWriter, req *http.Request, id st
 }
 
 func (a *App) runProbe(w http.ResponseWriter, req *http.Request, cfg config.BackendConfig, storedID string) {
-	result, err := backend.Probe(req.Context(), cfg, a.currentConfig().Server.RefreshInterval.Duration)
+	result, err := backend.Probe(req.Context(), cfg, a.currentConfig().Server.RefreshInterval.Duration, a.credentials.Shared(upstream.Endpoint{ID: cfg.ID, UID: cfg.EndpointUID, URL: cfg.URL, Credentials: cfg.Credentials}))
 	if err != nil {
 		payload, _ := json.Marshal(map[string]any{"ok": false, "message": "无法连接或发现此 MCP 后端"})
 		if storedID != "" {
@@ -548,6 +553,7 @@ func backendFromInput(input backendInput, current *config.BackendConfig) (config
 		}
 	}
 	value := config.BackendConfig{
+		Credentials:        config.CloneCredentials(input.Credentials),
 		RequireClientGrant: input.RequireClientGrant,
 		RateLimit:          input.RateLimit,
 		ID:                 input.ID, URL: input.URL, Required: input.Required,
@@ -615,6 +621,7 @@ func headerValue(headers map[string]string, name string) (string, bool) {
 
 func makeBackendView(record configstore.Record, details map[string]backend.StatusDetail) backendView {
 	view := backendView{
+		Credentials:        config.CloneCredentials(record.Config.Credentials),
 		RequireClientGrant: record.Config.RequireClientGrant,
 		RateLimit:          record.Config.RateLimit,
 		ID:                 record.Config.ID, URL: record.Config.URL, Enabled: record.Enabled, Required: record.Config.Required,

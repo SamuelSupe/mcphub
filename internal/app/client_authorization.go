@@ -74,6 +74,10 @@ func (a *App) serveClientAuthorization(w http.ResponseWriter, req *http.Request,
 			writeGrantError(w, configstore.ErrGrantInvalid)
 			return
 		}
+		if path == "/api/accounts" || strings.HasPrefix(path, "/api/accounts/") {
+			a.serveAccounts(w, req, rt, info, session, strings.TrimPrefix(path, "/api/accounts"))
+			return
+		}
 		a.clientAuthorizationRoute(w, req, rt, info, true, strings.TrimPrefix(path, "/api"))
 		return
 	}

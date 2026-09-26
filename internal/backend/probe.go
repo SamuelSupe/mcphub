@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -41,13 +42,16 @@ type ProbeCounts struct {
 	ResourceTemplates int `json:"resource_templates"`
 }
 
-func Probe(ctx context.Context, cfg config.BackendConfig, maximumRefresh time.Duration) (*ProbeResult, error) {
+func Probe(ctx context.Context, cfg config.BackendConfig, maximumRefresh time.Duration, authorize ...func(context.Context) (http.Header, error)) (*ProbeResult, error) {
 	started := time.Now()
 	probeCtx, cancel := context.WithTimeout(ctx, cfg.RequestTimeout.Duration)
 	defer cancel()
 	httpClient, err := newHTTPClient(probeCtx, cfg)
 	if err != nil {
 		return nil, err
+	}
+	if len(authorize) > 0 && authorize[0] != nil {
+		httpClient.Transport = &credentialTransport{base: httpClient.Transport, authorize: authorize[0]}
 	}
 	httpClient.Transport = &mcpcompat.RoundTripper{Base: httpClient.Transport}
 	client := mcp.NewClient(

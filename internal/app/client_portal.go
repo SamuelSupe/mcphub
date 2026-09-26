@@ -17,6 +17,8 @@ func (a *App) serveClientPortal(w http.ResponseWriter, req *http.Request) {
 	switch req.URL.Path {
 	case "/client-auth/":
 		file, contentType = "index.html", "text/html; charset=utf-8"
+	case "/client-auth/accounts.js":
+		file, contentType = "accounts.js", "text/javascript; charset=utf-8"
 	case "/client-auth/app.js":
 		file, contentType = "app.js", "text/javascript; charset=utf-8"
 	case "/client-auth/styles.css":

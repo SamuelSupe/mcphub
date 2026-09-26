@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -181,7 +182,7 @@ func (m *Manager) SeedUnavailableCatalogs(previous *Manager) []string {
 }
 
 func sameCatalogSource(previous, current config.BackendConfig) bool {
-	if previous.URL != current.URL ||
+	if !reflect.DeepEqual(previous.Credentials, current.Credentials) || previous.URL != current.URL ||
 		previous.AllowInsecureHTTP != current.AllowInsecureHTTP ||
 		!maps.Equal(previous.Headers, current.Headers) {
 		return false

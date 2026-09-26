@@ -25,19 +25,21 @@ import (
 	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
 	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 	"github.com/SamuelSupe/mcphub/v2/internal/sso"
+	"github.com/SamuelSupe/mcphub/v2/internal/upstream"
 )
 
 type App struct {
-	requests   diagnostics.Recorder
-	limits     ratelimit.Registry
-	ctx        context.Context
-	cancel     context.CancelFunc
-	shutdown   <-chan struct{}
-	configPath string
-	logger     *slog.Logger
-	auth       tokenVerifier
-	sso        *sso.Server
-	stopping   atomic.Bool
+	credentials *upstream.Manager
+	requests    diagnostics.Recorder
+	limits      ratelimit.Registry
+	ctx         context.Context
+	cancel      context.CancelFunc
+	shutdown    <-chan struct{}
+	configPath  string
+	logger      *slog.Logger
+	auth        tokenVerifier
+	sso         *sso.Server
+	stopping    atomic.Bool
 
 	runtimeMu       sync.RWMutex
 	runtime         *runtime
@@ -96,7 +98,7 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 		go manager.Run(ctx)
 		authManager = manager
 	}
-	rt, err := newRuntimeWithGroups(ctx, cfg, groups, logger, false)
+	credentials, err := upstream.New(cfg.Vault, store)
 	if err != nil {
 		cancel()
 		if store != nil {
@@ -104,7 +106,17 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 		}
 		return nil, err
 	}
+	rt, err := newRuntimeWithGroups(ctx, cfg, groups, logger, false, credentials)
+	if err != nil {
+		cancel()
+		credentials.Close()
+		if store != nil {
+			_ = store.Close()
+		}
+		return nil, err
+	}
 	app := &App{
+		credentials:     credentials,
 		ctx:             ctx,
 		cancel:          cancel,
 		shutdown:        parent.Done(),
@@ -247,6 +259,7 @@ func (a *App) Close() {
 		if rt != nil {
 			rt.close()
 		}
+		a.credentials.Close()
 		if a.store != nil {
 			_ = a.store.Close()
 		}
@@ -308,7 +321,7 @@ func (a *App) buildCandidateWithGroups(cfg *config.Config, groups []httptool.Gro
 	a.candidateCancel = cancelCandidate
 	a.candidateMu.Unlock()
 
-	candidate, err := newRuntimeWithGroups(candidateParent, cfg, groups, a.logger, true)
+	candidate, err := newRuntimeWithGroups(candidateParent, cfg, groups, a.logger, true, a.credentials)
 	if err != nil {
 		a.clearReloadCandidate()
 		cancelCandidate()

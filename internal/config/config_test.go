@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,51 @@ import (
 	"testing"
 	"time"
 )
+
+func TestVaultCredentialTrustBoundaries(t *testing.T) {
+	t.Setenv("MCPHUB_CONFIG_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	base := `
+server:
+  public_url: https://hub.example.com/mcp
+auth:
+  issuer: https://login.example.com
+admin:
+  enabled: true
+  database_path: /tmp/mcphub-vault-validation.db
+  encryption_key_env: MCPHUB_CONFIG_KEY
+client_authorization:
+  enabled: true
+  client_id: portal
+vault:
+  address: https://vault.example.com
+  token_env: VAULT_TEST_TOKEN
+backends:
+  - id: personal
+    url: https://backend.example.com/mcp
+    require_client_grant: true
+    credentials:
+      mode: personal
+      oauth:
+        issuer: https://accounts.example.com
+        client_id: upstream-client
+`
+	if _, err := Load(writeConfig(t, base)); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range [][2]string{
+		{"require_client_grant: true", "require_client_grant: false"},
+		{"address: https://vault.example.com", "address: http://vault.example.com\n  allow_insecure_http: true"},
+		{"mode: personal", "mode: personal\n      discovery_path: ../outside"},
+		{"mode: personal", "mode: personal\n      path: arbitrary-user-path"},
+		{"issuer: https://accounts.example.com", "issuer: http://accounts.example.com"},
+		{"require_client_grant: true", "require_client_grant: true\n    headers:\n      Authorization: Bearer shared"},
+		{"token_env: VAULT_TEST_TOKEN", "token_env: VAULT_TEST_TOKEN\n  role_id_env: ROLE\n  secret_id_env: SECRET"},
+	} {
+		if _, err := Load(writeConfig(t, strings.Replace(base, change[0], change[1], 1))); err == nil {
+			t.Fatalf("unsafe credential configuration accepted: %s", change[1])
+		}
+	}
+}
 
 func TestLoadExpandsEnvironmentAndAppliesDefaults(t *testing.T) {
 	t.Setenv("MCPHUB_TEST_KEY", "secret-value")

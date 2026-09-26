@@ -56,6 +56,7 @@ func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type Config struct {
+	Vault               *VaultConfig              `yaml:"vault"`
 	ClientAuthorization ClientAuthorizationConfig `yaml:"client_authorization"`
 	Server              ServerConfig              `yaml:"server"`
 	Auth                AuthConfig                `yaml:"auth"`
@@ -96,6 +97,7 @@ type AdminConfig struct {
 }
 
 type BackendConfig struct {
+	Credentials        *CredentialConfig `yaml:"credentials"`
 	EndpointUID        string            `yaml:"-"`
 	RequireClientGrant bool              `yaml:"require_client_grant"`
 	RateLimit          ratelimit.Config  `yaml:"rate_limit"`
@@ -344,6 +346,12 @@ func expandString(value string) (string, error) {
 }
 
 func (cfg *Config) Validate() error {
+	if err := cfg.Vault.Validate(); err != nil {
+		return err
+	}
+	if cfg.Vault != nil && !cfg.Admin.Enabled {
+		return fmt.Errorf("Vault integration requires managed configuration (admin.enabled)")
+	}
 	if err := validateListen(cfg.Server.Listen); err != nil {
 		return err
 	}
@@ -464,6 +472,17 @@ func (cfg *Config) Validate() error {
 		if backend.OAuth != nil {
 			if err := validateOAuth(backend); err != nil {
 				return err
+			}
+		}
+		if err := backend.Credentials.Validate(backend.Headers, backend.OAuth); err != nil {
+			return fmt.Errorf("backend %s: %w", backend.ID, err)
+		}
+		if backend.Credentials != nil {
+			if cfg.Vault == nil {
+				return fmt.Errorf("backend %s requires vault configuration", backend.ID)
+			}
+			if backend.Credentials.Mode == "personal" && (!cfg.ClientAuthorization.Enabled || !backend.RequireClientGrant) {
+				return fmt.Errorf("personal credentials require client authorization and require_client_grant")
 			}
 		}
 	}
@@ -787,6 +806,9 @@ func (cfg *Config) Backend(id string) (BackendConfig, bool) {
 }
 
 func (cfg *Config) ImmutableEqual(other *Config) error {
+	if !reflect.DeepEqual(cfg.Vault, other.Vault) {
+		return fmt.Errorf("vault configuration requires a restart")
+	}
 	if cfg.Server.Listen != other.Server.Listen {
 		return fmt.Errorf("server.listen requires a restart")
 	}

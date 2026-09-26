@@ -93,7 +93,7 @@ func TestResourceSubscriptionOnlyResolvesPublishedConcreteResources(t *testing.T
 	listed := encodeResource("alpha", "memory://listed")
 	unlisted := encodeResource("alpha", "memory://unlisted")
 	v := &view{
-		hub:            &Hub{issuedResources: make(map[string]*issuedResourceSet)},
+		hub:            &Hub{cfg: &config.Config{}, resourceRegistry: resourceRegistry{issuedResources: make(map[string]*issuedResourceSet)}},
 		allowed:        map[string]struct{}{"alpha": {}},
 		byHost:         map[string]string{"alpha": "alpha"},
 		resources:      map[string]string{listed: "fingerprint"},

@@ -22,6 +22,11 @@ func (a *App) runApprovalMaintenance() {
 				rt.hub.PruneIdentityViews(ctx)
 			}
 		}
+		if a.credentials != nil {
+			if cleanupErr := a.credentials.Maintain(ctx); cleanupErr != nil {
+				a.logger.Warn("upstream credential cleanup will retry")
+			}
+		}
 		cancel()
 		if err != nil && a.ctx.Err() == nil {
 			a.logger.Warn("approval maintenance failed")

@@ -16,6 +16,7 @@ import (
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
 	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
 	"github.com/SamuelSupe/mcphub/v2/internal/hub"
+	"github.com/SamuelSupe/mcphub/v2/internal/upstream"
 )
 
 type runtime struct {
@@ -35,7 +36,7 @@ func newRuntime(parent context.Context, cfg *config.Config, logger *slog.Logger,
 	return newRuntimeWithGroups(parent, cfg, nil, logger, requireReady)
 }
 
-func newRuntimeWithGroups(parent context.Context, cfg *config.Config, groups []httptool.GroupConfig, logger *slog.Logger, requireReady bool) (*runtime, error) {
+func newRuntimeWithGroups(parent context.Context, cfg *config.Config, groups []httptool.GroupConfig, logger *slog.Logger, requireReady bool, credentials ...*upstream.Manager) (*runtime, error) {
 	for _, group := range groups {
 		if group.RequireClientGrant && !cfg.ClientAuthorization.Enabled {
 			return nil, fmt.Errorf("tool group %s requires client_authorization.enabled", group.ID)
@@ -67,6 +68,13 @@ func newRuntimeWithGroups(parent context.Context, cfg *config.Config, groups []h
 		},
 	)
 	currentHub = hub.NewWithHTTPTools(cfg, manager, httpTools, logger)
+	if len(credentials) > 0 && credentials[0] != nil {
+		currentHub.ConfigureCredentials(ctx, credentials[0])
+		for _, c := range cfg.Backends {
+			client, _ := manager.Client(c.ID)
+			client.Authorize = credentials[0].Shared(upstream.Endpoint{ID: c.ID, UID: c.EndpointUID, URL: c.URL, Credentials: c.Credentials})
+		}
+	}
 	if err := manager.Start(ctx, requireReady); err != nil {
 		currentHub.Close()
 		cancel()

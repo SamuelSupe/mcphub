@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/backend"
 	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
@@ -18,6 +19,9 @@ import (
 )
 
 type view struct {
+	// Protected by hub.viewsMu, including the gap before the SDK opens a session.
+	activeRequests    int
+	lastUsed          time.Time
 	credentialMu      sync.Mutex
 	personalClients   map[string]*personalBackend
 	credentialsClosed bool

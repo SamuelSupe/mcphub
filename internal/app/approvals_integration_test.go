@@ -366,6 +366,16 @@ func TestWriteApprovalThroughOIDCAdminAndMCP(t *testing.T) {
 	}
 
 	t.Run("client grants bind writes and cached results", func(t *testing.T) {
+		// Earlier cases changed the runtime policy directly. Admin mutations load
+		// their candidate from storage, so persist that policy before issuing grants.
+		record, err := f.app.store.Get(t.Context(), "db")
+		if err != nil {
+			t.Fatal(err)
+		}
+		record.Config, _ = cfg.Backend("db")
+		if _, err := f.app.store.Update(t.Context(), record, record.Revision); err != nil {
+			t.Fatal(err)
+		}
 		cfg.ClientAuthorization = config.ClientAuthorizationConfig{Enabled: true, ClientID: "portal"}
 		if err := f.app.replaceRuntimeLocked(cfg); err != nil {
 			t.Fatal(err)
@@ -401,6 +411,30 @@ func TestWriteApprovalThroughOIDCAdminAndMCP(t *testing.T) {
 		}
 		grantA, clientA := newClient("ci_write_client_a")
 		_, clientB := newClient("ci_write_client_b")
+		for _, mutation := range []struct {
+			method, path, etag, body string
+			status                   int
+		}{
+			{"POST", "/api/v1/backends", "", `{"id":"unrelated","url":"https://unused.example/mcp","enabled":false}`, 201},
+			{"PUT", "/api/v1/backends/unrelated", `"1"`, `{"id":"unrelated","url":"https://changed.example/mcp","enabled":false}`, 200},
+			{"DELETE", "/api/v1/backends/unrelated", `"2"`, "", 204},
+		} {
+			req, _ := http.NewRequest(mutation.method, f.server.URL+mutation.path, strings.NewReader(mutation.body))
+			req.Header.Set("Authorization", "Bearer "+f.signed("mcphub:admin", f.server.URL))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("If-Match", mutation.etag)
+			response, err := f.client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			if response.StatusCode != mutation.status {
+				t.Fatalf("%s unrelated backend: HTTP %d", mutation.method, response.StatusCode)
+			}
+			if _, err := clientA.ListTools(t.Context(), nil); err != nil {
+				t.Fatalf("existing grant after %s: %v", mutation.method, err)
+			}
+		}
 		checkGrant := func(subject string, scopes []string, outcome string) {
 			t.Helper()
 			before := calls.Load()
@@ -672,6 +706,17 @@ func TestConfigurationApprovalSeparatesRolesAndBindsRevision(t *testing.T) {
 	current, _ = f.app.store.GetToolGroup(t.Context(), "governed")
 	if current.Config.Enabled || current.Config.ToolRules[0].Effect != "write" {
 		t.Fatal("stale proposal replaced emergency disable")
+	}
+	backend := startReloadBackend(t)
+	backendInput, _ := json.Marshal(map[string]any{"id": "approved-backend", "url": backend.URL, "enabled": true, "required": true, "allow_insecure_http": true})
+	id = propose("POST", "/api/v1/backends", backendInput, "")
+	if value := decide(security, securityCSRF, id, 200); value.Status != "succeeded" {
+		t.Fatalf("backend configuration not applied: %s", value.Status)
+	}
+	persisted, err := f.app.store.Get(t.Context(), "approved-backend")
+	active, ok := f.app.currentConfig().Backend("approved-backend")
+	if err != nil || !ok || active.EndpointUID == "" || active.EndpointUID != persisted.Config.EndpointUID {
+		t.Fatalf("approved backend runtime and persisted identity differ: %v", err)
 	}
 }
 

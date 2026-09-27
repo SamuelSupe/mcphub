@@ -62,7 +62,7 @@ func TestHubAggregatesAndRoutesProtocolFeatures(t *testing.T) {
 		manager.Close()
 	})
 
-	handler := mcp.NewStreamableHTTPHandler(aggregate.ServerForRequest, &mcp.StreamableHTTPOptions{
+	handler := aggregate.StreamableHTTPHandler(&mcp.StreamableHTTPOptions{
 		Stateless:                    true,
 		PropagateRequestCancellation: true,
 	})
@@ -447,8 +447,7 @@ func TestCanceledModernSubscriptionUnsubscribesLegacyBackend(t *testing.T) {
 		manager.Close()
 	})
 
-	hubHTTP := httptest.NewServer(mcp.NewStreamableHTTPHandler(
-		aggregate.ServerForRequest,
+	hubHTTP := httptest.NewServer(aggregate.StreamableHTTPHandler(
 		&mcp.StreamableHTTPOptions{Stateless: true, PropagateRequestCancellation: true},
 	))
 	t.Cleanup(func() {

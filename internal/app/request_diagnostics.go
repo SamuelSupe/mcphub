@@ -1,8 +1,10 @@
 package app
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
 )
@@ -48,11 +50,68 @@ func (a *App) serveRequestDiagnostics(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	if params.Get("cursor") != "" {
-		q.Before, err = strconv.ParseUint(params.Get("cursor"), 10, 64)
+		q.Before, err = strconv.ParseUint(params.Get("cursor"), 10, 63)
 		if err != nil {
 			writeAPIError(w, 400, "validation_failed", "请求筛选条件无效", "cursor")
 			return
 		}
 	}
-	writeJSON(w, 200, a.requests.Query(q))
+	now := time.Now().UTC()
+	retention := a.currentConfig().Admin.RequestRetentionDuration()
+	q.Until = now
+	if params.Get("until") != "" {
+		q.Until, err = time.Parse(time.RFC3339Nano, params.Get("until"))
+		if err != nil {
+			writeAPIError(w, 400, "validation_failed", "结束时间必须为 RFC3339 时间", "until")
+			return
+		}
+	}
+	if q.Until.After(now) {
+		q.Until = now
+	}
+	q.Since = q.Until.Add(-24 * time.Hour)
+	if params.Get("since") != "" {
+		q.Since, err = time.Parse(time.RFC3339Nano, params.Get("since"))
+		if err != nil {
+			writeAPIError(w, 400, "validation_failed", "开始时间必须为 RFC3339 时间", "since")
+			return
+		}
+	}
+	if earliest := now.Add(-retention); q.Since.Before(earliest) {
+		q.Since = earliest
+	}
+	if !q.Since.Before(q.Until) || (params.Get("format") != "" && params.Get("format") != "ndjson") {
+		writeAPIError(w, 400, "validation_failed", "请求时间范围或导出格式无效", "")
+		return
+	}
+	if a.store == nil {
+		writeJSON(w, 200, a.requests.Query(q))
+		return
+	}
+	if params.Get("format") == "ndjson" {
+		q.Limit = 10000
+		records, next, err := a.store.RequestRecords(req.Context(), q)
+		if err != nil {
+			writeAPIError(w, 503, "request_history_unavailable", "暂时无法读取请求历史，请重试", "")
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Content-Disposition", `attachment; filename="mcphub-requests.ndjson"`)
+		w.Header().Set("X-MCPHub-Next-Cursor", strconv.FormatUint(next, 10))
+		encoder := json.NewEncoder(w)
+		for _, record := range records {
+			if err := encoder.Encode(record); err != nil {
+				return
+			}
+		}
+		return
+	}
+	page, err := a.store.RequestHistory(req.Context(), q)
+	if err != nil {
+		writeAPIError(w, 503, "request_history_unavailable", "暂时无法读取请求历史，请重试", "")
+		return
+	}
+	page.RetentionDays = int(retention / (24 * time.Hour))
+	page.StorageFailures = a.requestWriteFailures.Load()
+	writeJSON(w, 200, page)
 }

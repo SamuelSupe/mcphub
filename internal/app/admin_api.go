@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -309,10 +310,11 @@ func (a *App) createAdminBackend(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	desired := append(slices.Clone(records), configstore.Record{Config: backendConfig, Enabled: enabled})
 	if a.stageConfigurationChange(w, req, configurationChange{Kind: "backend", Backend: &configstore.Record{Config: backendConfig, Enabled: enabled}}, nil, makeBackendView(configstore.Record{Config: backendConfig, Enabled: enabled}, nil)) {
 		return
 	}
+	backendConfig.EndpointUID = "ep_" + rand.Text()
+	desired := append(slices.Clone(records), configstore.Record{Config: backendConfig, Enabled: enabled})
 	candidate, previous, ok := a.prepareAdminCandidate(w, req, desired, backendConfig.ID, "create")
 	if !ok {
 		return
@@ -320,7 +322,7 @@ func (a *App) createAdminBackend(w http.ResponseWriter, req *http.Request) {
 	var saved configstore.Record
 	err = a.commitAdminCandidate(candidate, previous, func() error {
 		var commitErr error
-		saved, commitErr = a.store.Create(a.adminMutationContext(req), configstore.Record{Config: backendConfig, Enabled: enabled})
+		saved, commitErr = a.store.CreateWithUID(a.adminMutationContext(req), configstore.Record{Config: backendConfig, Enabled: enabled})
 		return commitErr
 	})
 	if err != nil {
@@ -469,8 +471,7 @@ func (a *App) commitAdminCandidate(candidate, previous *runtime, commit func() e
 		candidate.close()
 		return err
 	}
-	a.limits.Configure(candidate.rateLimitPolicies())
-	a.runtime = candidate
+	a.installRuntimeLocked(candidate, previous)
 	a.runtimeMu.Unlock()
 	go previous.drain(previous.cfg.Server.DrainTimeout.Duration)
 	return nil

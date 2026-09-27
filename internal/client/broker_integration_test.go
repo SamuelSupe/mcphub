@@ -280,6 +280,33 @@ func TestBrokerClientAuthorizationIsolationAndRevocation(t *testing.T) {
 	if !report.Healthy || report.Endpoint != "alpha" || f.toolCalls.Load() != diagnosticCalls {
 		t.Fatalf("doctor through Broker: %+v", report)
 	}
+	for _, status := range []string{"not_connected", "expired", "unavailable"} {
+		probe := *f.client
+		probe.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			response, err := f.client.Transport.RoundTrip(req)
+			if err != nil || req.URL.Path != "/api/v1/client-grants/current" || response.StatusCode != 200 {
+				return response, err
+			}
+			if req.URL.Query().Get("check_account") != "true" {
+				t.Error("doctor did not request personal account readiness")
+			}
+			var data map[string]any
+			err = json.NewDecoder(response.Body).Decode(&data)
+			response.Body.Close()
+			if err != nil {
+				return nil, err
+			}
+			data["account_status"] = status
+			encoded, _ := json.Marshal(data)
+			response.Body = io.NopCloser(bytes.NewReader(encoded))
+			response.ContentLength = int64(len(encoded))
+			return response, nil
+		})
+		failed := Doctor(ctx, f.store, "work", DoctorOptions{ClientID: a.ClientID, HTTPClient: &probe})
+		if failed.Healthy || f.toolCalls.Load() != diagnosticCalls {
+			t.Fatalf("doctor admitted unavailable account %s: %+v", status, failed)
+		}
+	}
 	encodedReport, _ := json.Marshal(report)
 	if strings.Contains(string(encodedReport), entry.Secret) {
 		t.Fatal("diagnostic report exposed an IPC credential")

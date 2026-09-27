@@ -1,6 +1,6 @@
 # MCPHub 文档导航
 
-[English](README.md) · [项目说明](../README.zh-CN.md) · [v2.1.0 发行说明](../RELEASE_NOTES_v2.1.0.md)
+[English](README.md) · [项目说明](../README.zh-CN.md) · [v2.2.0 发行说明](../RELEASE_NOTES_v2.2.0.md)
 
 ## 企业架构与最佳实践
 

@@ -29,17 +29,18 @@ import (
 )
 
 type App struct {
-	credentials *upstream.Manager
-	requests    diagnostics.Recorder
-	limits      ratelimit.Registry
-	ctx         context.Context
-	cancel      context.CancelFunc
-	shutdown    <-chan struct{}
-	configPath  string
-	logger      *slog.Logger
-	auth        tokenVerifier
-	sso         *sso.Server
-	stopping    atomic.Bool
+	credentials          *upstream.Manager
+	requests             diagnostics.Recorder
+	requestWriteFailures atomic.Uint64
+	limits               ratelimit.Registry
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	shutdown             <-chan struct{}
+	configPath           string
+	logger               *slog.Logger
+	auth                 tokenVerifier
+	sso                  *sso.Server
+	stopping             atomic.Bool
 
 	runtimeMu       sync.RWMutex
 	runtime         *runtime
@@ -130,6 +131,7 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 	}
 	app.limits.Configure(rt.rateLimitPolicies())
 	if store != nil {
+		store.ConfigureIdentityProtection(cfg.Auth, cfg.Admin)
 		store.ConfigureApprovalDelivery(cfg.Admin.Approvals, cfg.Admin.PublicURL)
 		if err := store.RecoverApprovals(ctx); err != nil {
 			app.Close()
@@ -140,7 +142,7 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 	rt.hub.ConfigureClientAuthorization(store)
 	if cfg.ClientAuthorization.Enabled {
 		u, _ := url.Parse(cfg.Server.PublicURL)
-		portal := config.AdminConfig{PublicURL: u.Scheme + "://" + u.Host, ClientID: cfg.ClientAuthorization.ClientID, ClientSecretEnv: cfg.ClientAuthorization.ClientSecretEnv, RequiredScopes: rt.allScopes()}
+		portal := config.AdminConfig{PublicURL: u.Scheme + "://" + u.Host, ClientID: cfg.ClientAuthorization.ClientID, ClientSecretEnv: cfg.ClientAuthorization.ClientSecretEnv}
 		app.userAuth = newAdminAuthorization(portal, cfg.Auth.Issuer, authManager)
 		app.userAuth.userPortal, app.userAuth.resource = true, cfg.Server.PublicURL
 	}
@@ -371,15 +373,23 @@ func (a *App) activateCandidate(candidate, previous *runtime) error {
 		candidate.close()
 		return fmt.Errorf("runtime changed while reloading configuration")
 	}
+	a.installRuntimeLocked(candidate, previous)
+	a.runtimeMu.Unlock()
+	go previous.drain(previous.cfg.Server.DrainTimeout.Duration)
+	return nil
+}
+
+// runtimeMu must be held so no request can observe a partially configured Hub.
+func (a *App) installRuntimeLocked(candidate, previous *runtime) {
+	if a.store != nil {
+		a.store.ConfigureIdentityProtection(candidate.cfg.Auth, candidate.cfg.Admin)
+	}
 	candidate.hub.ConfigureApprovals(a.store, &a.limits)
 	candidate.hub.ConfigureClientAuthorization(a.store)
 	previous.hub.CloseGrantViews()
 	previous.hub.RetireApprovals()
 	a.limits.Configure(candidate.rateLimitPolicies())
 	a.runtime = candidate
-	a.runtimeMu.Unlock()
-	go previous.drain(previous.cfg.Server.DrainTimeout.Duration)
-	return nil
 }
 
 func (a *App) cancelReloadCandidate() {
@@ -438,7 +448,15 @@ func (a *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if reason := writer.Header().Get("MCPHub-Authorization-Error"); reason != "" {
 				diagnostics.Outcome(req.Context(), "grant_denied", reason)
 			}
-			a.requests.Finish(req.Context(), status)
+			if record, ok := a.requests.Finish(req.Context(), status); ok && a.store != nil {
+				// Client cancellation must not erase the completed request's history.
+				ctx, cancel := context.WithTimeout(context.WithoutCancel(req.Context()), 2*time.Second)
+				defer cancel()
+				if err := a.store.RecordRequest(ctx, record); err != nil {
+					a.requestWriteFailures.Add(1)
+					a.logger.Error("request history write failed", "request_id", record.RequestID)
+				}
+			}
 		}()
 	}
 

@@ -25,6 +25,7 @@ var (
 
 type Store struct {
 	identityMu    sync.Mutex
+	identityAdmin *identityAdminPolicy
 	identityCalls map[string]identityCall
 	grantMu       sync.Mutex
 	grantCalls    map[string]map[string]context.CancelFunc
@@ -169,6 +170,16 @@ last_probe_at, last_probe_ok, last_probe_json FROM backends WHERE id = ? COLLATE
 
 func (s *Store) Create(ctx context.Context, record Record) (Record, error) {
 	record.Config.EndpointUID = "ep_" + rand.Text()
+	return s.CreateWithUID(ctx, record)
+}
+
+// CreateWithUID preserves the fresh server-generated UID used to prepare a
+// runtime before committing it. Callers must never reuse an existing endpoint's
+// UID or accept one from user input; use Create when no runtime is prepared.
+func (s *Store) CreateWithUID(ctx context.Context, record Record) (Record, error) {
+	if record.Config.EndpointUID == "" {
+		return Record{}, errors.New("endpoint UID is required")
+	}
 	record.CreatedAt = time.Now().UTC()
 	record.UpdatedAt = record.CreatedAt
 	tx, err := s.db.BeginTx(ctx, nil)

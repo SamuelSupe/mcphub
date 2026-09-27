@@ -68,6 +68,46 @@ func TestAdminSecurityHeadersAndHostPolicy(t *testing.T) {
 	assertAdminSecurityHeaders(t, recorder.Header())
 }
 
+func TestCompletedRequestHistoryAndExport(t *testing.T) {
+	a := newAdminTestApp(t)
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"notes.read","arguments":{"secret":"never-store-this"}}}`
+	w := httptest.NewRecorder()
+	a.ServeHTTP(w, httptest.NewRequest("POST", "/mcp", strings.NewReader(body)))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated request: %d", w.Code)
+	}
+	a.requests = diagnostics.Recorder{}
+	response := serveAdminJSON(t, a, "GET", "/api/v1/requests", nil, "")
+	var page diagnostics.Page
+	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &page) != nil || !page.Persisted || page.Statistics.Total != 1 || page.Records[0].Outcome != "auth_denied" {
+		t.Fatalf("completed request was not persisted: %d %s", response.Code, response.Body)
+	}
+	response = serveAdminJSON(t, a, "GET", "/api/v1/requests?format=ndjson", nil, "")
+	var record diagnostics.Record
+	if response.Code != 200 || response.Header().Get("Content-Type") != "application/x-ndjson" || json.Unmarshal(bytes.TrimSpace(response.Body.Bytes()), &record) != nil || record.RequestID != page.Records[0].RequestID || strings.Contains(response.Body.String(), "never-store-this") {
+		t.Fatalf("history export lost metadata or retained arguments: %d %s", response.Code, response.Body)
+	}
+	a.store.Close()
+	w = httptest.NewRecorder()
+	a.ServeHTTP(w, httptest.NewRequest("POST", "/mcp", strings.NewReader(body)))
+	if w.Code != http.StatusUnauthorized || a.requestWriteFailures.Load() != 1 {
+		t.Fatal("history failure changed the request outcome or went unreported")
+	}
+	response = serveAdminJSON(t, a, "GET", "/api/v1/requests", nil, "")
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatal("unreadable history was reported as an empty success")
+	}
+	var err error
+	a.store, err = configstore.Open(t.Context(), a.currentConfig().Admin.DatabasePath, make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = serveAdminJSON(t, a, "GET", "/api/v1/requests", nil, "")
+	if json.Unmarshal(response.Body.Bytes(), &page) != nil || page.StorageFailures != 1 || page.Statistics.Total != 1 {
+		t.Fatal("history recovery hid a recording gap")
+	}
+}
+
 func TestNativeToolPolicyWorkbench(t *testing.T) {
 	if os.Getenv("MCPHUB_POLICY_BROWSER_QA") != "1" || platform.GOOS != "darwin" {
 		t.Skip("set MCPHUB_POLICY_BROWSER_QA=1 on macOS for interactive tool-policy verification")
@@ -142,7 +182,10 @@ func TestNativeToolPolicyWorkbench(t *testing.T) {
 			status = 403
 		}
 		diagnostics.Outcome(ctx, outcome, "")
-		application.requests.Finish(ctx, status)
+		record, _ := application.requests.Finish(ctx, status)
+		if err := application.store.RecordRequest(t.Context(), record); err != nil {
+			t.Fatal(err)
+		}
 	}
 	done := make(chan struct{}, 1)
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

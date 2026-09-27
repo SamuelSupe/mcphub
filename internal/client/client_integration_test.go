@@ -505,6 +505,11 @@ func TestLoginFailurePreservesCredentials(t *testing.T) {
 		wrongAudience bool
 	}{
 		{"denied", func(q url.Values) { q.Set("error", "access_denied"); q.Del("code") }, false},
+		{"pending account", func(q url.Values) {
+			q.Set("error", "access_denied")
+			q.Set("error_description", "account_access_required")
+			q.Del("code")
+		}, false},
 		{"wrong issuer", func(q url.Values) { q.Set("iss", "https://untrusted.example") }, false},
 		{"wrong state", func(q url.Values) { q.Set("state", "wrong") }, false},
 		{"wrong audience", nil, true},
@@ -515,6 +520,8 @@ func TestLoginFailurePreservesCredentials(t *testing.T) {
 			defer stop()
 			if err := f.login(attemptCtx, test.mutate); err == nil {
 				t.Fatal("bad authorization succeeded")
+			} else if test.name == "pending account" && (attemptCtx.Err() != nil || !strings.Contains(err.Error(), "administrator")) {
+				t.Fatal("pending account did not immediately provide recovery guidance", err)
 			}
 			after, err := os.ReadFile(filepath.Join(f.store.Dir, "work.json"))
 			if err != nil || !bytes.Equal(before, after) {

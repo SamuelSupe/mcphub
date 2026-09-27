@@ -144,6 +144,10 @@ func (a *App) serveAccessCheck(w http.ResponseWriter, req *http.Request) {
 	check("required_scopes", len(missing) == 0, missing...)
 	arguments, err := config.CheckToolResources(tool.ResourceRules, input.Arguments)
 	check("resource_allowed", err == nil)
+	accountStatus := a.personalAccountStatus(req.Context(), rt, endpoint.ID, rt.cfg.Auth.Issuer, input.Subject)
+	if accountStatus != "not_required" {
+		check("personal_account_"+accountStatus, accountStatus == "connected")
+	}
 	if tool.Effect != "read" {
 		check("approval_service", rt.cfg.Admin.Remote())
 		if err == nil {

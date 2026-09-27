@@ -1,6 +1,6 @@
 # MCPHub documentation
 
-[中文](README.zh-CN.md) · [Project README](../README.md) · [v2.1.0 release notes](../RELEASE_NOTES_v2.1.0.md)
+[中文](README.zh-CN.md) · [Project README](../README.md) · [v2.2.0 release notes](../RELEASE_NOTES_v2.2.0.md)
 
 ## Enterprise architecture and best practices
 

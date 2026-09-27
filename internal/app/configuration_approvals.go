@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -166,6 +167,7 @@ func (a *App) commitConfigurationChange(ctx context.Context, change configuratio
 			return err
 		}
 		if change.Revision == 0 {
+			next.Config.EndpointUID = "ep_" + rand.Text()
 			records = append(records, next)
 		} else {
 			for i := range records {
@@ -184,7 +186,7 @@ func (a *App) commitConfigurationChange(ctx context.Context, change configuratio
 		}
 		return a.commitAdminCandidate(candidate, previous, func() error {
 			if change.Revision == 0 {
-				_, err = a.store.Create(ctx, next)
+				_, err = a.store.CreateWithUID(ctx, next)
 			} else {
 				_, err = a.store.Update(ctx, next, change.Revision)
 			}

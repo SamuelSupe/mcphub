@@ -5,11 +5,14 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -21,6 +24,8 @@ import (
 
 	"github.com/SamuelSupe/mcphub/v2/internal/authn"
 	"github.com/SamuelSupe/mcphub/v2/internal/client"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
 )
 
 type adminGrant struct{ scope, resource, challenge, redirect, nonce, subject string }
@@ -292,12 +297,34 @@ func TestRemoteAdminBrowserSessionRefreshAndCSRF(t *testing.T) {
 	f := newAdminLoginFixture(t)
 	c := *f.client
 	c.Jar, _ = cookiejar.New(nil)
+	pending := f.request(t, &c, "GET", "/auth/login", "", "", nil)
+	pendingURL := pending.Header.Get("Location")
+	pending.Body.Close()
+	pending, err := c.Get(pendingURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deniedURL, _ := url.Parse(pending.Header.Get("Location"))
+	pending.Body.Close()
+	deniedQuery := deniedURL.Query()
+	deniedQuery.Del("code")
+	deniedQuery.Set("error", "access_denied")
+	deniedQuery.Set("error_description", "account_access_required")
+	deniedURL.RawQuery = deniedQuery.Encode()
+	pending, err = c.Get(deniedURL.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending.StatusCode != http.StatusSeeOther || pending.Header.Get("Location") != "/?login_error=account_access_required" {
+		t.Fatalf("pending account lost its browser recovery state: %d %s", pending.StatusCode, pending.Header.Get("Location"))
+	}
+	pending.Body.Close()
 	resp := f.request(t, &c, "GET", "/auth/login", "", "", nil)
 	if resp.StatusCode != 302 {
 		t.Fatal("login redirect missing")
 	}
 	authURL := resp.Header.Get("Location")
-	resp, err := c.Get(authURL)
+	resp, err = c.Get(authURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,5 +450,75 @@ func TestRemoteAdminBrowserSessionRefreshAndCSRF(t *testing.T) {
 				t.Fatal("invalid callback created a session")
 			}
 		})
+	}
+}
+
+func TestPortalLoginUsesCurrentEndpointScopes(t *testing.T) {
+	f := newAdminLoginFixture(t)
+	cfg := f.app.currentConfig()
+	cfg.ClientAuthorization = config.ClientAuthorizationConfig{Enabled: true, ClientID: "admin-cli"}
+	f.app.userAuth = newAdminAuthorization(config.AdminConfig{PublicURL: f.server.URL, ClientID: "admin-cli", RequiredScopes: f.app.currentRuntime().allScopes()}, f.issuer.URL, f.app.adminAuth.verifier)
+	f.app.userAuth.userPortal, f.app.userAuth.resource = true, f.server.URL
+	f.app.userAuth.client = f.client
+	admin := f.app.adminHandler()
+	f.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/client-auth/") {
+			f.app.serveClientAuthorization(w, r, f.app.currentRuntime())
+			return
+		}
+		admin.ServeHTTP(w, r)
+	})
+	resp := f.request(t, f.client, "POST", "/api/v1/backends", f.signed("mcphub:admin", f.server.URL), "", []byte(`{"id":"new-endpoint","url":"https://127.0.0.1:1/mcp","enabled":true,"required":false,"required_scopes":["project:new"],"request_timeout":"200ms"}`))
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("setup failed: HTTP %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if !slices.Contains(f.app.currentRuntime().allScopes(), "project:new") {
+		t.Fatal("endpoint did not activate")
+	}
+	c := *f.client
+	c.Jar, _ = cookiejar.New(nil)
+	resp = f.request(t, &c, "GET", "/client-auth/auth/login", "", "", nil)
+	authorizationURL, _ := url.Parse(resp.Header.Get("Location"))
+	requested := strings.Fields(authorizationURL.Query().Get("scope"))
+	t.Logf("active endpoint scopes=%v; browser authorization scopes=%v", f.app.currentRuntime().allScopes(), requested)
+	for range 2 {
+		target := resp.Header.Get("Location")
+		resp.Body.Close()
+		var err error
+		resp, err = c.Get(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("login callback HTTP %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = f.request(t, &c, "GET", "/client-auth/auth/session", "", "", nil)
+	var session map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("new browser login: authenticated=%v", session["authenticated"])
+	g := configstore.ClientGrant{GrantBinding: configstore.GrantBinding{ClientID: "audit-new-scope-0001"}, Issuer: f.issuer.URL, Subject: "administrator-123", Resource: f.app.currentConfig().Server.PublicURL, EndpointID: "new-endpoint", ClientName: "new endpoint client", AllowedScopes: []string{"project:new"}, Capabilities: configstore.GrantCapabilities{Resources: true}}
+	var err error
+	g.EndpointUID, g.EndpointPolicy, err = f.app.store.ClientEndpointPolicy(t.Context(), g.EndpointID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, _, _, err = f.app.store.CreateClientGrant(t.Context(), g, "", time.Hour, 8*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrf, _ := session["csrf"].(string)
+	resp = f.request(t, &c, "POST", "/client-auth/api/client-authorization-requests/"+g.GrantID+"/confirm", "", csrf, nil)
+	confirmation, _ := io.ReadAll(resp.Body)
+	t.Logf("confirm newly scoped grant after fresh browser login: HTTP %d %s", resp.StatusCode, confirmation)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Error("new browser session cannot authorize the new endpoint scope")
+	}
+	if !slices.Contains(requested, "project:new") {
+		t.Error("new login did not request newly configured endpoint scope")
 	}
 }

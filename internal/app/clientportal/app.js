@@ -32,6 +32,9 @@ const messages = {
     footer:
       "本页只管理你自己的客户端授权。客户端名称不证明应用身份；同一系统账户下的恶意程序仍可能冒用本机入口。",
     error: "请求未完成，请刷新或重新登录。",
+    invalidRequest: "此授权链接已失效或不属于当前账号。请在客户端重新发起授权；已有授权仍可管理。",
+    retryRequest: "重试读取授权请求",
+    accountAccessRequired: "身份已记录，账号尚未获准访问或已被停用。请联系 MCPHub 管理员授权后重新登录。",
     pending: "待确认",
     confirmed: "已确认，等待终端领取",
     active: "有效",
@@ -75,6 +78,9 @@ const messages = {
     footer:
       "This portal manages only your own client access. Client names do not authenticate applications; malicious processes under the same OS account may impersonate a local entry.",
     error: "Request could not be completed. Refresh or sign in again.",
+    invalidRequest: "This authorization link is no longer available or belongs to another account. Start authorization again in your client. You can still manage existing grants.",
+    retryRequest: "Retry authorization request",
+    accountAccessRequired: "Your identity was recorded, but access is pending or disabled. Ask your MCPHub administrator for access, then sign in again.",
     pending: "Awaiting consent",
     confirmed: "Confirmed; waiting for terminal",
     active: "Active",
@@ -111,7 +117,9 @@ async function api(path, method = "GET", body) {
     try {
       code = (await response.json()).error?.code || "";
     } catch {}
-    throw new Error(code && t(code) !== code ? t(code) : t("error"));
+    const error = new Error(code && t(code) !== code ? t(code) : t("error"));
+    error.code = code;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
 }
@@ -225,7 +233,8 @@ async function load(showLoading = true) {
       const link = element("a", t("login"), "button");
       link.href = "/client-auth/auth/login";
       byId("identity").append(link);
-      byId("message").textContent = "";
+      const reason = new URLSearchParams(location.search).get("login_error");
+      byId("message").textContent = reason === "account_access_required" ? t("accountAccessRequired") : reason ? t("error") : "";
       return;
     }
     byId("identity").append(
@@ -241,20 +250,28 @@ async function load(showLoading = true) {
     );
     await loadAccounts();
     const id = sessionStorage.getItem("mcphub-client-request");
+    let shownRequest = "";
     if (id) {
-      const grant = await api(
-        "api/client-authorization-requests/" + encodeURIComponent(id),
-      );
-      byId("request").append(element("h2", t("request")), card(grant, true));
-      if (grant.status !== "pending")
-        sessionStorage.removeItem("mcphub-client-request");
+      try {
+        const grant = await api("api/client-authorization-requests/" + encodeURIComponent(id));
+        byId("request").append(element("h2", t("request")), card(grant, true));
+        shownRequest = grant.grant_id;
+        if (grant.status !== "pending") clearRequest();
+      } catch (error) {
+        if (["client_grant_invalid", "client_grant_expired", "client_grant_revoked", "client_broker_session_ended"].includes(error.code)) {
+          clearRequest();
+          byId("request").append(element("p", t("invalidRequest"), "notice"));
+        } else {
+          byId("request").append(element("p", error.message, "notice"), action(t("retryRequest"), () => load()));
+        }
+      }
     }
     const result = await api("api/client-grants");
     byId("grants").append(element("h2", t("mine")));
     if (!result.grants.length)
       byId("grants").append(element("p", t("empty"), "muted"));
     for (const grant of result.grants) {
-      if (grant.grant_id !== id) byId("grants").append(card(grant, false));
+      if (grant.grant_id !== shownRequest) byId("grants").append(card(grant, false));
     }
     if (showLoading) byId("message").textContent = "";
     const outcome = new URLSearchParams(location.search).get("connection");
@@ -265,6 +282,12 @@ async function load(showLoading = true) {
   } catch (error) {
     byId("message").textContent = error.message;
   }
+}
+function clearRequest() {
+  sessionStorage.removeItem("mcphub-client-request");
+  const url = new URL(location.href);
+  url.searchParams.delete("request");
+  history.replaceState(null, "", url.pathname + url.search + url.hash);
 }
 byId("language").addEventListener("click", () => {
   language = language === "zh" ? "en" : "zh";

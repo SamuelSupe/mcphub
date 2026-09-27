@@ -2,6 +2,12 @@ import { t } from "./i18n.js";
 
 const byId = (id) => document.getElementById(id);
 const labels = {
+	personal_account_connected: "个人账号已连接，保存的凭证可用",
+	personal_account_not_connected: "需要先在个人授权中心连接此服务账号",
+	personal_account_expired: "个人账号凭证已过期，需要重新连接",
+	personal_account_reconnect_required: "个人账号需要重新连接",
+	personal_account_unavailable: "暂时无法验证个人凭证，请检查凭证服务",
+	personal_account_subject_required: "检查个人账号需要填写用户 Subject",
   user_active: "MCPHub 用户已授权且目录状态有效",
   user_tool_resource_allowed: "符合用户与组织的工具和资源权限",
   endpoint_enabled: "Endpoint 已启用",

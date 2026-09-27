@@ -6,13 +6,13 @@
 
 Thank you for contributing to MCPHub. Please keep changes small, observable, and aligned with the current HTTP aggregation boundary.
 
-This public repository is [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub), documenting v2.0.0 with module path `github.com/SamuelSupe/mcphub/v2`. The project is released under the [Apache License 2.0](LICENSE); see the [v2.0.0 release notes](RELEASE_NOTES_v2.0.0.md) for the shipped scope. Earlier releases remain available as historical references.
+This public repository is [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub), documenting v2.2.0 with module path `github.com/SamuelSupe/mcphub/v2`. The project is released under the [Apache License 2.0](LICENSE); see the [v2.2.0 release notes](RELEASE_NOTES_v2.2.0.md) for the shipped scope. Earlier releases remain available as historical references.
 
 ### Before you start
 
 1. Read the [English README](README.md) and the [Chinese README](README.zh-CN.md), especially the configuration, security, and known-limits sections.
 2. For a vulnerability or a suspected secret leak, do not open a public issue; follow [SECURITY.md](SECURITY.md).
-3. Check the explicit exclusions before proposing a feature. The current release does not provide stdio backends, a standalone legacy SSE endpoint, native TLS, dynamic tenants or per-user backend credentials, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The release includes local or OIDC-authenticated remote administration, encrypted SQLite/PostgreSQL configuration storage for one instance, optional endpoint limits, and a separate local stdio-to-HTTP connector; see the management UI and browser login sections in the README.
+3. Check the explicit exclusions before proposing a feature. The current release does not provide stdio backends, a standalone legacy SSE endpoint, native TLS, dynamic tenants, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The release includes local or OIDC-authenticated remote administration, encrypted SQLite/PostgreSQL configuration storage for one instance, optional endpoint limits, Vault-backed shared/personal accounts, and a separate local stdio-to-HTTP connector; see the management UI and browser login sections in the README.
 
 ### Development setup
 
@@ -69,13 +69,13 @@ Documentation must reflect the current code, not a planned design. Keep `README.
 
 感谢你为 MCPHub 贡献代码。请让改动保持聚焦、可观察，并符合当前的 HTTP 聚合边界。
 
-本公开仓库是 [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub)，当前文档对应 v2.0.0，module path 为 `github.com/SamuelSupe/mcphub/v2`。项目采用 [Apache License 2.0](LICENSE)；已发布范围见 [v2.0.0 发行说明](RELEASE_NOTES_v2.0.0.md)。更早版本仍作为历史参考保留。
+本公开仓库是 [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub)，当前文档对应 v2.2.0，module path 为 `github.com/SamuelSupe/mcphub/v2`。项目采用 [Apache License 2.0](LICENSE)；已发布范围见 [v2.2.0 发行说明](RELEASE_NOTES_v2.2.0.md)。更早版本仍作为历史参考保留。
 
 ### 开始前
 
 1. 阅读[中文 README](README.zh-CN.md)和[英文 README](README.md)，尤其是配置、安全和已知限制部分。
 2. 漏洞或疑似 secret 泄露不要提交公开 Issue，请遵循 [SECURITY.md](SECURITY.md) 的私下报告流程。
-3. 提议新功能前先检查明确排除项。本版本不提供 stdio 后端接入、独立旧 SSE 端点、原生 TLS、动态租户或按用户后端凭证、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本版本包含本地或 OIDC 远程管理、单实例的加密 SQLite/PostgreSQL 配置存储、可选 endpoint 限流，以及独立的本地 stdio 到 HTTP 连接器，参见 README 的管理 UI 和浏览器登录章节。
+3. 提议新功能前先检查明确排除项。本版本不提供 stdio 后端接入、独立旧 SSE 端点、原生 TLS、动态租户、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本版本包含本地或 OIDC 远程管理、单实例的加密 SQLite/PostgreSQL 配置存储、可选 endpoint 限流、Vault 共享/个人账号，以及独立的本地 stdio 到 HTTP 连接器，参见 README 的管理 UI 和浏览器登录章节。
 
 ### 开发环境
 

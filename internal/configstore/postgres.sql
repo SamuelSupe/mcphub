@@ -146,3 +146,14 @@ CREATE INDEX IF NOT EXISTS sso_refresh_session ON sso_refresh(session_id);
 CREATE TABLE IF NOT EXISTS credential_bindings (id TEXT PRIMARY KEY, owner TEXT NOT NULL, revision BIGINT NOT NULL, data BYTEA NOT NULL);
 
 CREATE TABLE IF NOT EXISTS credential_cleanup (id TEXT PRIMARY KEY, due_at BIGINT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS request_records (
+ id BIGSERIAL PRIMARY KEY, request_id TEXT NOT NULL, completed_at BIGINT NOT NULL,
+ subject TEXT NOT NULL, client_id TEXT NOT NULL, endpoint TEXT NOT NULL, tool TEXT NOT NULL,
+ outcome TEXT NOT NULL, duration_ms BIGINT NOT NULL, approval_wait_ms BIGINT NOT NULL, data BYTEA NOT NULL
+);
+CREATE INDEX IF NOT EXISTS request_records_time ON request_records(completed_at);
+CREATE INDEX IF NOT EXISTS request_records_request ON request_records(request_id);
+CREATE INDEX IF NOT EXISTS request_records_subject ON request_records(subject, completed_at);
+CREATE INDEX IF NOT EXISTS request_records_client ON request_records(client_id, completed_at);
+CREATE INDEX IF NOT EXISTS request_records_endpoint ON request_records(endpoint, completed_at);

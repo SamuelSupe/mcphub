@@ -136,6 +136,7 @@ func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
 				}
 				return response
 			}
+			var callbackQuery url.Values
 			flow := func(want int) (string, string) {
 				t.Helper()
 				verifier := oauth2.GenerateVerifier()
@@ -159,6 +160,7 @@ func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
 					return "", verifier
 				}
 				target, _ := url.Parse(response.Header.Get("Location"))
+				callbackQuery = target.Query()
 				if target.Query().Get("state") != "cli-state" || target.Query().Get("iss") != cfg.Auth.Issuer {
 					t.Fatal("downstream state or issuer missing")
 				}
@@ -186,7 +188,10 @@ func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
 			if _, err = authn.LoginMetadata(ctx, cfg.Auth.Issuer, &browser, true); err != nil {
 				t.Fatal("public client discovery", err)
 			}
-			flow(403)
+			pendingCode, _ := flow(303)
+			if pendingCode != "" || callbackQuery.Get("error") != "access_denied" || callbackQuery.Get("error_description") != "account_access_required" {
+				t.Fatal("pending account did not notify the validated client callback", callbackQuery)
+			}
 			identities, err := store.Identities(ctx)
 			if err != nil {
 				t.Fatal(err)

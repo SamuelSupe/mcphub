@@ -1,8 +1,10 @@
 # 远程管理与数据库部署
 
-本目录对应 MCPHub v2.1.0 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
+本目录对应 MCPHub v2.2.0 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
 
-v2.1.0 新增 Vault 共享与个人上游账号，SQLite / PostgreSQL 升级到 schema 8。部署仍限单实例；替换旧版前请按[升级与回滚流程](../RELEASE_NOTES_v2.1.0.md)备份并检查兼容性。参见 [Vault 配置](../docs/vault-accounts.zh-CN.md)、[SSO 部署与组织同步](../docs/sso-and-user-management.zh-CN.md)，以及[企业接入架构与最佳实践](../docs/feishu-vault-agent-architecture.zh-CN.md)和 [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf)。
+v2.2.0 新增持久化请求历史、管理员保护和登录恢复提示，SQLite / PostgreSQL 升级到 schema 9。部署仍限单实例；替换旧版前请按[升级与回滚流程](../RELEASE_NOTES_v2.2.0.md)备份并检查兼容性。Vault 共享与个人上游账号继续可用。参见 [Vault 配置](../docs/vault-accounts.zh-CN.md)、[SSO 部署与组织同步](../docs/sso-and-user-management.zh-CN.md)，以及[企业接入架构与最佳实践](../docs/feishu-vault-agent-architecture.zh-CN.md)和 [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf)。
+
+已完成的 MCP POST 请求默认保留 30 天；可将 `admin.request_retention` 设置为 `24h`–`8760h`。管理员请求诊断页支持时间筛选和 NDJSON 导出，详见[请求历史与隐私边界](../README.zh-CN.md#接入向导与授权运维)。请保护数据库备份和导出文件：记录不含参数、结果和 Token，但查询索引仍含可读的身份与路由元数据。
 
 | 方式 | 用途 | 配置 |
 | --- | --- | --- |
@@ -43,7 +45,7 @@ mcphub validate --config deploy/config.remote-sqlite.yaml
 mcphub serve --config deploy/config.remote-sqlite.yaml
 ```
 
-相对数据库路径以 YAML 所在目录为准。保留原来的 `admin.database_path` 和密钥即可继续使用现有 SQLite 数据，`serve` 会执行所需 schema 迁移；旧二进制不能写入 schema 8 数据库。要沿用本地管理模式，保留 `mode: local`（默认值）；该模式无登录，仍只允许数字回环地址，禁止通过代理对外暴露。
+相对数据库路径以 YAML 所在目录为准。保留原来的 `admin.database_path` 和密钥即可继续使用现有 SQLite 数据，`serve` 会执行所需 schema 迁移；旧二进制不能写入 schema 9 数据库。要沿用本地管理模式，保留 `mode: local`（默认值）；该模式无登录，仍只允许数字回环地址，禁止通过代理对外暴露。
 
 外部 PostgreSQL：
 

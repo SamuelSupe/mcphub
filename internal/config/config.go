@@ -82,6 +82,7 @@ type AuthConfig struct {
 }
 
 type AdminConfig struct {
+	RequestRetention Duration         `yaml:"request_retention"`
 	Approvals        ApprovalSettings `yaml:"approvals"`
 	Enabled          bool             `yaml:"enabled"`
 	Mode             string           `yaml:"mode"`
@@ -493,6 +494,9 @@ func validateAdmin(admin AdminConfig) error {
 	if !admin.Enabled {
 		return nil
 	}
+	if admin.RequestRetentionDuration() < 24*time.Hour || admin.RequestRetentionDuration() > 365*24*time.Hour {
+		return fmt.Errorf("admin.request_retention must be between 24h and 8760h")
+	}
 	if err := admin.Approvals.Validate(); err != nil {
 		return err
 	}
@@ -562,6 +566,13 @@ func validateAdmin(admin AdminConfig) error {
 }
 
 func (admin AdminConfig) Remote() bool { return admin.Mode == "remote" }
+
+func (admin AdminConfig) RequestRetentionDuration() time.Duration {
+	if admin.RequestRetention.Duration == 0 {
+		return 30 * 24 * time.Hour
+	}
+	return admin.RequestRetention.Duration
+}
 
 func (admin AdminConfig) Driver() string {
 	if admin.DatabaseDriver == "" {

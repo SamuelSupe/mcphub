@@ -72,10 +72,10 @@ type Recorder struct {
 	next    uint64
 }
 
-func (r *Recorder) Finish(ctx context.Context, status int) {
+func (r *Recorder) Finish(ctx context.Context, status int) (Record, bool) {
 	s, ok := ctx.Value(stateKey{}).(*state)
 	if !ok {
-		return
+		return Record{}, false
 	}
 	s.mu.Lock()
 	value := s.record
@@ -111,10 +111,12 @@ func (r *Recorder) Finish(ctx context.Context, status int) {
 	r.next++
 	value.Sequence = r.next
 	r.records[(r.next-1)%Capacity] = value
+	return value, true
 }
 
 type Query struct {
 	RequestID, Subject, ClientID, Endpoint, Tool, Outcome string
+	Since, Until                                          time.Time
 	Before                                                uint64
 	Limit                                                 int
 }
@@ -129,18 +131,22 @@ type Statistics struct {
 }
 
 type Page struct {
-	Records     []Record   `json:"requests"`
-	NextCursor  uint64     `json:"next_cursor"`
-	Statistics  Statistics `json:"statistics"`
-	WindowStart time.Time  `json:"window_start"`
-	Capacity    int        `json:"capacity"`
+	Persisted       bool       `json:"persisted"`
+	StorageFailures uint64     `json:"storage_failures"`
+	RetentionDays   int        `json:"retention_days"`
+	WindowEnd       time.Time  `json:"window_end"`
+	Records         []Record   `json:"requests"`
+	NextCursor      uint64     `json:"next_cursor"`
+	Statistics      Statistics `json:"statistics"`
+	WindowStart     time.Time  `json:"window_start"`
+	Capacity        int        `json:"capacity"`
 }
 
 func (r *Recorder) Query(q Query) Page {
 	if q.Limit < 1 || q.Limit > 100 {
 		q.Limit = 25
 	}
-	page := Page{Records: []Record{}, Statistics: Statistics{Outcomes: map[string]int{}}, WindowStart: time.Now().Add(-Retention), Capacity: Capacity}
+	page := Page{Records: []Record{}, Statistics: Statistics{Outcomes: map[string]int{}}, WindowStart: time.Now().Add(-Retention), WindowEnd: time.Now(), Capacity: Capacity}
 	r.mu.Lock()
 	values := make([]Record, 0, min(r.next, Capacity))
 	for i, record := range r.records {
@@ -154,6 +160,9 @@ func (r *Recorder) Query(q Query) Page {
 	slices.SortFunc(values, func(a, b Record) int { return cmp.Compare(b.Sequence, a.Sequence) })
 	var durations []int64
 	for _, v := range values {
+		if (!q.Since.IsZero() && v.CompletedAt.Before(q.Since)) || (!q.Until.IsZero() && v.CompletedAt.After(q.Until)) {
+			continue
+		}
 		if (q.RequestID != "" && q.RequestID != v.RequestID) || (q.Subject != "" && q.Subject != v.Subject) || (q.ClientID != "" && q.ClientID != v.ClientID) || (q.Endpoint != "" && q.Endpoint != v.Endpoint) || (q.Tool != "" && q.Tool != v.Tool) || (q.Outcome != "" && q.Outcome != v.Outcome) {
 			continue
 		}

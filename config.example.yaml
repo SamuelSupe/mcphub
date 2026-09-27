@@ -42,6 +42,7 @@ admin:
   database_driver: sqlite
   database_path: ./data/mcphub.db
   encryption_key_env: MCPHUB_CONFIG_KEY
+  request_retention: 720h # Completed MCP request history; 24h–8760h, default 30 days.
   # Remote browser reviewers have a separate role from configuration admins.
   # approvals:
   #   required_scopes: [mcphub:approve]

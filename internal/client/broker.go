@@ -380,7 +380,7 @@ func watchClientGrant(ctx context.Context, cancel context.CancelFunc, store *Sto
 		}
 		if err == nil {
 			var snapshot grantSnapshot
-			snapshot, etag, err = a.current(ctx, bound.Credential, etag)
+			snapshot, etag, err = a.current(ctx, bound.Credential, etag, false)
 			if err == nil && snapshot.Grant.GrantID != "" && slices.ContainsFunc(bound.Grant.AllowedScopes, func(scope string) bool { return !slices.Contains(snapshot.EffectiveScopes, scope) }) {
 				cancel()
 				return

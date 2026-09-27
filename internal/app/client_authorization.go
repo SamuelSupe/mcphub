@@ -50,6 +50,10 @@ func (a *App) serveClientAuthorization(w http.ResponseWriter, req *http.Request,
 		if strings.HasPrefix(path, "/auth/") {
 			copy := req.Clone(req.Context())
 			copy.URL.Path = path
+			if path == "/auth/login" && req.Method == http.MethodGet {
+				a.userAuth.login(w, copy, rt.allScopes())
+				return
+			}
 			if path == "/auth/session" && req.Method == http.MethodGet {
 				a.userAuth.serveSession(w, req)
 				return
@@ -124,7 +128,11 @@ func (a *App) clientAuthorizationRoute(w http.ResponseWriter, req *http.Request,
 		value := struct {
 			Grant           configstore.ClientGrant `json:"grant"`
 			EffectiveScopes []string                `json:"effective_scopes"`
-		}{g, g.EffectiveScopes(info.Scopes)}
+			AccountStatus   string                  `json:"account_status,omitempty"`
+		}{Grant: g, EffectiveScopes: g.EffectiveScopes(info.Scopes)}
+		if req.URL.Query().Get("check_account") == "true" {
+			value.AccountStatus = a.personalAccountStatus(req.Context(), rt, g.EndpointID, issuer, info.UserID)
+		}
 		data, _ := json.Marshal(value)
 		etag := `"` + configstore.SecretHash(string(data)) + `"`
 		w.Header().Set("ETag", etag)

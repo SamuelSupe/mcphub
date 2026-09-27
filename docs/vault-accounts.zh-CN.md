@@ -1,6 +1,6 @@
 # Vault 与个人上游账号
 
-MCPHub v2.1.0 起提供此能力。支持 HashiCorp Vault KV v2、SQLite 和单实例 PostgreSQL；首次启动迁移到 schema 8，升级前同时备份数据库、加密密钥和 Vault 数据。
+MCPHub v2.1.0 起提供此能力。支持 HashiCorp Vault KV v2、SQLite 和单实例 PostgreSQL；v2.2.0 启动迁移到 schema 9（v2.1.0 为 schema 8），升级前同时备份数据库、加密密钥和 Vault 数据。
 
 ## 用户如何使用
 

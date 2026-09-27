@@ -167,7 +167,7 @@ func (a *App) serveAdminApprovals(w http.ResponseWriter, req *http.Request, suff
 				req = req.Clone(req.Context())
 				req.URL = &copyURL
 			}
-			target, err := a.adminAuth.startLogin(w, req, id, identity.session)
+			target, err := a.adminAuth.startLogin(w, req, id, identity.session, a.adminAuth.cfg.RequiredScopes)
 			if err != nil {
 				writeAPIError(w, 503, "verification_unavailable", "身份验证不可用，请检查 OIDC 和认证强度配置", "")
 				return

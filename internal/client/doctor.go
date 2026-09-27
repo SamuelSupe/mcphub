@@ -119,7 +119,7 @@ func Doctor(ctx context.Context, store *Store, name string, opts DoctorOptions) 
 		a, authErr := newAuthorizationClient(ctx, store, name, opts.HTTPClient)
 		var snapshot grantSnapshot
 		if authErr == nil {
-			snapshot, _, authErr = a.current(ctx, bound.Credential, "")
+			snapshot, _, authErr = a.current(ctx, bound.Credential, "", true)
 		}
 		if authErr != nil {
 			add("client_grant", "fail", publicError(authErr).Error(), fmt.Sprintf("Check connectivity, then mcphub-cli client authorize --profile %s --client %s if authorization has ended.", name, opts.ClientID))
@@ -127,6 +127,22 @@ func Doctor(ctx context.Context, store *Store, name string, opts DoctorOptions) 
 		}
 		r.EffectiveScopes = snapshot.EffectiveScopes
 		add("client_grant", "pass", "The server verified the client authorization and current policy.", "")
+		switch snapshot.AccountStatus {
+		case "not_required":
+		case "connected":
+			add("personal_account", "pass", "The personal account is connected and its stored credentials are available. No upstream operation was executed.", "")
+		case "":
+			add("personal_account", "warn", "This server does not report personal account readiness.", "Check connected accounts at "+a.discovery.PortalURL)
+		case "not_connected":
+			add("personal_account", "fail", "Connect your personal account before calling this endpoint.", a.discovery.PortalURL+"#accounts")
+		case "expired", "reconnect_required":
+			add("personal_account", "fail", "The personal account needs to be reconnected.", a.discovery.PortalURL+"#accounts")
+		default:
+			add("personal_account", "fail", "Personal credentials could not be verified; the credential service may be unavailable.", "Retry later or ask the administrator to check the credential service.")
+		}
+		if !r.Healthy {
+			return r
+		}
 		if slices.ContainsFunc(bound.Grant.AllowedScopes, func(scope string) bool { return !slices.Contains(snapshot.EffectiveScopes, scope) }) {
 			add("effective_scopes", "fail", "The current token no longer covers all scopes in this client authorization.", "Log in with the required scopes or explicitly authorize a narrower client entry, then restart the MCP connection.")
 			return r

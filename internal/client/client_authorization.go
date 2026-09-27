@@ -141,10 +141,15 @@ func (a *authorizationClient) request(ctx context.Context, method, target, grant
 type grantSnapshot struct {
 	Grant           configstore.ClientGrant `json:"grant"`
 	EffectiveScopes []string                `json:"effective_scopes"`
+	AccountStatus   string                  `json:"account_status,omitempty"`
 }
 
-func (a *authorizationClient) current(ctx context.Context, secret, etag string) (grantSnapshot, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.discovery.GrantsURL+"/current", nil)
+func (a *authorizationClient) current(ctx context.Context, secret, etag string, checkAccount bool) (grantSnapshot, string, error) {
+	target := a.discovery.GrantsURL + "/current"
+	if checkAccount {
+		target += "?check_account=true"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return grantSnapshot{}, "", err
 	}
@@ -420,7 +425,7 @@ func ListClients(ctx context.Context, store *Store, name string, base *http.Clie
 			if err := a.request(ctx, http.MethodGet, a.discovery.RequestsURL+"/"+c.Grant.GrantID, "", nil, &value.ClientGrant); err != nil {
 				onlineErr = err
 			} else {
-				snapshot, _, err := a.current(ctx, c.Credential, "")
+				snapshot, _, err := a.current(ctx, c.Credential, "", false)
 				var denied *permissionError
 				if errors.As(err, &denied) {
 					value.AuthorizationError = denied.code

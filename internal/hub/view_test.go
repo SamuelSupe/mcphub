@@ -2,11 +2,16 @@ package hub
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/backend"
@@ -132,6 +137,70 @@ func TestToolDefinitionsCacheTracksCatalogGeneration(t *testing.T) {
 
 type countingSchema struct {
 	calls *int
+}
+
+func TestViewCacheRetainsActiveRequestsAndSessions(t *testing.T) {
+	cfg := &config.Config{Server: config.ServerConfig{PageSize: 10, RequestTimeout: config.Duration{Duration: 5 * time.Second}}}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := New(cfg, backend.NewManager(cfg, logger, nil, nil), logger)
+	t.Cleanup(h.Close)
+	verify := func(_ context.Context, raw string, _ *http.Request) (*mcpauth.TokenInfo, error) {
+		return &mcpauth.TokenInfo{Scopes: []string{raw}, Expiration: time.Now().Add(time.Hour)}, nil
+	}
+	var leases []*view
+	acquire := mcpauth.RequireBearerToken(verify, nil)(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+		v := h.acquireView(req)
+		if v == nil {
+			t.Fatal("view rejected before reaching capacity")
+		}
+		leases = append(leases, v)
+	}))
+	for i := range maxCachedViews {
+		req := httptest.NewRequest("POST", "https://hub.example/mcp", nil)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer scope-%d", i))
+		acquire.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	t.Cleanup(func() {
+		for _, v := range leases[1:] {
+			h.releaseView(v)
+		}
+	})
+	handler := mcpauth.RequireBearerToken(verify, nil)(h.StreamableHTTPHandler(&mcp.StreamableHTTPOptions{Stateless: true}))
+	initialize := func(want int) {
+		t.Helper()
+		req := httptest.NewRequest("POST", "https://hub.example/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"visitor","version":"1"}}}`))
+		req.Header.Set("Authorization", "Bearer new-scope")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		if response.Code != want {
+			t.Fatalf("view admission: HTTP %d, want %d: %s", response.Code, want, response.Body.String())
+		}
+		if want == http.StatusServiceUnavailable && response.Header().Get("Retry-After") == "" {
+			t.Fatal("capacity rejection omitted retry guidance")
+		}
+	}
+	initialize(http.StatusServiceUnavailable)
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server, err := leases[0].server.Connect(t.Context(), serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	client, err := mcp.NewClient(&mcp.Implementation{Name: "active", Version: "1"}, nil).Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	h.releaseView(leases[0])
+	initialize(http.StatusServiceUnavailable)
+	if err := client.Ping(t.Context(), nil); err != nil {
+		t.Fatalf("cache pressure closed an active session: %v", err)
+	}
+	client.Close()
+	server.Close()
+	initialize(http.StatusOK)
 }
 
 func (schema countingSchema) MarshalJSON() ([]byte, error) {

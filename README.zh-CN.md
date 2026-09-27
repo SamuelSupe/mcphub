@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.1.0)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,9 +9,19 @@
 
 MCPHub 是一个面向远端 MCP Server 的聚合网关。它用一个 Streamable HTTP 入口连接多个后端，按 JWT 权限为每个请求生成可见的后端视图，并把工具、提示、资源和资源模板路由回正确的后端。
 
-MCPHub v2.1.0 新增 Vault 共享/个人上游账号、OIDC 凭证刷新，以及账号更换和断开时的授权撤销联动。工具显式发布、单次写审批、客户端授权、本地 Broker 与企业 SSO 继续由 MCPHub 集中控制。新版中英文控制台按服务接入、访问控制和治理审计组织功能。网关保持单实例部署，支持 SQLite 或 PostgreSQL；用户电脑单独安装 `mcphub-cli`。
+MCPHub v2.2.0 新增持久化请求历史，完善管理员恢复、SSO 登录和个人账号诊断。工具显式发布、单次写审批、客户端授权、本地 Broker、企业 SSO 与 Vault 上游账号继续由 MCPHub 集中控制。网关保持单实例部署，支持 SQLite 或 PostgreSQL；用户电脑单独安装 `mcphub-cli`。
 
-**从 v1.x 升级：** 后端工具现在默认不发布，写工具和未分类工具需经审批。数据库迁移前，请备份数据库与匹配的加密密钥，逐项审核发布范围及读写策略，并遵循[升级与回滚流程](RELEASE_NOTES_v2.1.0.md#upgrade-and-rollback--升级与回滚)。Go 安装路径新增 `/v2`。
+**v2.2.0 更新：**
+
+- 请求历史重启后保留，默认保存 30 天，可配置保留期、按时间筛选并导出 NDJSON。
+- 权限编辑不能移除最后一位有效 SSO 管理员，检查组继承与并发修改。
+- 失效授权链接不影响查看已有客户端授权；待授权 SSO 用户能立即收到明确提示。
+- `setup`、`doctor --client` 和管理员权限检查识别缺失或不可用的个人上游账号，不执行工具。
+- 后端更新保持授权服务及 endpoint 身份一致，MCP 视图缓存限制容量并保留活跃会话。
+
+**从 v2.1.0 升级：** 托管 SQLite / PostgreSQL 从 schema 8 迁移到 **schema 9**。启动新版前请备份数据库和匹配的加密密钥，回滚须恢复升级前数据库。详见[发行与升级说明](RELEASE_NOTES_v2.2.0.md#upgrade-and-rollback--升级与回滚)。
+
+**从 v1.x 升级：** 后端工具现在默认不发布，写工具和未分类工具需经审批。数据库迁移前，请备份数据库与匹配的加密密钥，逐项审核发布范围及读写策略，并遵循[升级与回滚流程](RELEASE_NOTES_v2.2.0.md#upgrade-and-rollback--升级与回滚)。Go 安装路径新增 `/v2`。
 
 ## 界面预览
 
@@ -52,13 +62,13 @@ MCPHub v2.1.0 新增 Vault 共享/个人上游账号、OIDC 凭证刷新，以�
 
 支持通用 OIDC / OAuth2 机密客户端身份桥接，向 `mcphub-cli` 签发 MCPHub 自己的凭证；无需把企业应用密钥放到用户电脑。管理员在「用户与组织」管理用户启停、管理员/审批员角色、Scope、endpoint、精确工具和业务资源范围。首次登录默认待授权，写权限仍受逐次审批保护。
 
-部门和用户组支持登录声明同步或独立鉴权的目录快照推送；同步只影响身份和成员关系，不能授予本地权限。SQLite / 单实例 PostgreSQL 在 v2.1.0 中自动迁移到 schema 8。详见[配置、同步契约和安全边界](docs/sso-and-user-management.zh-CN.md)。本次不连接飞书租户，也不包含飞书通讯录适配器或 SCIM；接口已支持企业 OAuth2 响应字段映射和租户限制。
+部门和用户组支持登录声明同步或独立鉴权的目录快照推送；同步只影响身份和成员关系，不能授予本地权限。SQLite / 单实例 PostgreSQL 在 v2.2.0 中自动迁移到 schema 9。详见[配置、同步契约和安全边界](docs/sso-and-user-management.zh-CN.md)。本次不连接飞书租户，也不包含飞书通讯录适配器或 SCIM；接口已支持企业 OAuth2 响应字段映射和租户限制。
 
 ## Vault 与个人账号
 
 管理员在 MCP 后端选择「Vault → 共享服务账号 / 每个用户自己的账号」；用户在个人门户点击「连接账号」，原有 MCP 客户端配置无需更改。上游 Token 保存在 Vault，支持 OIDC 自动刷新、账号隔离，以及更换/断开账号时使旧客户端授权失效；写操作仍需审批。
 
-此能力从 v2.1.0 起提供。SQLite / 单实例 PostgreSQL 迁移至 **schema 8**（v2.0.0 为 schema 7）。详见[配置、使用流程和安全边界](docs/vault-accounts.zh-CN.md)。
+此能力从 v2.1.0 起提供。v2.2.0 的 SQLite / 单实例 PostgreSQL 使用 **schema 9**（v2.1.0 为 schema 8）。详见[配置、使用流程和安全边界](docs/vault-accounts.zh-CN.md)。
 
 ## 架构
 
@@ -89,9 +99,9 @@ flowchart LR
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [Apache License 2.0](LICENSE)（Copyright 2026 SamuelSupe）
-- [v2.1.0 发行说明](RELEASE_NOTES_v2.1.0.md)、[v2.0.0 历史发行说明](RELEASE_NOTES_v2.0.0.md)、[v1.4.0 历史发行说明](RELEASE_NOTES_v1.4.0.md)、[v2.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.1.0)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
+- [v2.2.0 发行说明](RELEASE_NOTES_v2.2.0.md)、[v2.1.0 历史发行说明](RELEASE_NOTES_v2.1.0.md)、[v2.0.0 历史发行说明](RELEASE_NOTES_v2.0.0.md)、[v1.4.0 历史发行说明](RELEASE_NOTES_v1.4.0.md)、[v2.2.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0)和 [全部 GitHub Releases](https://github.com/SamuelSupe/mcphub/releases)
 
-MCPHub v2.1.0 是当前最新版本；v2.0.0 及更早版本仍作为历史版本保留。
+MCPHub v2.2.0 是当前最新版本；v2.1.0 及更早版本仍作为历史版本保留。
 
 ## 能力与边界
 
@@ -115,11 +125,11 @@ MCPHub v2.1.0 是当前最新版本；v2.0.0 及更早版本仍作为历史版�
 
 ## 快速开始
 
-要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装 v2.1.0 服务端和可选 CLI：
+要求 Go 1.26（`go.mod` 声明 `go 1.26.0`）。使用 Go 安装 v2.2.0 服务端和可选 CLI：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.1.0
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.1.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.2.0
 ```
 
 如果从源码构建，请先复制示例并设置其中的环境变量：
@@ -198,7 +208,7 @@ stdio 仅用于**本地连接器**，MCPHub 服务端和后端连接仍使用 HT
 
 ### 客户端授权与内置 Broker
 
-启用 `client_authorization.enabled`、配置用户门户 `client_id`，并启用托管数据库。支持 SQLite 和 **单实例 MCPHub + PostgreSQL**，升级到 schema 8 前请备份数据库与加密密钥。
+启用 `client_authorization.enabled`、配置用户门户 `client_id`，并启用托管数据库。支持 SQLite 和 **单实例 MCPHub + PostgreSQL**，升级到 v2.2.0 / schema 9 前请备份数据库与加密密钥（v2.1.0 为 schema 8）。
 
 在身份服务注册门户回调 `https://hub.example.com/client-auth/auth/callback`。门户位于 MCP 服务的域名下，与管理端口分开。CLI 与门户必须取得 audience 为完整 MCP resource URL、`issuer + sub` 一致的 JWT access token。若身份服务对不同客户端返回不同的 pairwise subject，应先调整身份服务的主体策略；不会通过 email 拼接身份。门户可选的 client secret 通过服务端 `client_secret_env` 配置。
 
@@ -263,7 +273,7 @@ mcphub-cli doctor --profile work --client ci_example --json --timeout 30s
 
 ### 接入向导与授权运维
 
-安装 v2.1.0 CLI 后，在用户电脑执行：
+安装 v2.2.0 CLI 后，在用户电脑执行：
 
 ```bash
 mcphub-cli setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work > mcphub-mcp.json
@@ -279,7 +289,13 @@ mcphub-cli setup --profile work > mcphub-mcp.json
 
 管理 UI 新增**客户端授权**和**请求诊断**。配置管理员可按精确用户 Subject、客户端 ID、endpoint 和状态查询并翻页，查看 Scope、工具、资源范围和协议能力，带入权限检查或撤销授权。授权 Scope 只是批准上限，不代表用户当前 Token 的实际权限。撤销立即阻止后续接纳并取消活动流，无法回滚上游副作用。个人门户仍只能访问登录用户自己的授权。
 
-请求诊断在进程内存中保留最多 2,000 条已完成的 MCP POST，请求窗口为最近 30 分钟，重启清空。仅记录请求 ID、已验证身份、已知目标名称、耗时和固定结果／原因代码，不记录参数、结果、Token 或原始错误正文。成功、工具错误、协议错误、等待审批、授权拒绝和限流分别统计。统计覆盖整个筛选窗口，包含 P95 耗时及已恢复操作从申请创建到恢复执行的平均审批等待时间。进行中的请求、GET 流和长期审计归档不属于此视图；点击刷新更新快照，长期记录使用审批与审计功能。
+请求诊断将已完成的 MCP POST 保存到托管 SQLite／PostgreSQL，重启后保留。`admin.request_retention` 默认 `720h`（30 天），可设为 `24h`–`8760h`；到期记录自动清理。默认查询最近 24 小时，支持完成时间筛选、分页和 NDJSON 导出。仅记录请求 ID、已验证身份、已知目标、耗时和固定结果／原因代码，不记录参数、结果、Token 或原始错误正文。详细记录加密保存，查询索引保留身份与路由等元数据，应保护数据库和导出文件。统计覆盖整个筛选窗口，包括 P95 和已恢复操作的平均审批等待时间。
+
+请求记录在处理完成后写入；写入失败不会重放或改变业务操作，服务器记录错误，页面提示本次运行的记录缺口。进程在写入前崩溃、进行中的请求和 GET 流不在此记录中；它不能替代审批审计的独立归档。未启用托管数据库的部署只保留原有短期内存诊断。
+
+`GET /api/v1/requests` 新增 `since`、`until`（RFC3339，按完成时间筛选），实际窗口在 `window_start`／`window_end` 中返回。`format=ndjson` 导出最多 10,000 条，仍受管理员鉴权和相同筛选限制；响应头 `X-MCPHub-Next-Cursor` 非零时可作为 `cursor` 继续导出，或在 UI 缩小时间范围。新增历史记录表使 v2.2.0 升级到 **schema 9**（v2.1.0 为 schema 8）；升级前备份数据库与匹配密钥，旧版本回滚需恢复升级前备份。
+
+`doctor --client ci_...` 和接入向导还会检查个人上游账号：未连接、过期、需重连或凭证服务不可用时诊断失败，并给出下一步；这项只读检查不刷新上游凭证、不执行工具，也不能保证上游业务权限。旧服务未提供账号状态时会明确警告。管理端权限检查也会展示个人账号的阻断原因。
 
 以下 API 仅位于**管理监听器**，个人门户不开放跨用户查询：
 
@@ -288,30 +304,30 @@ mcphub-cli admin --profile ops get '/client-grants?subject=alice&status=active&l
 mcphub-cli admin --profile ops get '/requests?endpoint=database-prod&outcome=scope_denied&limit=25'
 ```
 
-两者都返回 `next_cursor`，保持筛选条件并作为 `cursor` 传回。授权还可筛选 `client`、`endpoint`；诊断还可筛选 `request_id`、`subject`、`client` 和原始 `tool`。`limit` 范围为 1–100。撤销接口为 `POST /api/v1/client-grants/{grant_id}/revoke`，正文 `{"subject":"alice"}`。向导与诊断页面本身不增加迁移；SSO 与用户目录最初使用 schema 7，v2.1.0 的凭证存储升级到 schema 8；详见[v2.1.0 变更和升级流程](RELEASE_NOTES_v2.1.0.md)。
+两者都返回 `next_cursor`，保持筛选条件并作为 `cursor` 传回；请求历史翻页时同时保持返回的时间窗口。授权还可筛选 `client`、`endpoint`；诊断还可筛选 `request_id`、`subject`、`client` 和原始 `tool`。普通分页 `limit` 范围为 1–100。撤销接口为 `POST /api/v1/client-grants/{grant_id}/revoke`，正文 `{"subject":"alice"}`。schema 9 的迁移步骤见 [v2.2.0 变更和升级流程](RELEASE_NOTES_v2.2.0.md)。
 
-### v2.1.0 预构建下载
+### v2.2.0 预构建下载
 
-[v2.1.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.1.0) 在发布构建成功后分别提供服务端和客户端归档，并单独提供架构 PDF 下载。运行网关的机器安装 `mcphub`，用户电脑安装 `mcphub-cli`。
+[v2.2.0 GitHub release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0) 在发布构建成功后分别提供服务端和客户端归档，并单独提供架构 PDF 下载。运行网关的机器安装 `mcphub`，用户电脑安装 `mcphub-cli`。
 
 | 平台 | 服务端 | 登录 CLI 与本地连接器 |
 | --- | --- | --- |
-| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub_v2.1.0_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub_v2.1.0_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub_v2.1.0_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub_v2.1.0_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_linux_arm64.tar.gz) |
-| Windows x64 | — | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_windows_amd64.zip) |
-| Windows ARM64 | — | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/mcphub-cli_v2.1.0_windows_arm64.zip) |
+| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_darwin_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_darwin_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_linux_amd64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_linux_arm64.tar.gz) | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_linux_arm64.tar.gz) |
+| Windows x64 | — | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_windows_amd64.zip) |
+| Windows ARM64 | — | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_windows_arm64.zip) |
 
-下载后先与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.1.0/SHA256SUMS) 中对应条目核对 SHA-256，再解压并将可执行文件放入 PATH。所有归档包含许可证、中英文 README、安全策略、发行说明和 `docs/` 指南；服务端归档另附 `config.example.yaml` 与 `deploy/` 中的指南、配置和代理示例。Compose 示例从源码构建，使用该方式时请检出 v2.1.0 tag。
+下载后先与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS) 中对应条目核对 SHA-256，再解压并将可执行文件放入 PATH。所有归档包含许可证、中英文 README、安全策略、发行说明和 `docs/` 指南；服务端归档另附 `config.example.yaml` 与 `deploy/` 中的指南、配置和代理示例。Compose 示例从源码构建，使用该方式时请检出 v2.2.0 tag。
 
 ### Windows CLI 快速开始
 
 Intel/AMD 电脑选择 x64 ZIP，Windows on Arm 电脑选择 ARM64 ZIP。CLI 遵循 [Go 的 Windows 运行要求](https://go.dev/wiki/MinimumRequirements#windows)（Windows 10 及以上）；服务端下载仍提供 macOS/Linux。与 `SHA256SUMS` 核对归档哈希后，在 PowerShell 中解压并运行：
 
 ```powershell
-Get-FileHash .\mcphub-cli_v2.1.0_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcphub-cli_v2.1.0_windows_amd64.zip -DestinationPath .\mcphub-cli
+Get-FileHash .\mcphub-cli_v2.2.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcphub-cli_v2.2.0_windows_amd64.zip -DestinationPath .\mcphub-cli
 .\mcphub-cli\mcphub-cli.exe login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
 .\mcphub-cli\mcphub-cli.exe status --profile work
 ```
@@ -329,7 +345,7 @@ Expand-Archive .\mcphub-cli_v2.1.0_windows_amd64.zip -DestinationPath .\mcphub-c
 }
 ```
 
-基础 login/connect 仍可连接 v1.x 网关；客户端授权、Broker 接入向导与 SSO 权限管理需要 v2.0.0 或更新网关；Vault 账号需要 v2.1.0。
+基础 login/connect 仍可连接 v1.x 网关；客户端授权、Broker 接入向导与 SSO 权限管理需要 v2.0.0 或更新网关；Vault 账号需要 v2.1.0 或更新网关。持久化请求历史和个人账号诊断需要 v2.2.0。
 
 ## 本地管理 UI
 
@@ -371,7 +387,7 @@ backends: []
 
 多个 MCP endpoint 可复用相同的所需 Scope。未启用 SSO 桥接时，由外部身份服务签发对应 Scope；启用 `auth.sso` 后，可在用户与组织中维护用户和部门/用户组的本地授权，成员关系由已验证的登录声明或目录快照同步。HTTP 工具组用于同一 REST API 内共享连接与权限，不用于组合多个 MCP 后端。工具发布、Scope、业务资源、客户端授权和写审批共同约束调用。
 
-语言控件可切换中文与 English。窄屏使用抽屉导航，支持键盘与 Escape 关闭。刷新会重新读取当前配置并显示最近成功更新时间；失败时保留错误提示与重试入口。概览数据来自实际配置和连接状态；请求诊断仅覆盖内存中的最近窗口，不代表完整监控或长期审计。
+语言控件可切换中文与 English。窄屏使用抽屉导航，支持键盘与 Escape 关闭。刷新会重新读取当前配置并显示最近成功更新时间；失败时保留错误提示与重试入口。概览数据来自实际配置和连接状态；请求历史按数据库保留期查询，不代表完整监控或不可篡改的审计归档。
 
 ## 远程管理员与 PostgreSQL
 
@@ -463,9 +479,9 @@ JSON API 位于 `/api/v1`。单项 backend 响应携带 `ETag`；更新和删除
 
 工具组 Base URL 和 OpenAPI source URL 必须使用 HTTPS；工具组 HTTP 请求和 source 抓取都不跟随重定向。若 source 与工具组是不同 origin，抓取时绝不会发送该组的静态 Header 或 OAuth secret。OpenAPI 文档上限为 5 MiB，携带文档的请求 body 上限为 6 MiB，HTTP tool 响应默认上限为 1 MiB；响应上限可配置为 64 KiB 至 16 MiB。URL-backed import 默认每 15 分钟自动刷新（可设为 1 分钟至 24 小时）；刷新失败时保留 last-known-good 文档和 tools，并采用退避重试。
 
-#### v2.1.0 升级说明
+#### v2.2.0 升级说明
 
-替换 v2.0.0 或 v1.x 前，请先阅读[完整备份、升级与回滚流程](RELEASE_NOTES_v2.1.0.md#upgrade-and-rollback--升级与回滚)。`serve` 会将托管 SQLite/PostgreSQL 迁移到 schema 8，`validate` 只读。保留匹配的 `MCPHUB_CONFIG_KEY`；回滚必须同时恢复旧数据库、密钥/配置和二进制。
+从 v2.1.0 或更早版本升级前，请先阅读[完整备份、升级与回滚流程](RELEASE_NOTES_v2.2.0.md#upgrade-and-rollback--升级与回滚)。v2.2.0 的 `serve` 会将托管 SQLite/PostgreSQL 迁移到 schema 9（v2.1.0 为 schema 8），`validate` 只读。保留匹配的 `MCPHUB_CONFIG_KEY`；回滚必须同时恢复旧数据库、密钥/配置和二进制。
 
 逐项填写后端的 `published_tools`，并明确工具的读写分类。空发布名单不开放工具；写工具和未分类工具需要远程浏览器审批。本地免登录或仅 YAML 部署只能执行已发布且明确只读的工具。已有 HTTP 工具保留启停状态，新建手工工具默认停用。客户端授权与 SSO 按需启用，SSO 新用户默认待授权。
 
@@ -613,7 +629,7 @@ SQLite/PostgreSQL 原子消费批准，并发恢复不会执行两次；重复�
 
 每个 issuer/subject 最多 20 个活跃申请，执行请求最多 60 KiB，预览最多 32 KiB，含策略的完整审批记录最多 64 KiB，结果最多 16 MiB。请求、预览、结果、理由及核查详情加密保存；每分钟分批清理超过保留期的终态记录及详细审计，通用活动日志保留不含参数/理由的状态记录。配置变更前已接纳的操作仍可能完成。批准写入使用新的 HTTP/1 连接防止透明重试，上游须支持 HTTP/1.1；只读调用仍复用连接。
 
-v2.1.0 使用 **schema 8**（审批治理最初引入 schema 5），升级前备份数据库与加密密钥，旧二进制不能以写模式打开升级后的数据库。本地免登录模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
+v2.2.0 使用 **schema 9**（审批治理最初引入 schema 5），升级前备份数据库与加密密钥，旧二进制不能以写模式打开升级后的数据库。本地免登录模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
 
 
 #### 配置治理、双人审批与业务幂等

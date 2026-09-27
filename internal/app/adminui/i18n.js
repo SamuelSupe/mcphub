@@ -1,4 +1,21 @@
 const english = {
+  "账号待授权或已停用，请联系 MCPHub 管理员授权后重新登录。": "Account access is pending or disabled. Ask your MCPHub administrator for access, then sign in again.",
+  "个人账号已连接，保存的凭证可用": "Personal account connected; stored credentials are available",
+  "需要先在个人授权中心连接此服务账号": "Connect this service account in the personal authorization portal first",
+  "个人账号凭证已过期，需要重新连接": "Personal credentials expired; reconnect the account",
+  "个人账号需要重新连接": "Personal account needs reconnection",
+  "暂时无法验证个人凭证，请检查凭证服务": "Cannot verify personal credentials; check the credential service",
+  "检查个人账号需要填写用户 Subject": "Enter the user subject to check the personal account",
+  "已完成 MCP POST 请求保存到数据库，重启后保留。默认查询最近 24 小时，可按完成时间筛选并导出；不记录参数、结果或 Token。": "Completed MCP POST requests are stored in the database and survive restarts. The default window is 24 hours; filter and export by completion time. Arguments, results and tokens are excluded.",
+  "完成时间从": "Completed after",
+  "完成时间至": "Completed before",
+  "导出筛选结果": "Export filtered records",
+  "请求历史导出失败，请重试。": "Request history export failed. Try again.",
+  "已导出前 10,000 条，请缩小时间范围获取其余记录。": "Exported the first 10,000 records. Narrow the time range to retrieve the rest.",
+  "请求历史已导出。": "Request history exported.",
+  "本次运行有 {count} 条请求历史写入失败，记录可能不完整。请检查服务器日志和数据库。": "{count} request history writes failed during this run. Records may be incomplete; check the server logs and database.",
+  "数据库保留 {days} 天；单次导出最多 10,000 条。": "Database retention: {days} days. Each export includes up to 10,000 records.",
+  "当前仅有内存中的短期记录，重启后清空。": "Only recent in-memory records are available; restarting clears them.",
   "请填写 Vault 凭证路径。": "Enter the Vault credential path.",
   "请填写上游 Issuer 和 Client ID。": "Enter the upstream issuer and client ID.",
   "正在验证 Vault 连接…": "Checking Vault connection…",
@@ -708,6 +725,8 @@ const english = {
 };
 
 const apiErrors = {
+  last_administrator: "The last active administrator cannot be disabled or lose access. Authorize another administrator first.",
+  request_history_unavailable: "Request history is temporarily unavailable. Try again.",
   access_denied: "Management access was denied.",
   origin_denied: "The request origin was denied.",
   not_found: "The requested item was not found.",

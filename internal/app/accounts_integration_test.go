@@ -117,13 +117,24 @@ func newAccountFixture(t *testing.T, oauth bool) *accountFixture {
 	if oauth {
 		c.OAuth = &config.PersonalOAuth{Issuer: f.issuer.URL, ClientID: "admin-cli", Scopes: []string{"mcp:alpha"}}
 	}
-	r, err := f.app.store.Create(t.Context(), configstore.Record{Enabled: true, Config: config.BackendConfig{ID: "alpha", URL: f.server.URL, Required: true, RequireClientGrant: true, Credentials: c, RequiredScopes: []string{"mcp:alpha"}, PublishedTools: []string{"read", "write", "link", "slow"}, ToolRules: []config.ToolRule{{Match: "*", Effect: "read"}, {Match: "write", Effect: "write"}}, RequestTimeout: config.Duration{Duration: 5 * time.Second}}})
+	if err := f.app.replaceRuntimeLocked(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	input := backendInput{ID: "alpha", URL: f.server.URL, Required: true, RequireClientGrant: true, Credentials: c, RequiredScopes: []string{"mcp:alpha"}, PublishedTools: []string{"read", "write", "link", "slow"}, ToolRules: []config.ToolRule{{Match: "*", Effect: "read"}, {Match: "write", Effect: "write"}}, RequestTimeout: "5s"}
+	body, _ := json.Marshal(input)
+	response := f.request(t, f.client, "POST", "/api/v1/backends", f.signed("mcphub:admin", f.server.URL), "", body)
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create personal endpoint: HTTP %d", response.StatusCode)
+	}
+	response.Body.Close()
+	r, err := f.app.store.Get(t.Context(), "alpha")
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.endpoint = r.Config
-	if err := f.app.replaceRuntimeLocked(configWithRecords(&cfg, []configstore.Record{r})); err != nil {
-		t.Fatal(err)
+	active, ok := f.app.currentConfig().Backend("alpha")
+	if !ok || active.EndpointUID == "" || active.EndpointUID != r.Config.EndpointUID {
+		t.Fatal("personal endpoint runtime and credential binding identities differ")
 	}
 	f.app.userAuth = newAdminAuthorization(config.AdminConfig{PublicURL: f.server.URL, ClientID: "admin-cli", RequiredScopes: []string{"mcp:alpha"}}, f.issuer.URL, f.app.adminAuth.verifier)
 	f.app.userAuth.userPortal, f.app.userAuth.resource = true, f.server.URL
@@ -201,7 +212,24 @@ func (f *accountFixture) connectClient(t *testing.T, owner string, options *mcp.
 func TestPersonalCredentialsIsolateMCPAndRevoke(t *testing.T) {
 	f := newAccountFixture(t, false)
 	ctx := t.Context()
-	missing, _ := f.connectClient(t, "alice", nil)
+	missing, missingGrant := f.connectClient(t, "alice", nil)
+	input, _ := json.Marshal(accessCheckInput{Endpoint: "alpha", Tool: "read", Subject: "alice", GrantID: missingGrant.GrantID, Scopes: []string{"mcp:alpha"}, Arguments: json.RawMessage(`{}`)})
+	checkResponse := f.request(t, f.client, "POST", "/api/v1/access-check", f.signed("mcphub:admin", f.server.URL), "", input)
+	var check accessCheckResult
+	if err := json.NewDecoder(checkResponse.Body).Decode(&check); err != nil {
+		t.Fatal(err)
+	}
+	checkResponse.Body.Close()
+	if check.Outcome != "denied" {
+		t.Fatalf("unconnected account passed diagnostics: %+v", check)
+	}
+	found := false
+	for _, step := range check.Checks {
+		found = found || (step.Code == "personal_account_not_connected" && !step.Passed)
+	}
+	if !found {
+		t.Fatalf("missing account recovery reason: %+v", check)
+	}
 	result, err := missing.CallTool(ctx, &mcp.CallToolParams{Name: "alpha.write", Arguments: map[string]any{}})
 	if err != nil || !result.IsError {
 		t.Fatal("missing personal account admitted write", err)

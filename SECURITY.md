@@ -4,7 +4,7 @@
 
 ## English
 
-Repository: [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · documented release: v2.1.0 · module: `github.com/SamuelSupe/mcphub/v2` · [release notes](RELEASE_NOTES_v2.1.0.md) · license: [Apache License 2.0](LICENSE)
+Repository: [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · documented release: v2.2.0 · module: `github.com/SamuelSupe/mcphub/v2` · [release notes](RELEASE_NOTES_v2.2.0.md) · license: [Apache License 2.0](LICENSE)
 
 ### Scope
 
@@ -110,7 +110,7 @@ Security-sensitive changes should include a focused behavior-boundary test and e
 
 ## 中文
 
-仓库：[SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · 当前文档版本：v2.1.0 · module：`github.com/SamuelSupe/mcphub/v2` · [发行说明](RELEASE_NOTES_v2.1.0.md) · 许可证：[Apache License 2.0](LICENSE)
+仓库：[SamuelSupe/mcphub](https://github.com/SamuelSupe/mcphub) · 当前文档版本：v2.2.0 · module：`github.com/SamuelSupe/mcphub/v2` · [发行说明](RELEASE_NOTES_v2.2.0.md) · 许可证：[Apache License 2.0](LICENSE)
 
 ### 范围
 
@@ -208,13 +208,17 @@ JWKS ready 要求至少一个可用的非对称公开验签 key：`use` 为空�
 
 `setup` uses the existing browser login and consent paths. Its consent-options API requires a verified MCP token and only reveals eligible published tool names, effects, required scopes and resource constraints. This control-plane disclosure does not unlock strict MCP catalogs or permit calls. Selection is explicit; write/unknown tools require opt-in and still require per-operation approval. Configuration output contains no credentials and does not overwrite application files.
 
-Cross-user grant queries and request diagnostics require configuration-administrator authorization on the admin listener. The owner portal remains subject-scoped. Diagnostics use a bounded 2,000-entry process-memory ring and expose only completed MCP POST metadata from the last 30 minutes. They do not retain arguments, results, resource values, tokens or arbitrary error bodies, and do not replace the audit archive. Subject and client identifiers are personal operational data; restrict administrator access accordingly.
+Cross-user grant queries, request diagnostics and NDJSON exports require configuration-administrator authorization on the admin listener. The owner portal remains subject-scoped. Managed SQLite/PostgreSQL persist completed MCP POST metadata for 30 days by default (`admin.request_retention`, 1–365 days); unmanaged deployments retain only the bounded in-memory diagnostics. Records exclude arguments, results, resource values, tokens and arbitrary error bodies. Detailed records are encrypted, but query indexes retain identity/routing metadata. Protect database backups and exports as personal operational data. Persistence follows request processing; failures are reported without replaying operations, and a crash before persistence can leave a gap. In-flight requests and GET streams are outside this history, which does not replace an independent audit archive.
+
+Personal-account diagnostics read bindings and credential status without refreshing credentials or executing tools. A successful check cannot prove downstream business permissions.
 
 ### 接入向导与请求诊断
 
 `setup` 复用既有浏览器登录和同意流程。授权候选目录要求已验证的 MCP Token，仅披露当前身份可申请的已发布工具名称、读写属性、Scope 和资源限制；这项控制面展示不会开放严格模式 MCP 目录或调用权限。工具必须明确选择，写入／未分类工具需单独同意且仍受单次审批限制。生成配置不含凭证，不覆盖客户端文件。
 
-跨用户授权查询和请求诊断仅允许管理监听器上的配置管理员访问，个人门户仍限定当前 Subject。诊断使用容量 2,000 的进程内存环，仅展示最近 30 分钟已完成 MCP POST 的元数据，不保存参数、结果、资源值、Token 或任意错误正文，不能替代审计归档。Subject 和客户端标识属于人员相关运维数据，应限制管理员访问。
+跨用户授权查询、请求诊断与 NDJSON 导出仅允许管理监听器上的配置管理员访问，个人门户仍限定当前 Subject。托管 SQLite/PostgreSQL 默认保存 30 天已完成 MCP POST 的元数据（`admin.request_retention`，1–365 天），非托管部署仅保留有容量上限的内存诊断。不保存参数、结果、资源值、Token 或任意错误正文；详细记录加密，查询索引仍含身份/路由元数据。应按人员相关运维数据保护数据库备份和导出文件。持久化在请求处理之后执行，失败会提示缺口且不重放业务操作，保存前崩溃可能丢失记录。执行中请求和 GET 流不在范围内，请求历史不能替代独立审计归档。
+
+个人账号诊断只读取绑定与凭证状态，不刷新凭证或执行工具；检查通过不证明后端业务权限。
 
 
 ## Federated SSO and local identity permissions / 外部 SSO 与本地身份权限
@@ -226,6 +230,10 @@ Local users are isolated by provider connection (issuer, protocol, client ID and
 Ten-minute signed access tokens also require a live local session and current permissions on each request. Rotating refresh families last at most eight hours; replay of a consumed credential revokes the family. Upstream refresh credentials are not retained or periodically checked. Signing keys are encrypted with the existing configuration key; refresh credentials are hashed. Permission changes cancel affected admitted requests and reject stale cached views, but cannot undo writes already accepted by a backend. Pending login codes are process-local; deployment remains single instance for both database engines. Local identity and membership records contain operational personal data; protect database backups and administrator access. See [deployment contract](docs/sso-and-user-management.md).
 
 开启 `auth.sso` 后，MCPHub 自己签发凭证；上游应用密钥留在服务端，上游 Token 不透传给 MCP 客户端或后端。身份校验与本地授权分离，用户首次登录待授权；引导管理员只在首次创建时赋权，不能在后续登录覆盖管理员的撤权。部门/组同步不能修改本地授权；完整目录快照需先核验所有分页，不能在上游失败时用空快照覆盖。声明模式只在登录时更新成员关系，离职实时性需要目录推送；本实现没有上游全局退出联动。管理员修改角色/用户授权会审计并立即影响新请求；既有工具配置审批与写审批边界继续保留。配置接口是管理员权限，不是审批动作本身。详细配置见[中文说明](docs/sso-and-user-management.zh-CN.md)。
+
+Local SSO permission edits protect the final effective administrator, including group/department inheritance and concurrent changes. Authoritative directory revocations remain effective even for the final administrator. This safeguard cannot protect against direct database/configuration edits; trusted operators can recover through the local maintenance procedure in the SSO guide.
+
+本地 SSO 权限编辑会保护最后一位有效管理员，覆盖部门/组继承和并发修改；权威目录停用即使影响最后管理员也继续生效。此保护不防御直接修改数据库或部署配置，可信运维人员可按 SSO 文档通过本地维护流程恢复。
 
 ## Vault-backed upstream accounts
 

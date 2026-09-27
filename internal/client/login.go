@@ -149,6 +149,9 @@ func receiveCode(ctx context.Context, listener net.Listener, meta *oauthex.AuthS
 			result.err = errors.New("authorization callback issuer does not match")
 		case q.Get("error") != "":
 			result.err = errors.New("authorization was denied or failed at the identity service")
+			if q.Get("error") == "access_denied" && q.Get("error_description") == "account_access_required" {
+				result.err = errors.New("MCPHub account access is pending or disabled; ask your MCPHub administrator for access, then run login again. 账号待授权或已停用，请联系 MCPHub 管理员授权后重新登录")
+			}
 		case len(q["code"]) != 1 || result.code == "":
 			result.err = errors.New("authorization callback did not contain a code")
 		}
@@ -159,7 +162,7 @@ func receiveCode(ctx context.Context, listener net.Listener, meta *oauthex.AuthS
 			return
 		}
 		if result.err != nil {
-			http.Error(w, "Authorization failed. Return to your terminal.", http.StatusBadRequest)
+			http.Error(w, result.err.Error()+". Return to your terminal.", http.StatusBadRequest)
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")

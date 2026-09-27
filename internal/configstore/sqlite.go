@@ -157,6 +157,17 @@ CREATE TABLE IF NOT EXISTS sso_refresh (
 );
 CREATE INDEX IF NOT EXISTS sso_refresh_session ON sso_refresh(session_id);
 
+CREATE TABLE IF NOT EXISTS request_records (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL, completed_at BIGINT NOT NULL,
+ subject TEXT NOT NULL, client_id TEXT NOT NULL, endpoint TEXT NOT NULL, tool TEXT NOT NULL,
+ outcome TEXT NOT NULL, duration_ms BIGINT NOT NULL, approval_wait_ms BIGINT NOT NULL, data BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS request_records_time ON request_records(completed_at);
+CREATE INDEX IF NOT EXISTS request_records_request ON request_records(request_id);
+CREATE INDEX IF NOT EXISTS request_records_subject ON request_records(subject, completed_at);
+CREATE INDEX IF NOT EXISTS request_records_client ON request_records(client_id, completed_at);
+CREATE INDEX IF NOT EXISTS request_records_endpoint ON request_records(endpoint, completed_at);
+
 `
 
 func Open(ctx context.Context, path string, key []byte) (*Store, error) {
@@ -299,7 +310,7 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 	}
 	if err == nil {
 		version, parseErr := strconv.Atoi(string(versionRaw))
-		if parseErr != nil || version < 1 || version > 8 {
+		if parseErr != nil || version < 1 || version > 9 {
 			return fmt.Errorf("unsupported configuration schema version %q", string(versionRaw))
 		}
 	}
@@ -309,7 +320,7 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureEventSourceColumns(ctx, tx); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key, value) VALUES('schema_version', '8')
+	if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key, value) VALUES('schema_version', '9')
 ON CONFLICT(key) DO UPDATE SET value=excluded.value`); err != nil {
 		return fmt.Errorf("record configuration schema version: %w", err)
 	}

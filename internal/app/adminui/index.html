@@ -151,19 +151,22 @@
         </section>
 
         <section data-page="requests" aria-label="请求诊断" hidden>
-          <p class="context-note">仅展示最近 30 分钟内最多 2,000 条已完成 MCP POST 请求，重启后清空。不记录参数、结果或 Token；长期审计请使用审计日志。</p>
+          <p class="context-note">已完成 MCP POST 请求保存到数据库，重启后保留。默认查询最近 24 小时，可按完成时间筛选并导出；不记录参数、结果或 Token。</p>
           <form id="request-filters" class="policy-toolbar">
+            <label class="field"><span>完成时间从</span><input type="datetime-local" name="since"></label>
+            <label class="field"><span>完成时间至</span><input type="datetime-local" name="until"></label>
             <label class="field"><span>请求 ID</span><input name="request_id" maxlength="128"></label>
             <label class="field"><span>用户 Subject</span><input name="subject" maxlength="1024"></label>
             <label class="field"><span>客户端 ID</span><input name="client" maxlength="128"></label>
             <label class="field"><span>目标服务</span><input name="endpoint" maxlength="32"></label>
             <label class="field"><span>原始工具名</span><input name="tool" maxlength="128"></label>
             <label class="field"><span>执行结果</span><select name="outcome"><option value="">全部</option><option value="success">成功</option><option value="auth_denied">身份认证失败</option><option value="scope_denied">缺少 Scope</option><option value="grant_denied">客户端授权拒绝</option><option value="policy_denied">策略拒绝</option><option value="rate_limited">触发限流</option><option value="approval_pending">等待审批或恢复</option><option value="tool_error">工具返回错误</option><option value="protocol_error">协议错误</option><option value="cancelled">已取消</option><option value="unavailable">服务不可用</option></select></label>
-            <div class="filter-actions"><button class="primary" type="submit">筛选</button><button class="secondary" id="request-reset" type="button">清除筛选</button></div>
+            <div class="filter-actions"><button class="primary" type="submit">筛选</button><button class="secondary" id="request-reset" type="button">清除筛选</button><button class="secondary" id="request-export" type="button" disabled>导出筛选结果</button></div>
           </form>
           <div id="request-stats" class="diagnostic-stats" aria-live="polite"></div>
           <p class="field-note">统计覆盖当前筛选下的整个窗口。审批等待为申请创建到恢复执行的时间，不含人工审核中的请求；点击刷新获取最新结果。</p>
           <p id="request-feedback" role="status"></p>
+          <p id="request-storage-note" class="field-note" role="status"></p>
           <div id="request-list" class="policy-list" aria-live="polite"></div>
           <div class="pagination"><button id="request-prev" class="secondary" type="button" disabled>上一页</button><button id="request-next" class="secondary" type="button" disabled>下一页</button></div>
         </section>

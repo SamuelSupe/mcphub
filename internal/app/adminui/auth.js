@@ -40,7 +40,7 @@ async function loadSession() {
     if (!isAuthenticated()) {
       const reason = new URLSearchParams(location.search).get("login_error");
       requireLogin(session.forbidden || reason === "forbidden" ? 403 : 401);
-      if (reason && reason !== "forbidden") document.querySelector("#auth-message").textContent = t("登录未完成。请重试，或检查身份服务的客户端配置。" );
+      if (reason && reason !== "forbidden") document.querySelector("#auth-message").textContent = t(reason === "account_access_required" ? "账号待授权或已停用，请联系 MCPHub 管理员授权后重新登录。" : "登录未完成。请重试，或检查身份服务的客户端配置。" );
       if (reason) history.replaceState(null, "", location.pathname + location.hash);
       return;
     }

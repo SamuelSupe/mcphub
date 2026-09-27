@@ -10,6 +10,9 @@ func (a *App) runApprovalMaintenance() {
 	defer ticker.Stop()
 	for {
 		ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+		if err := a.store.PruneRequestHistory(ctx, time.Now().Add(-a.currentConfig().Admin.RequestRetentionDuration())); err != nil && a.ctx.Err() == nil {
+			a.logger.Warn("request history cleanup failed")
+		}
 		err := a.store.MaintainApprovals(ctx, a.currentConfig().Admin.Approvals.RetainDuration())
 		if err == nil && a.currentConfig().ClientAuthorization.Enabled {
 			err = a.store.MaintainClientGrants(ctx, a.currentConfig().Admin.Approvals.RetainDuration())

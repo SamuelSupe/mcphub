@@ -1,10 +1,12 @@
 package app
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
 )
 
 func (a *App) serveAdminIdentities(w http.ResponseWriter, r *http.Request, suffix string) {
@@ -65,6 +67,10 @@ func (a *App) serveAdminIdentities(w http.ResponseWriter, r *http.Request, suffi
 		return
 	}
 	updated, err := a.store.UpdateIdentity(r.Context(), id, revision, input.Enabled, input.Permissions)
+	if errors.Is(err, configstore.ErrLastAdministrator) {
+		writeAPIError(w, http.StatusConflict, "last_administrator", "不能停用或移除最后一位有效管理员的权限。请先授权另一位管理员。", "permissions")
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return

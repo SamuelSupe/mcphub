@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/backend"
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
@@ -76,12 +76,9 @@ func (h *Hub) ConfigureApprovals(store *configstore.Store, limits *ratelimit.Reg
 
 func (h *Hub) RetireApprovals() { h.approvalsRetired.Store(true) }
 
-func (h *Hub) ServerForRequest(req *http.Request) *mcp.Server {
+func (h *Hub) acquireView(req *http.Request) *view {
 	token := mcpauth.TokenInfoFromContext(req.Context())
 	identity := sso.Identity(token)
-	if h.cfg.Auth.SSO != nil && identity == nil {
-		return nil
-	}
 	var scopes []string
 	if token != nil {
 		scopes = token.Scopes
@@ -114,11 +111,15 @@ func (h *Hub) ServerForRequest(req *http.Request) *mcp.Server {
 	if identity != nil {
 		key += "|identity|" + identity.ID + "|" + identity.Version
 	}
-	h.viewsMu.RLock()
+	h.viewsMu.Lock()
 	existing := h.views[key]
-	h.viewsMu.RUnlock()
 	if existing != nil {
-		return existing.server
+		existing.activeRequests++
+		existing.lastUsed = time.Now()
+	}
+	h.viewsMu.Unlock()
+	if existing != nil {
+		return existing
 	}
 
 	candidate := newViewWithHTTP(h, backendIDs, groupIDs, toolScopes, scopes)
@@ -139,18 +140,27 @@ func (h *Hub) ServerForRequest(req *http.Request) *mcp.Server {
 	}
 	candidate.reconcile()
 	inserted := false
+	var evicted *view
 	h.viewsMu.Lock()
 	if existing = h.views[key]; existing == nil {
-		if len(h.views) >= 512 {
-			h.viewsMu.Unlock()
-			candidate.close()
-			return nil
+		if len(h.views) >= maxCachedViews {
+			evicted = h.evictIdleViewLocked()
+			if evicted == nil {
+				h.viewsMu.Unlock()
+				candidate.close()
+				return nil
+			}
 		}
 		h.views[key] = candidate
 		existing = candidate
 		inserted = true
 	}
+	existing.activeRequests++
+	existing.lastUsed = time.Now()
 	h.viewsMu.Unlock()
+	if evicted != nil {
+		evicted.close()
+	}
 	if !inserted {
 		candidate.close()
 	} else {
@@ -158,7 +168,7 @@ func (h *Hub) ServerForRequest(req *http.Request) *mcp.Server {
 		// visible. Reconcile once after insertion so that update cannot be lost.
 		candidate.reconcile()
 	}
-	return existing.server
+	return existing
 }
 
 func (h *Hub) ReconcileBackend(id string) {

@@ -21,11 +21,19 @@ let api,
   cursors = [""],
   filters = new URLSearchParams();
 
+function readFilters(form) {
+  const result = new URLSearchParams(new FormData(form));
+  for (const name of ["since", "until"]) {
+    if (result.get(name)) result.set(name, new Date(result.get(name)).toISOString());
+  }
+  return result;
+}
+
 export function initRequestDiagnostics(request) {
   api = request;
   byId("request-filters").addEventListener("submit", (event) => {
     event.preventDefault();
-    filters = new URLSearchParams(new FormData(event.target));
+    filters = readFilters(event.target);
     cursors = [""];
     refreshRequestDiagnostics();
   });
@@ -43,6 +51,32 @@ export function initRequestDiagnostics(request) {
     if (snapshot?.next_cursor) cursors.push(String(snapshot.next_cursor));
     refreshRequestDiagnostics();
   });
+  byId("request-export").addEventListener("click", async () => {
+    if (!snapshot) return;
+    const query = new URLSearchParams(filters);
+    query.set("since", snapshot.window_start);
+    query.set("until", snapshot.window_end);
+    query.set("format", "ndjson");
+    const button = byId("request-export");
+    button.disabled = true;
+    try {
+      const response = await fetch(`/api/v1/requests?${query}`, { credentials: "same-origin" });
+      if (!response.ok) throw new Error(t("请求历史导出失败，请重试。"));
+      const url = URL.createObjectURL(await response.blob());
+      const link = element("a", "");
+      link.href = url;
+      link.download = "mcphub-requests.ndjson";
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      byId("request-feedback").textContent = t(response.headers.get("X-MCPHub-Next-Cursor") !== "0" ? "已导出前 10,000 条，请缩小时间范围获取其余记录。" : "请求历史已导出。" );
+    } catch (error) {
+      byId("request-feedback").textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
 }
 
 export function showClientRequests(grant) {
@@ -51,7 +85,7 @@ export function showClientRequests(grant) {
   form.elements.subject.value = grant.subject;
   form.elements.client.value = grant.client_instance_id;
   form.elements.endpoint.value = grant.endpoint_id;
-  filters = new URLSearchParams(new FormData(form));
+  filters = readFilters(form);
   cursors = [""];
   location.hash = "requests";
 }
@@ -60,9 +94,14 @@ export async function refreshRequestDiagnostics() {
   const current = ++generation;
   const query = new URLSearchParams(filters);
   query.set("cursor", cursors.at(-1));
+  if (snapshot && cursors.length > 1) {
+    query.set("since", snapshot.window_start);
+    query.set("until", snapshot.window_end);
+  }
   byId("request-feedback").textContent = t("正在读取请求…");
   byId("request-list").setAttribute("aria-busy", "true");
   byId("request-prev").disabled = byId("request-next").disabled = true;
+  byId("request-export").disabled = true;
   try {
     const result = await api(`/requests?${query}`);
     if (current !== generation) return;
@@ -88,6 +127,12 @@ export function renderRequestDiagnostics() {
   list.replaceChildren();
   stats.replaceChildren();
   const s = snapshot.statistics;
+  byId("request-export").disabled = !snapshot.persisted;
+  byId("request-storage-note").textContent = snapshot.storage_failures
+    ? t("本次运行有 {count} 条请求历史写入失败，记录可能不完整。请检查服务器日志和数据库。", { count: snapshot.storage_failures })
+    : snapshot.persisted
+      ? t("数据库保留 {days} 天；单次导出最多 10,000 条。", { days: snapshot.retention_days })
+      : t("当前仅有内存中的短期记录，重启后清空。");
   const denied = Object.entries(s.outcomes)
     .filter(([key]) => key.endsWith("_denied") || key === "rate_limited")
     .reduce((total, [, count]) => total + count, 0);
@@ -120,7 +165,7 @@ export function renderRequestDiagnostics() {
     const header = element("summary", "", "record-summary");
     const title = element("span", "", "record-title");
     title.append(element("strong", record.tool ? `${record.endpoint} / ${record.tool}` : record.method || "HTTP"));
-    title.append(element("small", `${record.subject || "—"} · ${new Date(record.started_at).toLocaleTimeString(getLocale())}`));
+    title.append(element("small", `${record.subject || "—"} · ${new Date(record.started_at).toLocaleString(getLocale())}`));
     const status = element("span", t(outcomes[record.outcome] || record.outcome), "policy-tag");
     status.dataset.tone = record.outcome === "success" ? "success" : record.outcome === "approval_pending" || record.outcome === "cancelled" ? "warning" : "danger";
     header.append(

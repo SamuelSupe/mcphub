@@ -1,8 +1,8 @@
 # 飞书 SSO、Vault 与企业 Agent 接入架构
 
-核查日期：2026-09-26。对应 MCPHub v2.1.0，面向架构评审、部署人员、安全管理员和 Agent 使用者。
+架构核查日期：2026-09-26；版本说明更新于 2026-09-27，对应 MCPHub v2.2.0。本文面向架构评审、部署人员、安全管理员和 Agent 使用者。
 
-[下载 27 页 PDF](feishu-vault-agent-architecture.zh-CN.pdf) · [配置示例](../deploy/config.feishu-vault.example.yaml) · [文档导航](README.zh-CN.md)。PDF 保留同日发布前的架构评审快照；当前版本状态以本在线文档为准。
+[下载 27 页 PDF](feishu-vault-agent-architecture.zh-CN.pdf) · [配置示例](../deploy/config.feishu-vault.example.yaml) · [文档导航](README.zh-CN.md)。PDF 保留 2026-09-26、v2.1.0 发布前的架构评审快照；当前版本状态以本在线文档为准。
 
 本方案采用 **飞书登录 + MCPHub 集中授权 + Vault 上游凭证 + 本地 Broker**。员工在浏览器完成登录、连接个人服务账号，为 Codex 和 Claude Code 分别确认访问范围，然后在 Agent 中使用工具。生产写操作由独立审批人确认。
 
@@ -20,7 +20,7 @@ Vault 在本方案中承担凭证保管和路径访问控制；MCPHub 承担用�
 | Vault KV v2 共享/个人账号、刷新与撤销联动 | v2.1.0 已有实现 | 真实 Vault 权限、TLS、备份恢复演练 |
 | 本地 Broker、ClientGrant、stdio 连接器 | 已有实现 | 每个 Agent、每个 endpoint 分别授权 |
 | 独立写审批、多人复核、OIDC 加强认证 | 已有实现 | 飞书普通 OAuth2 不能提供 OIDC 加强认证证明；见第 4 节 |
-| SQLite / PostgreSQL | 支持；当前源码 schema 8 | MCPHub 保持单活，PostgreSQL 不代表可运行多台 Hub |
+| SQLite / PostgreSQL | 支持；v2.2.0 为 schema 9，v2.1.0 为 schema 8 | MCPHub 保持单活，PostgreSQL 不代表可运行多台 Hub |
 | Codex / Claude Code 接入 | 本文提供官方格式的配置 | 仍需在实际客户端版本完成验证 |
 | Vault AWS KMS 自动解封 | Vault 部署能力，可选 | 配置 Vault 的 IAM Role 和 KMS Key；不代表 Hub 已直连 KMS |
 | 飞书审批卡片、SCIM、Vault 动态凭证/OBO、Hub 多活 | 本方案未实现 | 单独设计和验收 |
@@ -390,7 +390,7 @@ admin:
   database_dsn_env: MCPHUB_DATABASE_URL
 ```
 
-数据库备份、Vault 数据和配置加密密钥必须协调恢复。schema 8 数据库不能交给旧二进制写入。恢复历史数据库可能恢复旧授权，应核对撤销记录与账号绑定后再开放流量。
+数据库备份、Vault 数据和配置加密密钥必须协调恢复。v2.2.0 升级至 schema 9，升级后的数据库不能交给旧二进制写入。恢复历史数据库可能恢复旧授权，应核对撤销记录与账号绑定后再开放流量。
 
 ### 可选：AWS KMS 保护 Vault
 
@@ -526,7 +526,7 @@ Grant 到期不能靠刷新登录 Token 自动延期；需要重新确认。切�
 | 续期 | 监控 refresh 失败、轮换冲突和凭证清理积压 | 不提供 OAuth 服务与 Vault 的跨系统事务 |
 | 撤权 | 离职目录停用、Hub 禁用、Grant 撤销、上游撤销分层处理 | Hub logout 不等于飞书全局退出或上游 revoke |
 | 故障 | 凭证/授权校验失败拒绝新调用，保留可恢复信息 | 已提交的副作用不能回滚，网络失败不自动重放 |
-| 审计 | 关联用户、client、Grant、endpoint、审批 ID、credential ID | 请求诊断是短期内存窗口，不能替代长期审计归档 |
+| 审计 | 关联用户、client、Grant、endpoint、审批 ID、credential ID | v2.2.0 持久化请求历史，默认保留 30 天并可导出；仍不能替代独立、不可篡改的审批审计归档 |
 | 变更 | 发布清单/写规则/凭证模式变更经安全复核，保存版本记录 | 可修改配置的管理员属于信任边界 |
 | 容灾 | 联合备份 DB、加密密钥、Vault；演练撤权状态恢复 | 恢复旧备份可能恢复旧授权，必须复核 |
 | 可用性 | Hub 单活，Vault/PG 可单独 HA，先设可观测的 RTO/RPO | 当前没有 Hub 多实例刷新/撤销/限流一致性保证 |
@@ -581,7 +581,7 @@ Hub 诊断不记录 Token、参数和结果正文；审批单为冻结执行需�
 | 个人会话与上游客户端隔离 | [credentials.go](../internal/hub/credentials.go) |
 | 单次审批恢复 | [approvals.go](../internal/hub/approvals.go) |
 
-本次文档根据当前源码、CLI 定义、官方文档以及飞书官方页面的本机 Chrome 内容核查。在 OrbStack 中运行 `go run ./cmd/mcphub validate --config deploy/config.feishu-vault.example.yaml`，使用仅供验证的占位环境变量，返回 `configuration valid`；架构 SVG 已渲染为 PNG 并检查可读性，文档本地链接及 `git diff --check` 均通过。
+2026-09-26 的架构核查根据当时源码、CLI 定义、官方文档以及飞书官方页面的本机 Chrome 内容完成；v2.2.0 的修复及验证范围见[发行说明](../RELEASE_NOTES_v2.2.0.md)。在 OrbStack 中运行 `go run ./cmd/mcphub validate --config deploy/config.feishu-vault.example.yaml`，使用仅供验证的占位环境变量，返回 `configuration valid`；架构 SVG 已渲染为 PNG 并检查可读性，文档本地链接及 `git diff --check` 均通过。
 
 上述静态验证不等于真实 SSO/业务联调。未安装或修改真实飞书应用、Vault 策略及 Agent 配置；未向外部服务发送业务凭证。
 

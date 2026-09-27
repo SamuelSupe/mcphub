@@ -1,8 +1,10 @@
 # Remote administration and database deployment
 
-MCPHub v2.1.0 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes. [中文](README.zh-CN.md)
+MCPHub v2.2.0 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes. [中文](README.zh-CN.md)
 
-v2.1.0 adds Vault-backed shared and personal upstream accounts. SQLite and PostgreSQL migrate to schema 8; retain the single-instance boundary and follow the [upgrade and rollback procedure](../RELEASE_NOTES_v2.1.0.md) before replacing an older version. See [Vault deployment](../docs/vault-accounts.md), [SSO deployment](../docs/sso-and-user-management.md), and the [enterprise architecture and best practices](../docs/feishu-vault-agent-architecture.zh-CN.md) with its [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf).
+v2.2.0 adds persistent request history and administrator/login safeguards. SQLite and PostgreSQL migrate to schema 9; retain the single-instance boundary and follow the [upgrade and rollback procedure](../RELEASE_NOTES_v2.2.0.md) before replacing an older version. Vault shared/personal accounts remain available. See [Vault deployment](../docs/vault-accounts.md), [SSO deployment](../docs/sso-and-user-management.md), and the [enterprise architecture and best practices](../docs/feishu-vault-agent-architecture.zh-CN.md) with its [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf).
+
+Completed MCP POST requests are retained for 30 days by default. Set `admin.request_retention` between `24h` and `8760h` to match operational needs. The administrator's request diagnostics page supports time filters and NDJSON export; see the [history contract and privacy boundaries](../README.md#guided-setup-and-administration). Protect database backups and exports: arguments, results and tokens are excluded, but identity/routing indexes are readable database metadata.
 
 | Deployment | Configuration |
 | --- | --- |
@@ -41,7 +43,7 @@ mcphub validate --config deploy/config.remote-sqlite.yaml
 mcphub serve --config deploy/config.remote-sqlite.yaml
 ```
 
-Relative database paths resolve from the YAML directory. Keep the existing SQLite path and key to reuse existing data; `serve` applies any required schema migration; do not let an older binary write a schema-8 database. `mode: local` remains the default, with no login and a numeric loopback-only listener that must never be published through a proxy.
+Relative database paths resolve from the YAML directory. Keep the existing SQLite path and key to reuse existing data; `serve` applies any required schema migration; do not let an older binary write a schema-9 database. `mode: local` remains the default, with no login and a numeric loopback-only listener that must never be published through a proxy.
 
 External PostgreSQL:
 

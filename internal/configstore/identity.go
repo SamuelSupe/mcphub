@@ -135,6 +135,9 @@ func (s *Store) UpdateIdentity(ctx context.Context, id string, revision int64, e
 		return p, ErrConflict
 	}
 	p.Enabled, p.Permissions = enabled, permissions
+	if err := s.checkLastAdministrator(ctx, tx, p); err != nil {
+		return Identity{}, err
+	}
 	p, err = saveIdentity(ctx, tx, p, "identity_permissions_updated")
 	if err == nil {
 		err = tx.Commit()

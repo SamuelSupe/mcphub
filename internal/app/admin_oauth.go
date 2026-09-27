@@ -20,8 +20,8 @@ import (
 	"github.com/SamuelSupe/mcphub/v2/internal/authn"
 )
 
-func (a *adminAuthorization) login(w http.ResponseWriter, req *http.Request) {
-	target, err := a.startLogin(w, req, "", nil)
+func (a *adminAuthorization) login(w http.ResponseWriter, req *http.Request, scopes []string) {
+	target, err := a.startLogin(w, req, "", nil, scopes)
 	if err != nil {
 		http.Error(w, "Login unavailable. Check identity service configuration.", 503)
 		return
@@ -29,7 +29,7 @@ func (a *adminAuthorization) login(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, target, http.StatusFound)
 }
 
-func (a *adminAuthorization) startLogin(w http.ResponseWriter, req *http.Request, approvalID string, session *adminSession) (string, error) {
+func (a *adminAuthorization) startLogin(w http.ResponseWriter, req *http.Request, approvalID string, session *adminSession, scopes []string) (string, error) {
 	meta, err := authn.LoginMetadata(req.Context(), a.issuer, a.client, a.cfg.ClientSecretEnv == "")
 	if err != nil {
 		return "", err
@@ -43,7 +43,7 @@ func (a *adminAuthorization) startLogin(w http.ResponseWriter, req *http.Request
 			return "", fmt.Errorf("unsupported OAuth client authentication method")
 		}
 	}
-	scopes := slices.Clone(a.cfg.RequiredScopes)
+	scopes = slices.Clone(scopes)
 	if !a.userPortal && req.URL.Query().Get("role") == "approver" || approvalID != "" {
 		scopes = slices.Clone(a.cfg.Approvals.Scopes())
 	}
@@ -119,8 +119,13 @@ func (a *adminAuthorization) callback(w http.ResponseWriter, req *http.Request) 
 	}
 	setAdminCookie(w, a.loginCookie(), "", -1)
 	iss := q.Get("iss")
-	if len(q["iss"]) > 1 || (pending.issuerRequired && iss == "") || (iss != "" && iss != a.issuer) || q.Get("error") != "" || len(q["code"]) != 1 || q.Get("code") == "" {
-		http.Redirect(w, req, a.homePath()+"?login_error=denied", http.StatusSeeOther)
+	validIssuer := len(q["iss"]) <= 1 && (!pending.issuerRequired || iss != "") && (iss == "" || iss == a.issuer)
+	if !validIssuer || q.Get("error") != "" || len(q["code"]) != 1 || q.Get("code") == "" {
+		reason := "denied"
+		if validIssuer && len(q["error"]) == 1 && q.Get("error") == "access_denied" && len(q["error_description"]) == 1 && q.Get("error_description") == "account_access_required" {
+			reason = "account_access_required"
+		}
+		http.Redirect(w, req, a.homePath()+"?login_error="+reason, http.StatusSeeOther)
 		return
 	}
 	ctx := context.WithValue(req.Context(), oauth2.HTTPClient, a.client)

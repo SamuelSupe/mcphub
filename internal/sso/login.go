@@ -160,7 +160,7 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 	}
 	identity, err := s.tokenIdentity(r.Context(), user.ID)
 	if err != nil {
-		http.Error(w, "Your identity was recorded. Access is pending or disabled; ask the MCPHub administrator to authorize your account. 身份已记录，请联系 MCPHub 管理员授权。", 403)
+		s.redirectResult(w, r, p.downstream, "", "account_access_required")
 		return
 	}
 	code := p.downstream
@@ -191,6 +191,10 @@ func (s *Server) redirectResult(w http.ResponseWriter, r *http.Request, p author
 	q.Set("iss", s.cfg.Auth.Issuer)
 	if err != "" {
 		q.Set("error", err)
+		if err == "account_access_required" {
+			q.Set("error", "access_denied")
+			q.Set("error_description", "account_access_required")
+		}
 	} else {
 		q.Set("code", code)
 	}

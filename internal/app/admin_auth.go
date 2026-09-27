@@ -155,7 +155,7 @@ func (a *adminAuthorization) servePublic(w http.ResponseWriter, req *http.Reques
 			http.Error(w, "method not allowed", 405)
 			return true
 		}
-		a.login(w, req)
+		a.login(w, req, a.cfg.RequiredScopes)
 	case "/auth/callback":
 		if req.Method != http.MethodGet {
 			http.Error(w, "method not allowed", 405)

@@ -12,6 +12,70 @@ import (
 
 func TestIdentityLifecycle(t *testing.T) { s, _, _ := newTestStore(t); testIdentityLifecycle(t, s) }
 
+func TestLastAdministratorProtection(t *testing.T) {
+	s, _, _ := newTestStore(t)
+	testLastAdministratorProtection(t, s)
+}
+
+func testLastAdministratorProtection(t *testing.T, s *Store) {
+	t.Helper()
+	ctx := t.Context()
+	auth := config.AuthConfig{SSO: &config.SSOConfig{Upstream: config.IdentityProvider{Issuer: "https://admin-protection.example", Protocol: "oidc", ClientID: "admin"}}}
+	admin := config.AdminConfig{Mode: "remote", RequiredScopes: []string{"manage"}}
+	s.ConfigureIdentityProtection(auth, admin)
+	defer s.ConfigureIdentityProtection(config.AuthConfig{}, config.AdminConfig{})
+	user, err := s.SyncIdentity(ctx, auth.SSO.Upstream.Namespace(), "first", "First admin", []string{"ops"}, nil, false, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, enabled := range []bool{false, true} {
+		if _, err := s.UpdateIdentity(ctx, user.ID, user.Revision, enabled, config.IdentityPermissions{}); !errors.Is(err, ErrLastAdministrator) {
+			t.Fatalf("last administrator change admitted: %v", err)
+		}
+	}
+	group, err := s.Identity(ctx, user.Groups[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	group, err = s.UpdateIdentity(ctx, group.ID, group.Revision, true, config.IdentityPermissions{Roles: []string{"admin"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err = s.UpdateIdentity(ctx, user.ID, user.Revision, true, config.IdentityPermissions{})
+	if err != nil {
+		t.Fatal("inherited administration was ignored", err)
+	}
+	if _, err := s.UpdateIdentity(ctx, group.ID, group.Revision, false, group.Permissions); !errors.Is(err, ErrLastAdministrator) {
+		t.Fatal("group edit removed the only effective administrator", err)
+	}
+	second, err := s.SyncIdentity(ctx, auth.SSO.Upstream.Namespace(), "second", "Second admin", nil, nil, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err = s.UpdateIdentity(ctx, second.ID, second.Revision, true, config.IdentityPermissions{Scopes: []string{"manage"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := make(chan error, 2)
+	for _, p := range []Identity{user, second} {
+		go func() { _, err := s.UpdateIdentity(ctx, p.ID, p.Revision, false, p.Permissions); results <- err }()
+	}
+	succeeded, blocked := 0, 0
+	for range 2 {
+		err := <-results
+		if err == nil {
+			succeeded++
+		} else if errors.Is(err, ErrLastAdministrator) {
+			blocked++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if succeeded != 1 || blocked != 1 {
+		t.Fatalf("concurrent demotions: success=%d blocked=%d", succeeded, blocked)
+	}
+}
+
 func testIdentityLifecycle(t *testing.T, s *Store) {
 	t.Helper()
 	ctx := t.Context()

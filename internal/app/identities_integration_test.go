@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,48 @@ import (
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func TestAdminCannotDisableLastAdministrator(t *testing.T) {
+	a := newAdminTestApp(t)
+	cfg := *a.currentConfig()
+	cfg.Admin.Mode, cfg.Admin.PublicURL = "remote", "https://hub.example.com"
+	cfg.Admin.RequiredScopes = []string{"mcphub:admin"}
+	cfg.Auth.SSO = &config.SSOConfig{Upstream: config.IdentityProvider{Protocol: "oidc", Issuer: "https://idp.example.com", ClientID: "enterprise"}}
+	if err := a.replaceRuntimeLocked(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	user, err := a.store.SyncIdentity(t.Context(), cfg.Auth.SSO.Upstream.Namespace(), "only-admin", "Only admin", nil, nil, false, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	permissions := config.IdentityPermissions{Roles: []string{"admin"}, Scopes: []string{"mcphub:admin"}}
+	user, err = a.store.UpdateIdentity(t.Context(), user.ID, user.Revision, true, permissions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.adminAuth = newAdminAuthorization(cfg.Admin, cfg.Auth.Issuer, identityVerifier{a.store, cfg.Auth.Issuer})
+	body, _ := json.Marshal(map[string]any{"enabled": false, "permissions": permissions})
+	req := httptest.NewRequest("PUT", cfg.Admin.PublicURL+"/api/v1/identities/"+user.ID, bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+user.ID)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("If-Match", revisionETag(user.Revision))
+	w := httptest.NewRecorder()
+	a.adminHandler().ServeHTTP(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("last administrator disabled: %d %s", w.Code, w.Body)
+	}
+	current, err := a.store.Identity(t.Context(), user.ID)
+	if err != nil || !current.Enabled || current.Revision != user.Revision {
+		t.Fatal("rejected edit changed the account", err)
+	}
+	req = httptest.NewRequest("GET", cfg.Admin.PublicURL+"/api/v1/identities", nil)
+	req.Header.Set("Authorization", "Bearer "+user.ID)
+	w = httptest.NewRecorder()
+	a.adminHandler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("administrator lost access after rejected edit: %d", w.Code)
+	}
+}
 
 type identityVerifier struct {
 	store  *configstore.Store
@@ -75,6 +118,10 @@ func TestManagedIdentityRestrictsMCPCatalogCallsAndRunningRequests(t *testing.T)
 		t.Fatal(err)
 	}
 	application.auth = identityVerifier{application.store, cfg.Auth.Issuer}
+	response := serveAdminJSON(t, application, "POST", "/api/v1/backends", []byte(`{"id":"unrelated","url":"https://unused.example/mcp","enabled":false}`), "")
+	if response.Code != http.StatusCreated {
+		t.Fatalf("save backend with managed identities: %d %s", response.Code, response.Body.String())
+	}
 	server := httptest.NewServer(application)
 	defer server.Close()
 	client := connectAppClient(t, t.Context(), server.URL+"/mcp", user.ID)
@@ -105,6 +152,18 @@ func TestManagedIdentityRestrictsMCPCatalogCallsAndRunningRequests(t *testing.T)
 	if result, err := client.CallTool(t.Context(), &mcp.CallToolParams{Name: "db.read", Arguments: map[string]any{"project": "work"}}); err != nil || result.IsError {
 		t.Fatal("allowed call rejected", err)
 	}
+	// Past users must not exhaust the view cache after their HTTP sessions close.
+	for i := range 513 {
+		other, err := application.store.SyncIdentity(t.Context(), cfg.Auth.SSO.Upstream.Namespace(), fmt.Sprintf("visitor-%d", i), "Visitor", nil, nil, false, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := application.store.UpdateIdentity(t.Context(), other.ID, other.Revision, true, permissions); err != nil {
+			t.Fatal(err)
+		}
+		visitor := connectAppClient(t, t.Context(), server.URL+"/mcp", other.ID)
+		visitor.Close()
+	}
 	completed := make(chan error, 1)
 	go func() {
 		_, err := client.CallTool(t.Context(), &mcp.CallToolParams{Name: "db.slow", Arguments: map[string]any{"project": "work"}})
@@ -119,7 +178,7 @@ func TestManagedIdentityRestrictsMCPCatalogCallsAndRunningRequests(t *testing.T)
 	request := newAdminRequest(http.MethodPut, "/api/v1/identities/"+user.ID, body)
 	request.Header.Set("If-Match", revisionETag(user.Revision))
 	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
+	response = httptest.NewRecorder()
 	application.adminHandler().ServeHTTP(response, request)
 	if response.Code != 200 {
 		t.Fatalf("permission edit: %d %s", response.Code, response.Body.String())

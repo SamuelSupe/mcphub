@@ -92,8 +92,7 @@ func newRuntimeWithGroups(parent context.Context, cfg *config.Config, groups []h
 		cfg: cfg, manager: manager, hub: currentHub,
 		origins: origins, ctx: ctx, cancel: cancel,
 	}
-	rt.mcpHandler = mcp.NewStreamableHTTPHandler(
-		currentHub.ServerForRequest,
+	rt.mcpHandler = currentHub.StreamableHTTPHandler(
 		&mcp.StreamableHTTPOptions{
 			Stateless:                    true,
 			MaxRequestBodyBytes:          cfg.Server.MaxRequestBodyBytes,

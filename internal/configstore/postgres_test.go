@@ -12,11 +12,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/diagnostics"
 	"github.com/SamuelSupe/mcphub/v2/internal/httptool"
 	"github.com/SamuelSupe/mcphub/v2/internal/ratelimit"
 )
@@ -222,5 +224,16 @@ func TestPostgresConfigurationLifecycle(t *testing.T) {
 		testIdentityLifecycle(t, migrated)
 		testClientGrantAdministratorQuery(t, migrated)
 		testCredentialBindingLifecycle(t, migrated)
+		testLastAdministratorProtection(t, migrated)
+		testRequestHistory(t, migrated)
+		reopened, err := OpenPostgres(ctx, dsn, key, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer reopened.Close()
+		page, err := reopened.RequestHistory(ctx, diagnostics.Query{Subject: "history-user", Since: time.Now().Add(-48 * time.Hour), Until: time.Now(), Limit: 25})
+		if err != nil || page.Statistics.Total != 2 {
+			t.Fatal("PostgreSQL history lost on reopen", err)
+		}
 	})
 }

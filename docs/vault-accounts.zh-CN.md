@@ -1,16 +1,14 @@
 # Vault 与个人上游账号
 
+[English](vault-accounts.md) · [管理员手册](admin-guide.zh-CN.md) · [文档导航](README.zh-CN.md)
+
+本文是管理员配置与运维专题。员工接入请阅读[用户手册](user-guide.zh-CN.md)。
+
 MCPHub v2.1.0 起提供此能力。支持 HashiCorp Vault KV v2、SQLite 和单实例 PostgreSQL；v2.2.0 启动迁移到 schema 9（v2.1.0 为 schema 8），升级前同时备份数据库、加密密钥和 Vault 数据。
 
 ## 用户如何使用
 
-1. 像以前一样使用 `mcphub-cli login` 登录 MCPHub，或通过现有 Broker 配置 MCP 客户端。
-2. 打开 `https://hub.example.com/client-auth/`，在「已连接账号」点击目标服务的「连接账号」。支持浏览器授权的服务会打开上游登录页；其他服务只需填写个人 Token。
-3. 返回客户端继续调用。客户端配置、Broker 和 Agent 都不需要上游 Token，也不需要 Vault 路径。
-
-账号可以同时供该用户已授权的多个客户端使用。客户端仍只能访问自己的 ClientGrant 范围；写工具及未分类工具仍须逐次审批。「查看授权详情」显示账号、权限、有效期和能否自动续期。
-
-更换账号或断开连接会使该用户在此 endpoint 的旧 ClientGrant 失效，并取消已接纳的请求和订阅。重新连接后，需要重新进行客户端授权；已完成的操作不会撤销。首次连接账号可以直接满足已有客户端授权。退出网页会话或本机 `logout` 不等于撤销上游账号；请在门户点击「断开连接」。
+连接、重连与断开账号的步骤已归入[用户手册：连接个人账号](user-guide.zh-CN.md#连接个人账号)。
 
 ## 管理员如何配置
 

@@ -1,8 +1,12 @@
 # MCPHub 登录、内置 Broker 与客户端授权统一方案
 
+[文档导航](README.zh-CN.md) · [用户手册](user-guide.zh-CN.md) · [管理员手册](admin-guide.zh-CN.md)
+
+本文为设计与实现参考，日常操作以两份手册为入口。
+
 方案日期：2026-09-25；发行版本：v2.0.0（2026-09-26）。
 
-本文记录登录、本地 Broker、客户端 scope 授权、endpoint 最终校验、写入审批及撤销同步的设计与实现。v2.0.0 包含首版 Broker；既有 v1.4.0 发布包不包含此能力。实际命令和配置见 [README](../README.zh-CN.md#客户端授权与内置-broker)。首版使用不透明 Grant、普通用户门户、SQLite/PostgreSQL 和单实例撤销控制。
+本文记录登录、本地 Broker、客户端 scope 授权、endpoint 最终校验、写入审批及撤销同步的设计与实现。v2.0.0 包含首版 Broker；既有 v1.4.0 发布包不包含此能力。实际命令和配置见 [用户手册](user-guide.zh-CN.md#管理客户端授权)和[管理员手册](admin-guide.zh-CN.md#启用客户端授权)。首版使用不透明 Grant、普通用户门户、SQLite/PostgreSQL 和单实例撤销控制。
 
 **1. 目标与核心决策**
 

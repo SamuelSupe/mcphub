@@ -1,16 +1,14 @@
 # Vault and personal upstream accounts
 
+[中文](vault-accounts.zh-CN.md) · [Administrator manual](admin-guide.md) · [Documentation](README.md)
+
+This is an administrator configuration and operations guide. For employee access, use the [user manual](user-guide.md).
+
 Available since MCPHub v2.1.0. It supports HashiCorp Vault KV v2, SQLite and **one MCPHub instance with PostgreSQL**. MCPHub v2.2.0 migrates the database to schema 9 (v2.1.0 uses schema 8). Back up the database, matching encryption key and Vault data together.
 
 ## User workflow
 
-1. Sign in using the existing `mcphub-cli login` or Broker workflow.
-2. Open `https://hub.example.com/client-auth/`. Under **Connected accounts**, select **Connect account** for a service. Complete its browser authorization, or enter a personal token if the administrator selected that method.
-3. Continue using your existing MCP client configuration. Neither the client nor the Agent needs an upstream token or Vault path.
-
-Several authorized clients belonging to the same user can use one account connection. Each client remains restricted by its ClientGrant; writes and unclassified tools still require approval for each operation. Account details show permissions, expiry and whether renewal is possible.
-
-Replacing or disconnecting an account invalidates that user's existing ClientGrants for the endpoint and cancels admitted requests and subscriptions. Authorize clients again after reconnecting. Completed operations cannot be undone. An initial account connection may fulfill an existing grant. Signing out of the portal or running local `logout` does not revoke an upstream account: use **Disconnect** in the portal.
+Connection, reconnection and disconnect steps are in the [user manual: personal accounts](user-guide.md#connect-a-personal-account).
 
 ## Administrator configuration
 

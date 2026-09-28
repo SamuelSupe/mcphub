@@ -1,0 +1,217 @@
+# MCPHub user manual
+
+[中文](user-guide.zh-CN.md) · [Documentation](README.md) · [Project home](../README.md)
+
+For people using company tools through Codex, Claude Code or another MCP client. This manual covers v2.2.0. Install `mcphub-cli` on your own computer; administrators configure the gateway, identity provider and Vault.
+
+For first-time access: **install the CLI → run setup → confirm authorization → add the generated configuration to your client**. If a service requires a personal upstream account, connect it in the portal before completing the connection check.
+
+- [Before you start](#before-you-start) · [Install the CLI](#install-the-cli) · [Connect an MCP client](#connect-an-mcp-client)
+- [Connect a personal account](#connect-a-personal-account) · [Write approvals](#write-approvals) · [Manage client authorizations](#manage-client-authorizations)
+- [Diagnostics and troubleshooting](#diagnostics-and-troubleshooting) · [Manual login and compatible connections](#manual-login-and-compatible-connections) · [Local data and logout](#local-data-and-logout)
+
+## Before you start
+
+Ask your administrator for:
+
+| Information | Example or purpose |
+| --- | --- |
+| MCPHub URL | `https://hub.example.com/mcp`, including the full path |
+| CLI client ID | Such as `mcphub-cli`, registered by the administrator |
+| Available services and tools | A first SSO login may remain pending until an administrator enables the user and grants access |
+| Callback port, if required | For a fixed port such as `8765`, add `--callback-port 8765` to `setup` or `login` |
+
+Domains, tools and `ci_example` below are placeholders. Use your actual URL and the client ID returned by the command. `work` is a local profile name you can choose. Setup requires server-side client authorization; see [compatible connections](#manual-login-and-compatible-connections) for older deployments.
+
+## Install the CLI
+
+Choose the CLI package for your computer from the [v2.2.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0):
+
+| Platform | CLI download |
+| --- | --- |
+| macOS Intel | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_linux_arm64.tar.gz) |
+| Windows x64 | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_windows_amd64.zip) |
+| Windows ARM64 | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_windows_arm64.zip) |
+
+Compare the download's SHA-256 with [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS), extract it and put the executable on PATH. Windows requires version 10 or later; choose x64 for Intel/AMD computers and ARM64 for Windows on Arm.
+
+Windows PowerShell example (substitute the archive for your architecture):
+
+```powershell
+Get-FileHash .\mcphub-cli_v2.2.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcphub-cli_v2.2.0_windows_amd64.zip -DestinationPath .\mcphub-cli
+```
+
+If you have not added it to PATH, replace `mcphub-cli` in subsequent commands with `.\mcphub-cli\mcphub-cli.exe`.
+
+With Go 1.26 installed, you can also run:
+
+```bash
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.2.0
+```
+
+To build from source, use `go build -trimpath -o ./mcphub-cli ./cmd/mcphub-cli`. Make sure the MCP client can find the executable. Setup generates its actual absolute path.
+
+## Connect an MCP client
+
+Run this on the computer where you installed the CLI:
+
+```bash
+mcphub-cli setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work > mcphub-mcp.json
+```
+
+For an existing `work` login, use this instead:
+
+```bash
+mcphub-cli setup --profile work > mcphub-mcp.json
+```
+
+Follow the wizard:
+
+1. Sign in through the browser, then choose a service (endpoint) and specific tools. The list contains published tools you are eligible to request.
+2. Set optional resource limits, an authorization duration and a client name. Resource limits apply to every selected tool; empty selection never grants all tools. Writes and unclassified tools require a separate confirmation and still need approval per operation.
+3. Compare the authorization scope and terminal pairing code in the browser, then confirm. Appearing in the selection catalog does not itself grant access.
+
+Choose portable `mcpServers` JSON or [VS Code `servers` JSON](https://code.visualstudio.com/docs/agent-customization/mcp-servers). Output contains the executable path, `connect --profile … --client …` and `MCPHUB_HOME`, with no credentials. Prompts and diagnostic results go to stderr. Merge the entry into your client's existing configuration and restart its MCP connection; setup does not overwrite application files. Run the configured command on the same computer and OS account as setup. Containers, SSH hosts and remote development environments cannot reuse these local paths or the local Broker. One entry covers one endpoint; run setup again for another.
+
+Setup verifies authorization, initialization and catalog discovery without executing tools. If this final check fails, it keeps the approved grant and prints the configuration with a failing exit status; follow the diagnostics and rerun `doctor`. `Ctrl+C` cancels setup. An expired grant requires `client authorize` or a new setup; refreshable login credentials do not extend the grant's deadline.
+
+The portable configuration looks like:
+
+```json
+{
+  "mcpServers": {
+    "work-projects": {
+      "command": "/absolute/path/to/mcphub-cli",
+      "args": ["connect", "--profile", "work", "--client", "ci_example"]
+    }
+  }
+}
+```
+
+Keep the actual path, client ID and `env.MCPHUB_HOME`, when present, generated by setup. Escape backslashes in Windows JSON paths, for example `C:\\Tools\\mcphub-cli\\mcphub-cli.exe`. For clients requiring a different configuration format, use the same command, arguments and environment values in that format.
+
+Reload the client's MCP connection to discover authorized tools. You can also run `mcphub-cli doctor --profile work --client ci_example`. Login refresh and client authorization expiry are separate.
+
+## Connect a personal account
+
+1. Sign in to MCPHub through setup or `mcphub-cli login`.
+2. Open `https://hub.example.com/client-auth/`. Under **Connected accounts**, select **Connect account** for a service. Complete its browser authorization, or enter a personal token if the administrator selected that method.
+3. Continue using your existing MCP client configuration. Neither the client nor the Agent needs an upstream token or Vault path.
+
+Several authorized clients belonging to the same user can use one account connection. Each client remains restricted by its ClientGrant; writes and unclassified tools still require approval for each operation. Account details show permissions, expiry and whether renewal is possible.
+
+Replacing or disconnecting an account invalidates that user's existing ClientGrants for the endpoint and cancels admitted requests and subscriptions. Authorize clients again after reconnecting. Completed operations cannot be undone. An initial account connection may fulfill an existing grant. Signing out of the portal or running local `logout` does not revoke an upstream account: use **Disconnect** in the portal.
+
+## Write approvals
+
+Read tools execute after permission checks. Write tools and unclassified tools require approval for each operation. Permission to request a write does not approve the operation itself.
+
+1. When the Agent receives `approval_pending`, the write has not executed. Open the returned `approval_url`.
+2. An authorized reviewer checks the target, resources, complete arguments and available preview, then completes any required step-up authentication and approves or rejects. You may need to share the link with the designated reviewer; being the requester does not grant approval rights.
+3. After approval, the original client calls `mcphub_resume_approval` with the `approval_id`. Use `mcphub_approval_status` to check progress and `mcphub_cancel_approval` to cancel before execution.
+
+Approval may require two different reviewers and has an expiry. If the result is uncertain, check status and contact an administrator instead of repeatedly requesting the write. Revocation or cancellation cannot undo a write already accepted upstream. Replacing a client grant does not transfer its pending approvals to the new grant.
+
+## Manage client authorizations
+
+At `https://hub.example.com/client-auth/`, inspect, deny or revoke your own grants and sessions. One client entry targets one service (endpoint); authorize different Agents or services separately so each can be revoked independently.
+
+To select tools and resources explicitly, use the manual commands:
+
+```bash
+mcphub-cli client add --profile work --name editor-read --endpoint database-prod \
+  --scope mcp:database --scope db:read --tool query --resource /project=project-a
+```
+
+Review the scope and pairing code in the browser. Choose subsequent actions as needed, replacing `ci_example` with your actual client ID:
+
+| Action | Command and effect |
+| --- | --- |
+| List grants | `mcphub-cli client list --profile work` |
+| Reauthorize or renew | `mcphub-cli client authorize --profile work --client ci_example`; confirm in the browser, then restart the MCP connection |
+| Change resource limits | `mcphub-cli client authorize --profile work --client ci_example --resource /project=project-b`; replaces the resource list and asks for consent again |
+| Revoke one grant | `mcphub-cli client revoke --profile work --client ci_example`; blocks subsequent calls using that grant |
+| Inspect the Broker | `mcphub-cli broker status` |
+| Stop the Broker | `mcphub-cli broker stop`; stops local connections while remote grants remain active |
+
+`client add` prints a complete MCP configuration containing `connect --profile work --client ci_...`, with no credentials. One entry grants access to one endpoint; use separate entries for multiple endpoints. `connect` starts the shared local Broker as needed. `broker run` runs it in the foreground. `MCPHUB_HOME` selects an alternative private directory; all related processes must use the same directory. Broker diagnostics go to `broker.log`; stdio connections emit only MCP messages.
+
+Authorization defaults to reads and a frozen list of currently eligible tools. Omitted scopes are derived from the selected endpoint and eligible tools within the user's token permissions. Repeated `--scope`, `--tool` and `--resource /json/pointer=value` narrow access. Add `--prompts`, `--resources` and `--subscriptions` explicitly when needed; subscriptions also require resources. Tool argument restrictions cannot scope resource URIs or prompts, so use a separate entry for those capabilities. `--ttl` can shorten the server maximum (1 minute to 8 hours). `client authorize` preserves unspecified settings and asks for consent again; repeated list flags replace the previous list. Existing connections must restart after replacement.
+
+`--allow-write-requests` only permits requesting writes. Each write still follows server approval, quorum, MFA, resource/version checks and business-operation deduplication. Include any required preview/status tools in the client's allowlist. Another client or replacement grant cannot read, cancel, resume or inherit an old approval/result. Reusing its business operation ID cannot cause another execution.
+
+`status` and `client list` distinguish cached login state from online grant status and effective scopes. The Broker checks local changes every second and remote status with ETags every 30 seconds; **server revocation applies to new admission immediately**, independently of polling, and cancels active streams. A side effect already accepted upstream cannot be rolled back. `logout` immediately clears local secrets, disconnects the profile and attempts remote session revocation. Offline failures retain only non-secret session references and report revocation as unconfirmed; revoke the old session at `/client-auth/`. `broker stop` stops local transport without revoking grants. Neither command revokes issuer tokens or signs out browser sessions.
+
+## Diagnostics and troubleshooting
+
+On the user's computer, diagnose the same profile and client entry used by the MCP configuration:
+
+```bash
+mcphub-cli doctor --profile work
+mcphub-cli doctor --profile work --client ci_example
+mcphub-cli doctor --profile work --client ci_example --json --timeout 30s
+```
+
+`doctor` checks private credential storage, login/refresh, pairing, online Grant state and effective scopes, then performs MCP initialization and reads the first tool-catalog page. It uses a running Broker when available; otherwise it warns and tests the remote connection directly with the same client credentials. It can refresh tokens, but never opens a login window, starts a Broker, creates authorization or executes tools. Reports contain no tokens or IPC credentials, include next steps, and return exit code `1` for blocking failures (`0` for success or warnings). The default deadline is 15 seconds, configurable from 1 second to 2 minutes.
+
+`doctor --client ci_...` and setup also check personal upstream accounts. Missing, expired, disconnected or unavailable credentials fail diagnostics with recovery guidance. This read-only check neither refreshes upstream credentials nor executes tools, and cannot guarantee upstream business permissions. Older servers without account status produce an explicit warning.
+
+### Common problems
+
+| Symptom | Next step |
+| --- | --- |
+| First login is pending authorization | Ask an administrator to enable the user and assign service, scope and tool permissions |
+| No eligible tools or a 403 response | Check the identity and selected service; ask an administrator to inspect publication and permissions |
+| Expired, revoked or changed client grant | Run `mcphub-cli client authorize --profile work --client ci_example`, confirm in the browser and restart the MCP connection |
+| Missing, expired or disconnected personal account | Connect/reconnect in the portal; authorize the client again after replacing or disconnecting an account |
+| Browser did not open | Open the printed URL on the same computer and check the required callback port |
+| 401 and login cannot refresh | Run `mcphub-cli login --profile work` again, then restart the MCP connection |
+| 429 response | Wait for service capacity; do not automatically replay writes |
+| Unavailable service or persistent 503 | Send diagnostics and request IDs to the administrator to investigate the gateway, identity provider and backend |
+
+Reports contain no tokens. Share the time, profile, client ID, endpoint, request ID and diagnostic result; do not send credential files from `~/.mcphub/`.
+
+## Manual login and compatible connections
+
+To log in or renew credentials separately:
+
+```bash
+mcphub-cli login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+mcphub-cli status --profile work
+```
+
+`login` opens the system browser and waits up to five minutes for the local callback. If browser opening fails, it prints a URL to open on the same computer. It validates state/issuer and completes an authenticated MCP handshake before replacing saved credentials. A failed or canceled login preserves the previous profile. Repeat `--scope` to choose the requested scopes; otherwise the challenge or resource metadata provides the defaults. `offline_access` is added when advertised. A provider that issues no refresh token is supported, with an explicit message that another login will be required after expiry.
+
+For older deployments or endpoints where the administrator allows access without a client grant, use this stdio configuration:
+
+```json
+{
+  "mcpServers": {
+    "mcphub": {
+      "command": "/absolute/path/to/mcphub-cli",
+      "args": ["connect", "--profile", "work"]
+    }
+  }
+}
+```
+
+This cannot access endpoints requiring client authorization. Use the setup-generated `--client ci_...` configuration for those services. Basic `login` / `connect` works with v1.x; client authorization, Broker and setup require v2.0.0 or newer, personal accounts require v2.1.0, and personal-account diagnostics require v2.2.0.
+
+`connect` reads this profile, adds the Bearer token to requests to its saved MCPHub endpoint, and refreshes credentials before expiry. It forwards tools, prompts, resources, pagination, progress, and subscriptions without changing their public names or URIs. Each canceled stdio call closes its corresponding HTTP response stream. stdout contains MCP messages only; diagnostics use stderr. The connector never opens a browser. It refreshes/retries a rejected 401 request at most once, surfaces missing scopes for 403, and does not replay operations after network errors.
+
+## Local data and logout
+
+```bash
+mcphub-cli status --profile work
+mcphub-cli logout --profile work
+```
+
+Logout, stopping the Broker, revoking a client grant and disconnecting a personal account are separate actions. Stopping the Broker only stops local transport; revoking a grant restricts that client; disconnecting an account affects its upstream credentials. Disconnect personal accounts in the portal and revoke authorization at the upstream provider when necessary.
+
+Profiles default to `default` and are stored in `~/.mcphub/` on macOS/Linux (directory `0700`, files `0600`), or `%USERPROFILE%\.mcphub\` on Windows with a DACL granting access only to the current user. Windows credential storage requires a local filesystem supporting Windows access controls, such as NTFS. Existing profiles work with `mcphub-cli` without migration. Tokens are stored as local JSON, **not encrypted**; keep this directory outside shared folders and backups accessible to other users. Temporary-file replacement and per-profile process locks protect refresh-token rotation across multiple connectors.
+
+For profiles without a Broker, `status` reports local cache state, expiry, and refresh capability, never token values. `logout` clears local tokens while keeping non-secret endpoint settings; subsequent connector requests fail and require login. Already accepted requests may finish. It does not revoke issuer tokens or sign out the browser. Logging in again requires restarting existing connectors for that profile.

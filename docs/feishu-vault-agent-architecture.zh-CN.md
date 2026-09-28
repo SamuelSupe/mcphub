@@ -1,6 +1,6 @@
 # 飞书 SSO、Vault 与企业 Agent 接入架构
 
-架构核查日期：2026-09-26；版本说明更新于 2026-09-27，对应 MCPHub v2.2.0。本文面向架构评审、部署人员、安全管理员和 Agent 使用者。
+架构核查日期：2026-09-26；版本说明更新于 2026-09-27，对应 MCPHub v2.2.0。本文面向架构评审、部署人员和安全管理员。员工日常接入见[用户手册](user-guide.zh-CN.md)，部署与维护入口见[管理员手册](admin-guide.zh-CN.md)。
 
 [下载 27 页 PDF](feishu-vault-agent-architecture.zh-CN.pdf) · [配置示例](../deploy/config.feishu-vault.example.yaml) · [文档导航](README.zh-CN.md)。PDF 保留 2026-09-26、v2.1.0 发布前的架构评审快照；当前版本状态以本在线文档为准。
 

@@ -1,34 +1,46 @@
 # MCPHub documentation
 
-[中文](README.zh-CN.md) · [Project README](../README.md) · [v2.2.0 release notes](../RELEASE_NOTES_v2.2.0.md)
+[中文](README.zh-CN.md) · [Project home](../README.md)
 
-## Enterprise architecture and best practices
+These documents cover v2.2.0. Choose a manual for your role, then use the references when you need details.
 
-The [Feishu SSO, Vault and Agent integration guide](feishu-vault-agent-architecture.zh-CN.md) covers identity, user and client permissions, personal upstream accounts, write approval, Codex / Claude Code configuration, operations and deployment acceptance. The full guide is currently in Chinese.
+## User manual
 
-![Enterprise Agent architecture](diagrams/feishu-vault-agents.svg)
+**[Open the user manual](user-guide.md)**: for employees using Codex, Claude Code or another MCP client.
 
-- [27-page architecture PDF](feishu-vault-agent-architecture.zh-CN.pdf), with rendered sequence diagrams, a linked table of contents and the full configuration appendix. This is the 2026-09-26 review snapshot; current release status is maintained in the online guide.
-- [Deployment configuration](../deploy/config.feishu-vault.example.yaml), using placeholders and candidate Feishu endpoints that require tenant validation.
-- [Scalable SVG](diagrams/feishu-vault-agents.svg) and [PNG](diagrams/feishu-vault-agents.png).
+1. [Prepare and install the CLI](user-guide.md#before-you-start)
+2. [Run setup and connect an MCP client](user-guide.md#connect-an-mcp-client)
+3. [Connect a personal upstream account](user-guide.md#connect-a-personal-account)
+4. [Handle write approvals](user-guide.md#write-approvals) and [manage client grants](user-guide.md#manage-client-authorizations)
+5. [Diagnose connection problems](user-guide.md#diagnostics-and-troubleshooting)
 
-Feishu establishes identity; MCPHub enforces user, client, tool, scope, resource and write-approval policies; Vault stores upstream credentials. Business endpoints retain their own authorization checks. The guide explicitly identifies the pending Feishu directory adapter and real-tenant/MFA acceptance requirements.
+## Administrator manual
 
-## Configuration guides
+**[Open the administrator manual](admin-guide.md)**: for deployment, access control, governance and operations.
+
+1. [Prepare and deploy](admin-guide.md#preparation-and-installation)
+2. [Connect services and publish tools](admin-guide.md#connect-services-and-publish-tools)
+3. [Configure users and organizations](admin-guide.md#users-and-organizations), [client authorization](admin-guide.md#enable-client-authorization) and [upstream accounts](admin-guide.md#configure-upstream-accounts)
+4. [Configure write approval and governance](admin-guide.md#write-approval-and-configuration-governance)
+5. [Inspect grants and requests](admin-guide.md#grant-and-request-diagnostics), [upgrade and back up](admin-guide.md#upgrades-and-backups)
+
+## Configuration and topic references
 
 | Topic | English | Chinese |
 | --- | --- | --- |
-| Vault shared/personal accounts and credential lifecycle | [Guide](vault-accounts.md) | [说明](vault-accounts.zh-CN.md) |
-| SSO, user permissions and directory synchronization | [Guide](sso-and-user-management.md) | [说明](sso-and-user-management.zh-CN.md) |
-| Remote administration, SQLite and single-instance PostgreSQL | [Deployment](../deploy/README.md) | [部署](../deploy/README.zh-CN.md) |
-| Client Broker and synchronized authorization design | - | [设计](broker-authorization-design.zh-CN.md) |
-| Security boundaries | [Policy](../SECURITY.md) | [安全说明](../README.zh-CN.md#安全说明) |
+| YAML, tool policies, management APIs, protocol and reloads | [Reference](configuration.md) | [配置与协议参考](configuration.zh-CN.md) |
+| HTTPS, remote administration, SQLite / PostgreSQL | [Deployment](../deploy/README.md) | [部署指南](../deploy/README.zh-CN.md) |
+| SSO, user policies, department/group sync and administrator recovery | [Administrator guide](sso-and-user-management.md) | [管理员专题](sso-and-user-management.zh-CN.md) |
+| Vault shared/personal account configuration, policies and operations | [Administrator guide](vault-accounts.md) | [管理员专题](vault-accounts.zh-CN.md) |
+| Security boundaries and vulnerability reporting | [Security policy](../SECURITY.md) | [运行安全](admin-guide.zh-CN.md#安全说明) |
 
-## Recommended rollout
+## Architecture, design and release material
 
-1. Validate one explicitly published read-only endpoint with the real identity provider.
-2. Configure local user/organization permissions and complete directory synchronization checks.
-3. Connect personal upstream accounts and issue separate grants for each Agent and endpoint.
-4. Enable independently approved writes only after authorization, MFA where required, revocation, audit and recovery checks pass.
+Use these for design context and historical records. Start with the manuals for everyday commands.
 
-Deploy one active MCPHub process. PostgreSQL and Vault may use their own HA arrangements; they do not add multi-instance coordination to the Hub.
+- [Feishu SSO, Vault and enterprise Agent architecture](feishu-vault-agent-architecture.zh-CN.md) (Chinese): integration design and pending acceptance work, with [configuration](../deploy/config.feishu-vault.example.yaml), [SVG](diagrams/feishu-vault-agents.svg) and [PNG](diagrams/feishu-vault-agents.png).
+- [27-page architecture PDF](feishu-vault-agent-architecture.zh-CN.pdf): the 2026-09-26 review snapshot; current status is maintained in the online architecture document.
+- [Client Broker and authorization design](broker-authorization-design.zh-CN.md) (Chinese): decisions and implementation boundaries.
+- [Screenshot notes](screenshots/README.md): provenance of the v2.1.0 demonstration screenshots.
+- [v2.2.0 release and upgrade notes](../RELEASE_NOTES_v2.2.0.md), [all releases](https://github.com/SamuelSupe/mcphub/releases).
+- [Contributing](../CONTRIBUTING.md): development, validation and documentation conventions.

@@ -15,7 +15,7 @@ MCPHub v2.0.0 将工具发布、写审批、客户端授权、企业 SSO 权限�
 - Tool permissions workbench, side-effect-free access checks and `mcphub-cli doctor`. / 工具权限工作台、无副作用权限检查和本机诊断。
 - `mcphub-cli setup`, an administrator client authorization center, and bounded request diagnostics. / 接入向导、管理员客户端授权中心和有容量上限的请求诊断。
 
-See [English usage](README.md#guided-setup-and-administration) / [中文使用说明](README.zh-CN.md#接入向导与授权运维).
+See [English usage](docs/user-guide.md#connect-an-mcp-client) / [中文使用说明](docs/user-guide.zh-CN.md#接入-mcp-客户端).
 
 ## Upgrade and rollback / 升级与回滚
 

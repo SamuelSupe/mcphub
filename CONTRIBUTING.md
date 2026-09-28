@@ -10,9 +10,9 @@ This public repository is [SamuelSupe/mcphub](https://github.com/SamuelSupe/mcph
 
 ### Before you start
 
-1. Read the [English README](README.md) and the [Chinese README](README.zh-CN.md), especially the configuration, security, and known-limits sections.
+1. Start with the [documentation index](docs/README.md), then read the relevant [user manual](docs/user-guide.md), [administrator manual](docs/admin-guide.md) and [configuration reference](docs/configuration.md).
 2. For a vulnerability or a suspected secret leak, do not open a public issue; follow [SECURITY.md](SECURITY.md).
-3. Check the explicit exclusions before proposing a feature. The current release does not provide stdio backends, a standalone legacy SSE endpoint, native TLS, dynamic tenants, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The release includes local or OIDC-authenticated remote administration, encrypted SQLite/PostgreSQL configuration storage for one instance, optional endpoint limits, Vault-backed shared/personal accounts, and a separate local stdio-to-HTTP connector; see the management UI and browser login sections in the README.
+3. Check the explicit exclusions before proposing a feature. The current release does not provide stdio backends, a standalone legacy SSE endpoint, native TLS, dynamic tenants, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The release includes local or OIDC-authenticated remote administration, encrypted SQLite/PostgreSQL configuration storage for one instance, optional endpoint limits, Vault-backed shared/personal accounts, and a separate local stdio-to-HTTP connector; see the administrator and user manuals.
 
 ### Development setup
 
@@ -58,12 +58,12 @@ PostgreSQL persistence checks require a disposable database with `citext` instal
 - Use a focused title that states the user-visible or operational change.
 - Explain the problem, the chosen behavior, configuration/API impact, and known limitations.
 - Include validation commands and their results. If a check was not run, say why.
-- Update both README languages when user-facing behavior, configuration, security semantics, or supported boundaries change.
+- Update both languages of the affected manual or reference when behavior, configuration, security semantics or supported boundaries change; update the README when the project overview or entry points change.
 - Update the issue/PR templates or release notes only when the requested change actually affects them; do not add a release promise for an excluded capability.
 
 ### Documentation changes
 
-Documentation must reflect the current code, not a planned design. Keep `README.md` and `README.zh-CN.md` semantically equivalent and keep their language links working. Examples must use environment-variable placeholders and must not contain live credentials.
+Documentation must reflect the current code, not a planned design. Keep both languages of each manual, reference and README semantically equivalent, with working language links. Put employee workflows in `docs/user-guide*.md`, administration in `docs/admin-guide*.md`, and detailed fields/protocols in `docs/configuration*.md`; the README remains an overview and navigation entry. Examples must use environment-variable placeholders and must not contain live credentials.
 
 ## 中文
 
@@ -73,9 +73,9 @@ Documentation must reflect the current code, not a planned design. Keep `README.
 
 ### 开始前
 
-1. 阅读[中文 README](README.zh-CN.md)和[英文 README](README.md)，尤其是配置、安全和已知限制部分。
+1. 从[文档导航](docs/README.zh-CN.md)开始，按改动阅读[用户手册](docs/user-guide.zh-CN.md)、[管理员手册](docs/admin-guide.zh-CN.md)和[配置参考](docs/configuration.zh-CN.md)。
 2. 漏洞或疑似 secret 泄露不要提交公开 Issue，请遵循 [SECURITY.md](SECURITY.md) 的私下报告流程。
-3. 提议新功能前先检查明确排除项。本版本不提供 stdio 后端接入、独立旧 SSE 端点、原生 TLS、动态租户、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本版本包含本地或 OIDC 远程管理、单实例的加密 SQLite/PostgreSQL 配置存储、可选 endpoint 限流、Vault 共享/个人账号，以及独立的本地 stdio 到 HTTP 连接器，参见 README 的管理 UI 和浏览器登录章节。
+3. 提议新功能前先检查明确排除项。本版本不提供 stdio 后端接入、独立旧 SSE 端点、原生 TLS、动态租户、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本版本包含本地或 OIDC 远程管理、单实例的加密 SQLite/PostgreSQL 配置存储、可选 endpoint 限流、Vault 共享/个人账号，以及独立的本地 stdio 到 HTTP 连接器，参见管理员手册和用户手册。
 
 ### 开发环境
 
@@ -121,9 +121,9 @@ PostgreSQL 持久化检查需要允许安装 `citext` 的临时数据库。运�
 - 标题应说明用户可见或运维可见的变化，保持聚焦。
 - 说明问题、选择的行为、配置/API 影响和已知限制。
 - 写明验证命令和结果；未运行的检查要说明原因。
-- 用户可见行为、配置、安全语义或支持边界变化时，同时更新中英文 README。
+- 行为、配置、安全语义或支持边界变化时，同时更新对应手册或参考页的中英文版本；项目概览和入口变化时再更新 README。
 - 只有在请求确实影响时才更新 Issue/PR 模板或 release notes；不要为明确排除能力增加发布承诺。
 
 ### 文档变更
 
-文档必须反映当前代码，而不是计划设计。保持 `README.md` 和 `README.zh-CN.md` 语义等价并确保语言链接可用。示例使用环境变量占位符，不得包含真实凭证。
+文档必须反映当前代码，而不是计划设计。保持各手册、参考页和 README 的中英文语义等价并确保语言链接可用。员工操作放入 `docs/user-guide*.md`，管理流程放入 `docs/admin-guide*.md`，详细字段和协议放入 `docs/configuration*.md`；README 保持项目概览和导航职责。示例使用环境变量占位符，不得包含真实凭证。

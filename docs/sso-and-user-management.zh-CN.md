@@ -1,5 +1,9 @@
 # 外部 SSO 与 MCPHub 用户权限
 
+[English](sso-and-user-management.md) · [管理员手册](admin-guide.zh-CN.md) · [文档导航](README.zh-CN.md)
+
+本文是管理员配置与运维专题。员工接入请阅读[用户手册](user-guide.zh-CN.md)。
+
 MCPHub 可以作为身份桥接服务接入 OIDC 或支持授权码、PKCE S256 和 Bearer UserInfo 的 OAuth2 身份源。客户端继续使用 `mcphub-cli`，无需持有上游应用密钥。当前没有配置或连接任何飞书租户；飞书兼容性需由实际应用的授权接口、UserInfo 字段、租户配置和目录适配器确认。
 
 ```text
@@ -168,14 +172,7 @@ upstream:
 
 ## 客户端与部署边界
 
-```bash
-mcphub-cli login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
-mcphub-cli connect --profile work
-mcphub-cli status --profile work
-mcphub-cli logout --profile work
-```
-
-需要本地 Broker 时继续使用已有 `setup`/客户端授权流程。MCP 客户端配置仍只启动 `mcphub-cli`；不填写上游 Token 或 client secret。
+员工安装、登录与 Broker 授权统一见[用户手册](user-guide.zh-CN.md)。客户端只启动 `mcphub-cli`，不填写上游 Token 或 client secret。
 
 本地 access JWT 有效期 10 分钟；请求 `offline_access` 后可取得轮换 refresh token，SSO 会话最长 8 小时，之后重新登录。上游凭证不长期保存；本地刷新不会重新查询上游账号。已消费 refresh token 被重放时撤销整个会话。签名私钥使用现有配置密钥加密保存在数据库，refresh token 只保存摘要；access JWT 仍需通过数据库中的会话与最新用户权限检查。备份时必须一同保留数据库与匹配的配置加密密钥。
 

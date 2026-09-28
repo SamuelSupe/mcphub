@@ -1,15 +1,17 @@
 # Remote administration and database deployment
 
-MCPHub v2.2.0 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes. [中文](README.zh-CN.md)
+[中文](README.zh-CN.md) · [Administrator manual](../docs/admin-guide.md) · [Documentation](../docs/README.md)
+
+MCPHub v2.2.0 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes.
 
 v2.2.0 adds persistent request history and administrator/login safeguards. SQLite and PostgreSQL migrate to schema 9; retain the single-instance boundary and follow the [upgrade and rollback procedure](../RELEASE_NOTES_v2.2.0.md) before replacing an older version. Vault shared/personal accounts remain available. See [Vault deployment](../docs/vault-accounts.md), [SSO deployment](../docs/sso-and-user-management.md), and the [enterprise architecture and best practices](../docs/feishu-vault-agent-architecture.zh-CN.md) with its [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf).
 
-Completed MCP POST requests are retained for 30 days by default. Set `admin.request_retention` between `24h` and `8760h` to match operational needs. The administrator's request diagnostics page supports time filters and NDJSON export; see the [history contract and privacy boundaries](../README.md#guided-setup-and-administration). Protect database backups and exports: arguments, results and tokens are excluded, but identity/routing indexes are readable database metadata.
+Completed MCP POST requests are retained for 30 days by default. Set `admin.request_retention` between `24h` and `8760h` to match operational needs. The administrator's request diagnostics page supports time filters and NDJSON export; see the [history contract and privacy boundaries](../docs/admin-guide.md#grant-and-request-diagnostics). Protect database backups and exports: arguments, results and tokens are excluded, but identity/routing indexes are readable database metadata.
 
 | Deployment | Configuration |
 | --- | --- |
 | Feishu SSO + Vault + personal MCP accounts (integration example) | [config.feishu-vault.example.yaml](config.feishu-vault.example.yaml); requires real-tenant acceptance |
-| Local administration + SQLite | Local UI example in the main README |
+| Local administration + SQLite | [Local UI example in the administrator manual](../docs/admin-guide.md#local-management-ui) |
 | HTTPS remote administration + SQLite | [config.remote-sqlite.yaml](config.remote-sqlite.yaml) |
 | HTTPS remote administration + PostgreSQL | [config.remote-postgres.yaml](config.remote-postgres.yaml), [Compose](compose.postgres.yaml) |
 
@@ -86,7 +88,7 @@ mcphub-cli admin --profile ops get /tool-groups
 mcphub-cli admin --profile ops get '/events?limit=50'
 ```
 
-`admin` is a JSON management API client supporting `get/post/put/delete`. Paths are relative to `/api/v1`; all flags precede the method. Backend, tool and import operations use the API paths in the main README. Use `--file FILE` for JSON or `--file -` for stdin. JSON goes to stdout, ETags to stderr; tokens are never exported. The body limit is 6 MiB, matching OpenAPI uploads.
+`admin` is a JSON management API client supporting `get/post/put/delete`. Paths are relative to `/api/v1`; all flags precede the method. Backend, tool and import operations use the [API paths in the configuration reference](../docs/configuration.md#tool-groups-and-managed-http-api-tools). Use `--file FILE` for JSON or `--file -` for stdin. JSON goes to stdout, ETags to stderr; tokens are never exported. The body limit is 6 MiB, matching OpenAPI uploads.
 
 Save a disabled backend as `backend.json`:
 
@@ -112,4 +114,4 @@ Both databases commit configuration and audit events transactionally and encrypt
 
 Back up the database and retain `MCPHUB_CONFIG_KEY` separately. Changing the driver does not migrate existing data; tool groups and OpenAPI imports have no YAML representation. Multi-instance coordination and cross-database migration tooling remain out of scope. Remote MCP endpoints support [personal upstream accounts](../docs/vault-accounts.md). With an external issuer, upstream JWT revocation depends on that provider; Hub-managed SSO also checks the current local session and user policy. Signing out of Hub does not revoke upstream business accounts or a global identity-provider session.
 
-MCP backends and HTTP tool groups expose **Rate limits** in the admin UI and a `rate_limit` object in the management API: `requests_per_second`, `burst`, `max_concurrent`. All default to zero (unlimited); users share the endpoint allowance. Policies persist in the selected database, while counters stay in the process. See [rate-limit semantics](../README.md#endpoint-rate-limits).
+MCP backends and HTTP tool groups expose **Rate limits** in the admin UI and a `rate_limit` object in the management API: `requests_per_second`, `burst`, `max_concurrent`. All default to zero (unlimited); users share the endpoint allowance. Policies persist in the selected database, while counters stay in the process. See [rate-limit semantics](../docs/configuration.md#endpoint-rate-limits).

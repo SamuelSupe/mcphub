@@ -28,10 +28,10 @@ result:
 
 ### Checklist
 
-- [ ] I read the relevant README and SECURITY guidance.
+- [ ] I read the relevant manual, configuration reference and SECURITY guidance.
 - [ ] I preserved the current MCP wire contract and namespace/URI mapping.
 - [ ] I added or updated a behavior-boundary test when the change warrants one.
-- [ ] I updated both `README.md` and `README.zh-CN.md` when user-facing semantics changed.
+- [ ] I updated both languages of the affected manual or reference; README changes cover project overview and navigation.
 - [ ] I removed secrets, tokens, private keys, and production personal data.
 - [ ] I did not add a promise for stdio backends, standalone legacy SSE, native TLS, Tasks, MCP Apps, or custom MCP extensions.
 
@@ -65,9 +65,9 @@ result:
 
 ### 检查清单
 
-- [ ] 我已阅读相关 README 和 SECURITY 指南。
+- [ ] 我已阅读相关手册、配置参考和 SECURITY 指南。
 - [ ] 我保留了当前 MCP wire contract 以及命名空间/URI 映射。
 - [ ] 需要时，我添加或更新了行为边界测试。
-- [ ] 用户可见语义变化时，我同时更新了 `README.md` 和 `README.zh-CN.md`。
+- [ ] 我已同步更新相关手册或参考页的中英文版本；README 仅在项目概览或导航变化时更新。
 - [ ] 我已删除 secret、token、私钥和生产个人数据。
 - [ ] 我没有为 stdio 后端接入、独立旧 SSE、原生 TLS、Tasks、MCP Apps 或自定义 MCP 扩展增加承诺。

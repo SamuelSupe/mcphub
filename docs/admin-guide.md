@@ -7,6 +7,7 @@ For administrators responsible for deployment, service connections, access polic
 Recommended sequence: **deploy the gateway → connect a read-only service → publish tools explicitly → assign user permissions → enable client authorization → validate before enabling writes**.
 
 - [Preparation and installation](#preparation-and-installation) · [Local management UI](#local-management-ui) · [Remote administration and databases](#remote-administrators-and-postgresql)
+- [Login clients and credentials](#distinguish-login-clients-and-upstream-credentials)
 - [Connect services and publish tools](#connect-services-and-publish-tools) · [Users and organizations](#users-and-organizations) · [Client authorization](#enable-client-authorization) · [Upstream accounts](#configure-upstream-accounts)
 - [Write approval and governance](#write-approval-and-configuration-governance) · [Console navigation](#console-navigation) · [Tool permission checks](#tool-permission-checks) · [Grant and request diagnostics](#grant-and-request-diagnostics)
 - [Upgrades and backups](#upgrades-and-backups) · [Operations](#operations) · [Security](#security-notes) · [Known limits and troubleshooting](#known-limits-and-troubleshooting)
@@ -37,6 +38,8 @@ go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.0
 ```
 
 `validate --config PATH` checks configuration without creating a database. `serve --config PATH` starts the server and performs required migrations, writing structured JSON logs to stderr. Read [upgrades and backups](#upgrades-and-backups) before replacing an older version.
+
+Before deployment, check [example selection and configuration ownership](configuration.md#choose-a-configuration-and-apply-changes), [environment/secret syntax](configuration.md#environment-variables-and-secrets) and the [deployment variable inventory](../deploy/README.md#environment-variables). Add optional modules only when needed.
 
 ## Local management UI
 
@@ -91,6 +94,20 @@ Choose the identity mode before assigning access. With an external OIDC issuer, 
 Enable users in **Users and organizations**, then assign endpoints, exact tools, scopes, resources and required roles. New SSO users start pending authorization. Department/group synchronization updates identity and membership, not local grants; timely offboarding requires reliable directory synchronization. Assign administrator and reviewer roles separately.
 
 See [SSO and user management](sso-and-user-management.md) for configuration, directory snapshots and last-administrator recovery. Give employees the MCP URL, CLI client ID, available services, any required callback port and the [client setup instructions](user-guide.md#connect-an-mcp-client).
+
+## Distinguish login clients and upstream credentials
+
+Each `client_id` belongs to a different authentication flow; register and configure them separately. Replace these example domains. Hub user tokens target the full `server.public_url`; administrator tokens target `admin.public_url`. They are not interchangeable.
+
+| Purpose | Configuration | Example callback registration |
+| --- | --- | --- |
+| Employee CLI login to Hub | CLI `--client-id` | `http://127.0.0.1:PORT/oauth/callback` |
+| Ordinary-user portal | `client_authorization.client_id` | `https://hub.example.com/client-auth/auth/callback` |
+| Administrator browser login | `admin.client_id` | `https://admin.example.com/auth/callback` |
+| Hub verifies identity with enterprise SSO | `auth.sso.upstream.client_id` | `https://hub.example.com/sso/callback` |
+| User connects a business account | `backends[].credentials.oauth.client_id` | `https://hub.example.com/client-auth/api/accounts/callback` |
+
+`backends[].oauth` is Hub's service-account OAuth `client_credentials`, without a browser callback; `credentials.oauth` is personal user authorization. They cannot coexist. Hub `required_scopes` and upstream `oauth.scopes` are interpreted by their respective identity services and never automatically map or grant each other.
 
 ## Enable client authorization
 
@@ -208,7 +225,7 @@ The Dockerfile builds a static binary with `golang:1.26-bookworm`, then copies i
 docker build -t mcphub:local .
 docker run --rm \
   --name mcphub \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   --env-file .env \
   -v "$PWD/config.yaml:/etc/mcphub/config.yaml:ro" \
   mcphub:local serve --config /etc/mcphub/config.yaml
@@ -245,8 +262,18 @@ SQLite administration needs a writable database volume; both stores need `MCPHUB
 
 Common symptoms:
 
-1. `validate` reports `environment variable ... is not set`: export every `${...}` variable in the example.
+1. `validate` reports `environment variable ... is not set`: inject the selected example's variables into the actual service process; see the [base example](configuration.md#starting-from-the-full-yaml-example) or [remote deployment](../deploy/README.md#environment-variables). `required: false` does not skip backend variable validation.
 2. `/readyz` returns 503: inspect `auth_verifier_ready` and `required_ready` in the JSON, then check OIDC discovery/JWKS and required backend URLs.
 3. MCP returns 401 with a `resource_metadata` challenge: check the Bearer token, signature, issuer, and audience.
 4. MCP returns 403 `insufficient_scope`: add every scope named in the challenge for that backend.
 5. `/mcp` returns 404: ensure the request path exactly matches the path in `public_url`; `public_url` cannot be the domain root.
+
+Common configuration mistakes:
+
+| Symptom | Check and action |
+| --- | --- |
+| YAML edits do not change the service list | After managed-store initialization, edit through UI/API; do not delete the database. |
+| SSO/Vault still uses `${...}` despite exports | These fields do not expand; use literal settings and `*_env` names for secrets. |
+| Admin console exists but no user portal | Enable `client_authorization` separately and register ordinary-user clients. |
+| Published tools remain hidden or cannot execute | Check original names, `effect`, token/grant scopes and user policies; validation does not check actual tool existence. |
+| SQLite appears empty | Check the YAML location and resolved `database_path`; avoid opening a new path unintentionally. |

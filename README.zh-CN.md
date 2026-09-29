@@ -7,7 +7,7 @@
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-MCPHub 是面向远端 MCP Server 的聚合网关。它提供一个 Streamable HTTP 入口，集中管理服务接入、工具发布、用户权限、客户端授权与写操作审批。
+MCPHub 将已有的远端 MCP Server 和普通 HTTP API 统一提供为 MCP 工具。它提供一个 Streamable HTTP 入口，集中管理服务接入、工具发布、用户权限、客户端授权与写操作审批。
 
 用户在自己的电脑安装 `mcphub-cli`，通过浏览器登录并为 Agent 确认访问范围；管理员部署 `mcphub`，维护服务、凭证和访问策略。网关保持单实例运行，支持 SQLite 或 PostgreSQL。
 

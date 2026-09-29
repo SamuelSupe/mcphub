@@ -4,13 +4,62 @@
 
 本页用于查阅 YAML 字段、工具策略、管理 API 和网关协议细节。首次部署从[管理员手册](admin-guide.zh-CN.md)开始，日常接入从[用户手册](user-guide.zh-CN.md)开始。
 
-- [server](#server)、[auth](#auth)、[admin](#admin)、[backends](#backends)
+- [配置生效方式](#选择配置与生效方式)、[环境变量与 Secret](#环境变量与-secret)
+- [server](#server)、[auth](#auth)、[admin](#admin)、[backends](#backends)、[客户端授权](#client_authorization)、[Vault](#vault)
 - [工具组与 HTTP API](#工具组与托管-http-api-tool)、[限流](#endpoint-限流)、[发布与资源范围](#显式发布与资源范围)
 - [写审批](#单次写入审批)、[配置治理与双人审批](#配置治理双人审批与业务幂等)、[通知和审计归档](#审批通知与独立审计归档)
 - [其他配置专题](#其他配置专题)、[完整 YAML 示例启动](#从完整-yaml-示例启动)
 - [能力与边界](#能力与边界)、[HTTP 端点](#http-端点与-rfc-9728)、[名称与 URI](#命名与-uri-映射)、[热重载与关停](#sighup-热重载与关停)、[客户端凭证边界](#客户端凭证与连接边界)
 
-配置是单个 YAML 文档，解码使用严格字段检查；未知字段、多文档 YAML、缺失环境变量都会被拒绝。字符串配置项中的 `${NAME}` 占位符会从当前进程环境展开，`NAME` 必须匹配 `[A-Za-z_][A-Za-z0-9_]*`；没有默认值语法。duration、整数和布尔字段不支持占位符。配置加载和 SIGHUP 重载都会重新展开环境变量。管理数据库完成初始化后，YAML backends 及其环境变量占位符会被忽略。
+## 选择配置与生效方式
+
+本参考对应 v2.2.0。YAML 只允许一个文档，未知字段会被拒绝。**不要把管理 API 的 JSON 对象直接粘贴为 YAML**：例如 YAML 的 `headers` 是键值映射，API 的 `headers` 是对象数组；`enabled` 是托管 backend 的 API 字段，不是 YAML backend 字段。HTTP 工具组及 OpenAPI 导入只能通过控制台/API 管理。
+
+| 场景 | 从哪里开始 | 需要准备 |
+| --- | --- | --- |
+| YAML 管理一个 MCP 后端 | [基础示例](../config.example.yaml) | 4 个环境变量；默认不发布工具，无数据库和用户门户 |
+| 本机管理、SQLite | [管理员手册](admin-guide.zh-CN.md#本地管理-ui) | 网关 URL、issuer、固定加密密钥 |
+| 团队远程管理 | [部署示例与变量清单](../deploy/README.zh-CN.md#环境变量清单) | 管理 URL、身份客户端、SQLite 或 PostgreSQL、HTTPS 代理 |
+| SSO / Vault 个人账号 | [SSO](sso-and-user-management.zh-CN.md)、[Vault](vault-accounts.zh-CN.md) | 在托管配置上增加所需模块；飞书示例还需真实租户验收 |
+
+| 配置 | 修改位置 | 如何生效 |
+| --- | --- | --- |
+| `server.listen`、`server.public_url`、全部 `auth`、`admin`、`client_authorization`、`vault` | YAML / 服务环境 | 重启；SIGHUP 拒绝这些字段的变化 |
+| 其他 `server` 字段 | YAML | SIGHUP，见[热重载](#sighup-热重载与关停) |
+| `backends`（未启用 admin） | YAML | SIGHUP；至少需要一个后端 |
+| `backends`（已启用 admin） | 首次从 YAML 导入，以后使用控制台/API | 空数据库只导入一次；之后 YAML backend 修改和其变量不会覆盖数据库 |
+| HTTP 工具组、OpenAPI、用户权限、客户端授权记录 | 控制台/用户门户/API | 保存或完成所需审批后生效；不通过 YAML 导入 |
+
+管理模式也始终严格解析 YAML；已忽略的 backend 中出现未知字段仍会报错。不要删除数据库来强制重新导入：其中还保存工具组、授权和审计等数据。
+
+## 环境变量与 Secret
+
+`${NAME}` **只在下表列出的字段展开**，不是所有字符串都支持。变量从 MCPHub 进程环境读取；shell 中另行 `export` 不会改变已运行服务的环境，轮换时应更新服务环境并重启。MCPHub 不自动加载 `.env`。
+
+| 支持展开的位置 | 具体字段 |
+| --- | --- |
+| `server`、`auth` | `server.listen`、`public_url`、`allowed_origins[]`；`auth.issuer` |
+| `admin` | `listen`、`mode`、`public_url`、`client_id`、`client_secret_env`、`database_driver`、`database_dsn_env`、`database_path`、`encryption_key_env`、`required_scopes[]` |
+| `admin.approvals` | `required_scopes[]`、`step_up_acr_values[]`；`policy_changes.required_scopes[]`、`policy_changes.subjects[]`；`notifications.url`、`notifications.secret`；`audit_archive.url`、`audit_archive.signing_key`、`audit_archive.key_id` |
+| `client_authorization` | `client_id`、`client_secret_env` |
+| YAML `backends[]` | `id`、`url`、`headers` 的值、`required_scopes[]`、`published_tools[]`；`oauth` 的全部字符串字段与 `scopes[]` |
+| YAML `backends[].tool_rules[]` | `match`、`required_scopes[]`；`resource_rules[].argument`、`allowed_values[]` |
+
+`auth.sso.*`、`vault.*`、`backends[].credentials.*`、`tool_rules[].approval.*` 和 `effect` **不展开**；请填写实际字面值。duration、数字、布尔字段也不支持占位符。变量名只接受 `[A-Za-z_][A-Za-z0-9_]*`；未设置的受支持变量会报错。`${NAME:-default}`、`$NAME` 不是默认值/替换语法，可能保留为字面量，不要使用。
+
+`*_env` 字段存放的是**环境变量名**，不是 Secret 本身：
+
+```yaml
+# 片段：两种写法用途不同，请放在各自配置段。
+admin:
+  encryption_key_env: MCPHUB_CONFIG_KEY # 从这个变量读取 Base64 编码的 32 字节密钥。
+# backends[].headers 中的值才使用 ${...}：
+#   X-API-Key: ${MCPHUB_PRIMARY_API_KEY}
+```
+
+不要写 `encryption_key_env: ${MCPHUB_CONFIG_KEY}`，否则会把密钥值误当变量名。数据库加密密钥只生成一次，备份和升级保留原值。SSO/Vault 同样通过各自的 `*_env` 引用 Secret，值由服务管理器或 Secret store 注入。
+
+`required: false` 只允许后端连接失败；该 backend 的 URL、OAuth 字段和受支持环境变量仍须完整有效。它不是“禁用配置”。不使用某个 YAML backend 时，应从当前配置移除该条目。
 
 ## `server`
 
@@ -19,7 +68,7 @@
 | `listen` | `:8080` | HTTP 监听地址。SIGHUP 不可修改，修改后需重启。 |
 | `public_url` | 无 | 必填的绝对 HTTPS URL，必须包含 MCP 路径（例如 `https://hub.example.com/mcp`），不能有 query 或 fragment。路径不能含 percent-encoded 字符，也不能是 `/healthz`、`/readyz` 或 `/.well-known/oauth-protected-resource`。它既是 MCP 地址，也是 JWT 的 audience。SIGHUP 不可修改。 |
 | `page_size` | `1000` | 聚合 MCP 目录分页大小，必须大于 0。 |
-| `request_timeout` | `60s` | 普通 MCP 请求和后端调用的默认超时；必须大于 0。MCP 监听器的所有 HTTP 路由在 request body 被消费或关闭前都使用该值作为读取 deadline，未认证或被拒绝请求的慢 body 也会有界结束。MCP 处理继续后，普通 MCP POST 还会用它设置 response 写入 deadline 和 request context；新版 `subscriptions/listen` POST 在 body 读完后保持长连接，不使用普通的 response 写入和 request context timeout。但 runtime 或 client context 取消仍会让底层 write deadline 立即到期，因此代际 drain 或 client 断开时，慢 subscription write 会被打断。 |
+| `request_timeout` | `60s` | 普通请求与后端调用的默认超时；必须大于 0。长连接订阅在请求体读取后使用独立生命周期，见下方说明。 |
 | `drain_timeout` | `15s` | SIGTERM/SIGINT 关停，以及 SIGHUP 替换旧运行时等待活动请求的最长时间；必须大于 0。 |
 | `refresh_interval` | `5m` | 后端目录刷新的最大间隔；后端返回更短 TTL 时会提前刷新，最终间隔不会低于 5 秒。必须大于 0。 |
 | `catalog_ttl` | `30s` | 对 MCP 目录/发现结果声明的 private TTL；允许为 0，但不能为负数。 |
@@ -28,11 +77,19 @@
 
 duration 使用 Go `time.ParseDuration` 语法，例如 `500ms`、`60s`、`5m`。`public_url` 的路径就是 MCP 入口路径；上例入口为 `/mcp`。路径中的 percent-encoded 字符会被拒绝，`/healthz`、`/readyz` 和 `/.well-known/oauth-protected-resource` 是保留路径。
 
+<details>
+<summary>请求超时与长连接订阅的具体行为</summary>
+
+普通 MCP 请求和后端调用的默认超时；必须大于 0。MCP 监听器的所有 HTTP 路由在 request body 被消费或关闭前都使用该值作为读取 deadline，未认证或被拒绝请求的慢 body 也会有界结束。MCP 处理继续后，普通 MCP POST 还会用它设置 response 写入 deadline 和 request context；新版 `subscriptions/listen` POST 在 body 读完后保持长连接，不使用普通的 response 写入和 request context timeout。但 runtime 或 client context 取消仍会让底层 write deadline 立即到期，因此代际 drain 或 client 断开时，慢 subscription write 会被打断。
+
+</details>
+
 ## `auth`
 
 | 字段 | 说明 |
 | --- | --- |
 | `issuer` | 必填的绝对 HTTPS OIDC issuer。MCPHub 从该地址 discovery（通常是 `/.well-known/openid-configuration`）并读取 JWKS；SIGHUP 不可修改。 |
+| `sso` | 可选身份桥接配置；启用时 `issuer` 必须是本网关的 `/sso` 地址，并需要托管数据库。字段为字面值，修改后重启；见 [SSO 专题](sso-and-user-management.zh-CN.md)。 |
 
 JWT 必须满足以下条件：签名和 `iss` 由该 issuer 验证；`aud` 必须包含完整的 `server.public_url`（包含路径）——`aud` 为字符串时必须等于 `public_url`，为数组时必须包含 `public_url`；必须有非空 `sub` 和 `exp`；`nbf`（如有）也会校验。过期、未生效和 OIDC 时间比较允许 30 秒时钟偏差。只有在 OIDC discovery 成功、`jwks_uri` 是绝对 HTTPS URL，且可达的 JWKS 响应至少包含一个可解析、有效且非对称的公开验证密钥后，verifier 才会 ready；对称 `oct` 密钥以及无效或空 key 均不满足此条件。首次成功刷新前 MCP 入口返回 503；ready 后 discovery 或 JWKS 刷新暂时失败会保留 last-known-good verifier。OIDC discovery 和 JWKS 响应分别限制为 1 MiB。
 
@@ -40,9 +97,27 @@ JWKS ready 还要求至少一个可用 key：`use` 为空或为 `sig`；存在 `
 
 scope 取自 JWT 的 `scope` 和 `scp` 两个 claim：`scope` 只接受空格分隔字符串（包括空字符串或 JSON `null`）；`scp` 接受空格分隔字符串或字符串数组。两个 claim 的值会合并、去重；数组项不能包含空白。后端访问采用 **all-of** 语义：`required_scopes: [a, b]` 要求 token 同时拥有 `a` 和 `b`；缺任一项，该后端不会出现在该 token 的目录视图中，对已识别的直接调用返回 403 `insufficient_scope`。未配置 `required_scopes` 的后端不受 scope 限制。Protected Resource Metadata 的 `scopes_supported` 是所有后端 required scope 的去重并集。
 
+## `client_authorization`
+
+用户门户与客户端 Grant 需要 `admin.enabled: true` 和托管数据库。此段所有字段修改后都需重启。注册与启用流程见[管理员手册](admin-guide.zh-CN.md#启用客户端授权)。
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `enabled` | `false` | 启用用户门户和客户端授权。仅打开 admin 不会打开此功能。 |
+| `client_id` | 无 | 启用时必填，普通用户门户的 OAuth 客户端；不同于 CLI 或管理员客户端。 |
+| `client_secret_env` | 无 | 可选机密客户端的 Secret 变量名；Hub SSO 下的门户使用公开客户端，不得设置。 |
+| `require_client_grant` | `false` | 全局强制；与 endpoint 上同名字段取 OR。任一级为 true 都要求开启本模块。 |
+| `max_grant_ttl` | `8h` | 单次用户授权的最长有效期，范围 `1m`–`8h`。 |
+
+## `vault`
+
+可选；启用后要求托管数据库。`address` 必填，`mount` 默认 `secret`，`prefix` 默认 `mcphub`，`auth_mount` 默认 `approle`。使用 `role_id_env` + `secret_id_env`，或单独的 `token_env`，两种方式互斥。全部字段是字面值，不展开 `${...}`；所有全局 Vault 配置修改后需重启。
+
+凭证引用放在 `backends[].credentials`。个人模式还要求用户门户及 **该 backend 自身的** `require_client_grant: true`；只开全局严格模式不能替代此字段的配置校验。完整的字段、路径、权限和回调见 [Vault 专题](vault-accounts.zh-CN.md)。
+
 ## `admin`
 
-管理平台默认关闭。启用后，它通过独立监听器提供嵌入式 UI 和 JSON API；默认本地模式仅回环访问，远程模式必须通过 OIDC 管理员认证。它管理 backend 和工具组配置；`server`、`auth` 和 `admin` 仍由 YAML 管理并需要重启才能修改。
+管理平台默认关闭。启用后，它通过独立监听器提供嵌入式 UI 和 JSON API；默认本地模式仅回环访问，远程模式必须通过 OIDC 管理员认证。它管理 backend 和工具组配置；进程配置仍由 YAML 管理，哪些字段可热重载见[生效方式表](#选择配置与生效方式)。
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -94,6 +169,8 @@ YAML-only 模式至少配置一个后端；管理模式允许从空数据库启�
 | `id` | 无 | tool/prompt 名称使用的对外命名空间和配置 ID；不能包含点号。名称保留大写，而 resource/template URI authority 使用小写 ID。 |
 | `url` | 无 | 必填绝对 URL。默认只接受 HTTPS；仅当 `allow_insecure_http: true` 且主机是 `localhost`、IPv4/IPv6 loopback 时才允许 HTTP。 |
 | `required` | `false` | required 后端影响 `/readyz`。运行中断线会使就绪变为 503；连接循环会继续重试。 |
+| `require_client_grant` | `false` | 对此 endpoint 强制客户端授权，需要启用用户门户。个人 Vault 账号必须显式设为 true。 |
+| `credentials` | 无 | Vault `shared` / `personal` 凭证来源；需要全局 `vault`，与此 backend 的服务 `oauth` 和冲突的静态认证头互斥。见 [Vault 专题](vault-accounts.zh-CN.md)。 |
 | `required_scopes` | `[]` | 该后端所需的 JWT scope，按 all-of 判断；scope 不能含空白，也不能重复。 |
 | `published_tools` | `[]` | 获准发布的原始工具名，精确匹配并区分大小写，不支持通配符；留空不发布任何工具。 |
 | `tool_rules` | `[]` | 可选的后端本地 tool 策略。每条规则包含 `match` glob，以及 `effect`、`approval`、`required_scopes`、`resource_rules` 中至少一项。`effect: read` 可直接执行；`write` 或未分类需要审批。匹配基于原始后端 tool name，使用 Go `path.Match`，整串且区分大小写。 |
@@ -113,6 +190,22 @@ YAML-only 模式至少配置一个后端；管理模式允许从空数据库启�
 | `scopes` | 发给后端 OAuth token endpoint 的 scope 列表；它与 `required_scopes`（验证进入 MCPHub 的 JWT）是两套独立的 scope。 |
 
 后端 OAuth discovery 和 token 请求不会带上该后端的静态 headers；数据面请求才会附加 headers 并自动复用/刷新 client-credentials token。Discovery 只从 RFC 8414/OIDC metadata 读取并精确校验 `issuer` 和 `token_endpoint`，不要求交互式 authorization 或 PKCE metadata。OAuth metadata 响应上限为 1 MiB。后端和 OIDC HTTP 客户端都不跟随重定向。
+
+服务账号 OAuth 示例：将以下条目放入 `backends`，并为这条目设置全部 4 个变量；`required: false` 只影响连接失败的处理。工具仍需审核后显式发布。
+
+```yaml
+- id: crm
+  url: ${MCPHUB_CRM_BACKEND_URL}
+  required: false
+  required_scopes: [mcp:crm.read]
+  published_tools: []
+  oauth:
+    type: client_credentials
+    issuer: ${MCPHUB_CRM_OAUTH_ISSUER}
+    client_id: ${MCPHUB_CRM_CLIENT_ID}
+    client_secret: ${MCPHUB_CRM_CLIENT_SECRET}
+    scopes: [crm.read]
+```
 
 ### Endpoint 限流
 
@@ -336,28 +429,25 @@ Backend ID 的唯一性按大小写不敏感检查。tool/prompt 名称保留配
 
 ## 从完整 YAML 示例启动
 
-如果从源码构建，请先复制示例并设置其中的环境变量：
+基础文件现在只配置一个 MCP 后端，需要下方 4 个变量。它默认不发布工具，也不开启用户门户/写审批；请按文件注释同时配置精确发布名单与已确认的 `effect: read`。需要控制台或普通 HTTP API 工具时，使用[管理员部署流程](admin-guide.zh-CN.md)。以下从源码构建，已安装二进制时可直接使用 `mcphub`：
 
 ```bash
 cp config.example.yaml config.yaml
 
 # 示例；请替换为真实的 HTTPS 地址和 secret。不要把 secret 写进 Git。
 export MCPHUB_PUBLIC_URL='https://hub.example.com/mcp'
-export MCPHUB_CONSOLE_ORIGIN='https://console.example.com'
 export MCPHUB_AUTH_ISSUER='https://idp.example.com'
 export MCPHUB_PRIMARY_BACKEND_URL='https://mcp-a.example.com/mcp'
 export MCPHUB_PRIMARY_API_KEY='replace-me'
-export MCPHUB_CRM_BACKEND_URL='https://mcp-crm.example.com/mcp'
-export MCPHUB_CRM_OAUTH_ISSUER='https://idp.example.com'
-export MCPHUB_CRM_CLIENT_ID='replace-me'
-export MCPHUB_CRM_CLIENT_SECRET='replace-me'
 
 go build -trimpath -o ./mcphub ./cmd/mcphub
 ./mcphub validate --config ./config.yaml
 ./mcphub serve --config ./config.yaml
 ```
 
-`validate` 只读校验配置，成功时在 stdout 输出 `configuration valid`。管理模式下，数据库存在时会只读检查所选存储；数据库尚不存在时校验 YAML bootstrap backends，不创建文件。`serve` 把结构化 JSON 日志写到 stderr。两个子命令都要求 `--config PATH`。
+`validate` 成功输出 `configuration valid`：检查 YAML、可展开字段、配置约束，以及适用的密钥/DSN 等环境变量。管理模式下会只读检查已有数据库；SQLite 文件缺失或存储尚未初始化时校验 YAML bootstrap。PostgreSQL 即使尚无 MCPHub 表，也必须有可连接的数据库和凭证；命令不创建数据库或迁移 schema。
+
+**通过校验不代表部署可用**：不会完成 IdP 登录、连接 MCP 后端、验证工具名或验证 Vault 路径权限；SSO 上游 Secret、目录 Token、Vault 凭证值和 CA 文件还有运行时检查。`serve` 才执行必要的存储迁移并启动服务，JSON 日志写到 stderr。启动后按[部署验收步骤](../deploy/README.zh-CN.md#启动后验收)检查实际连接。两个子命令都要求 `--config PATH`。
 
 也可以直接运行而不生成二进制：
 
@@ -425,7 +515,8 @@ SIGHUP 会先完整加载、环境展开和校验配置，再构建 candidate ru
 
 - `server.listen`
 - `server.public_url`
-- `auth.issuer`
+- 全部 `auth`（包括 `auth.sso`）
+- 全部 `client_authorization` 和 `vault`
 - 全部 `admin` 字段
 
 这些值决定监听器、存储/加密身份、RFC 9728/JWT audience 和 OIDC verifier，不能只替换内存中的 runtime。管理模式下 SIGHUP 只重载 YAML 静态字段，backend 始终从所选数据库组合；首次导入后 YAML backend 变化会被忽略。
@@ -434,10 +525,10 @@ SIGHUP candidate 启动使用可取消的 context；关停开始时仍在连接�
 
 SIGINT 和 SIGTERM 会先停止接收新请求，再保留当前 runtime 与 backend context，让 HTTP 请求在 `drain_timeout` 内完成 drain。HTTP drain 超时后，MCPHub 会强制关闭剩余 HTTP 连接；随后代际关闭会先取消绑定到该代际的 request context，再关闭 backend 状态。
 
-SIGHUP 创建 unavailable optional backend 时，只有目录来源身份未变才会继承上一代内存目录：backend ID 和 URL、`allow_insecure_http`、全部固定 header，以及 OAuth 配置是否存在和 `type`、`issuer`、`client_id`、`client_secret`、`scopes` 必须完全一致。任意凭证、OAuth 或 tenant-selection header 变化都会阻止复用；`required`、`required_scopes`、`tool_rules`、timeout 等不标识目录来源的字段不阻止复用；继承的目录不会把新 backend 标记为 ready。
+SIGHUP 创建 unavailable optional backend 时，只有目录来源身份未变才会继承上一代内存目录：backend ID 和 URL、`allow_insecure_http`、全部固定 header、完整 `credentials` 配置，以及 OAuth 配置是否存在和 `type`、`issuer`、`client_id`、`client_secret`、`scopes` 必须完全一致。任意凭证、OAuth 或 tenant-selection header 变化都会阻止复用；`required`、`required_scopes`、`tool_rules`、timeout 等不标识目录来源的字段不阻止复用；继承的目录不会把新 backend 标记为 ready。
 
 ## 客户端凭证与连接边界
 
-服务端同时检查 OIDC Token 与不透明 `MCPHub-Grant` 凭证，有效 scope 是二者交集。每次请求校验 issuer、用户、resource、endpoint UID、期限、工具发布状态、资源条件和当前策略。修改 scope/目标、停用或同名重建 endpoint、改变 HTTP 工具执行语义后需重新确认。新工具不会自动进入旧授权；用户 Token 与 Grant 均不转发上游。
+严格客户端授权启用时，服务端同时检查 OIDC Token 与不透明 `MCPHub-Grant` 凭证，有效 scope 是二者交集。每次请求校验 issuer、用户、resource、endpoint UID、期限、工具发布状态、资源条件和当前策略。修改 scope/目标、停用或同名重建 endpoint、改变 HTTP 工具执行语义后需重新确认。新工具不会自动进入旧授权；用户 Token 与 Grant 均不转发上游。
 
 私有 socket/named pipe、OS 对端检查和独立 IPC 凭证限制其他系统用户接入，但不能证明应用身份，也不能隔离同一系统账户下的恶意进程。发布流程要求 Windows x64、ARM64 的原生 CLI 测试（含 Broker IPC）通过；macOS/Linux 使用 Unix socket 与 OS 对端校验。完整边界及验证记录见[方案文档](broker-authorization-design.zh-CN.md)。

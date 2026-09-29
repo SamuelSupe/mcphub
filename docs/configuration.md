@@ -4,13 +4,62 @@
 
 Use this page to look up YAML fields, tool policies, management APIs and gateway protocol details. Start with the [administrator manual](admin-guide.md) for deployment or the [user manual](user-guide.md) for client access.
 
-- [server](#server), [auth](#auth), [admin](#admin), [backends](#backends)
+- [Configuration ownership](#choose-a-configuration-and-apply-changes), [environment and secrets](#environment-variables-and-secrets)
+- [server](#server), [auth](#auth), [admin](#admin), [backends](#backends), [client_authorization](#client_authorization), [Vault](#vault)
 - [HTTP tool groups](#tool-groups-and-managed-http-api-tools), [rate limits](#endpoint-rate-limits), [publication and resources](#explicit-publication-and-resource-limits)
 - [Write approval](#one-time-write-approval), [governance and quorum](#configuration-governance-quorum-and-operation-identity), [notifications and audit](#approval-notifications-and-independent-audit-archive)
 - [Other configuration guides](#other-configuration-guides), [starting from the full YAML example](#starting-from-the-full-yaml-example)
 - [Capabilities](#capabilities-and-boundaries), [HTTP endpoints](#http-endpoints-and-rfc-9728), [names and URIs](#name-and-uri-mapping), [reload and shutdown](#sighup-reload-and-shutdown), [client credential boundaries](#client-credentials-and-connection-boundaries)
 
-Configuration is one YAML document decoded with strict field checking. Unknown fields, multiple YAML documents, and missing environment variables are rejected. `${NAME}` placeholders in string configuration fields are expanded from the current process environment; `NAME` must match `[A-Za-z_][A-Za-z0-9_]*`, and there is no default-value syntax. Duration, integer, and boolean fields do not accept placeholders. Loading and SIGHUP reload both expand the environment again. After the admin database has been initialized, YAML backends and their environment placeholders are ignored.
+## Choose a configuration and apply changes
+
+This reference targets v2.2.0. Configuration is one YAML document with strict field checking. **Do not paste management API JSON directly into YAML**: YAML `headers` is a map; API `headers` is an object array. A managed backend's API `enabled` field is not a YAML backend field. HTTP tool groups and OpenAPI imports are managed only through the UI/API.
+
+| Scenario | Starting point | Prerequisites |
+| --- | --- | --- |
+| One MCP backend managed in YAML | [Base example](../config.example.yaml) | 4 environment variables; tools initially unpublished, no database or user portal |
+| Local administration, SQLite | [Administrator manual](admin-guide.md#local-management-ui) | MCP URL, issuer, persistent encryption key |
+| Remote team administration | [Deployment examples and variables](../deploy/README.md#environment-variables) | Admin URL, identity clients, SQLite or PostgreSQL, HTTPS proxy |
+| SSO / Vault personal accounts | [SSO](sso-and-user-management.md), [Vault](vault-accounts.md) | Add the required modules to a managed deployment; Feishu also needs real-tenant acceptance |
+
+| Configuration | Edit in | Takes effect through |
+| --- | --- | --- |
+| `server.listen`, `server.public_url`, all `auth`, `admin`, `client_authorization`, `vault` | YAML / service environment | Restart; SIGHUP rejects changes to these fields |
+| Other `server` fields | YAML | SIGHUP; see [reload](#sighup-reload-and-shutdown) |
+| `backends` with admin disabled | YAML | SIGHUP; at least one backend is required |
+| `backends` with admin enabled | YAML for initial import, then UI/API | Imported once into an empty database; later YAML backends and their variables do not override stored records |
+| HTTP tool groups, OpenAPI, user policies, client grant records | Admin UI / user portal / API | Save or complete required approval; never imported from YAML |
+
+Strict YAML decoding still applies in managed mode: unknown fields in ignored backend entries remain errors. Do not delete the database to force a reimport; it also stores tool groups, grants and audit history.
+
+## Environment variables and secrets
+
+`${NAME}` expands **only in the fields below**, not in every string. Values come from the MCPHub process environment. Exporting variables in another shell cannot change a running service's environment; update its service environment and restart for rotation. MCPHub does not automatically load `.env`.
+
+| Expansion location | Fields |
+| --- | --- |
+| `server`, `auth` | `server.listen`, `public_url`, `allowed_origins[]`; `auth.issuer` |
+| `admin` | `listen`, `mode`, `public_url`, `client_id`, `client_secret_env`, `database_driver`, `database_dsn_env`, `database_path`, `encryption_key_env`, `required_scopes[]` |
+| `admin.approvals` | `required_scopes[]`, `step_up_acr_values[]`; `policy_changes.required_scopes[]`, `policy_changes.subjects[]`; `notifications.url`, `notifications.secret`; `audit_archive.url`, `audit_archive.signing_key`, `audit_archive.key_id` |
+| `client_authorization` | `client_id`, `client_secret_env` |
+| YAML `backends[]` | `id`, `url`, `headers` values, `required_scopes[]`, `published_tools[]`; all `oauth` strings and `scopes[]` |
+| YAML `backends[].tool_rules[]` | `match`, `required_scopes[]`; `resource_rules[].argument`, `allowed_values[]` |
+
+`auth.sso.*`, `vault.*`, `backends[].credentials.*`, `tool_rules[].approval.*` and `effect` **do not expand**; supply literal settings. Durations, numbers and booleans do not accept placeholders. Names must match `[A-Za-z_][A-Za-z0-9_]*`; unset variables in supported fields fail validation. `${NAME:-default}` and `$NAME` are not fallback/expansion syntax and may remain literal; do not use them.
+
+A `*_env` field contains an **environment variable name**, not the secret:
+
+```yaml
+# Fragment: place each setting in its respective section.
+admin:
+  encryption_key_env: MCPHUB_CONFIG_KEY # Read the Base64-encoded 32-byte key from this variable.
+# In backends[].headers, values use ${...} instead:
+#   X-API-Key: ${MCPHUB_PRIMARY_API_KEY}
+```
+
+Do not write `encryption_key_env: ${MCPHUB_CONFIG_KEY}`: that treats the key value as a variable name. Generate the database encryption key once and retain it with backups/upgrades. SSO and Vault likewise reference secrets through their `*_env` fields; inject values through the service manager or secret store.
+
+`required: false` only tolerates connection failure. That backend's URL, OAuth fields and supported environment variables must still be valid and complete; it does not disable the configuration. Remove an unused backend entry from the active YAML.
 
 ## `server`
 
@@ -19,7 +68,7 @@ Configuration is one YAML document decoded with strict field checking. Unknown f
 | `listen` | `:8080` | HTTP listen address. It cannot be changed by SIGHUP; restart to change it. |
 | `public_url` | none | Required absolute HTTPS URL with an MCP path (for example, `https://hub.example.com/mcp`), with no query or fragment. The path may not contain percent-encoded characters and may not be `/healthz`, `/readyz`, or `/.well-known/oauth-protected-resource`. It is both the MCP URL and the JWT audience. It cannot be changed by SIGHUP. |
 | `page_size` | `1000` | Aggregated MCP catalog page size; must be positive. |
-| `request_timeout` | `60s` | Default timeout for ordinary MCP requests and backend calls; must be positive. Every MCP-listener HTTP route keeps a request-body read deadline from this value until the body is consumed or closed, including unauthenticated and rejected requests. Once MCP handling proceeds, ordinary MCP POSTs also apply it to response-write deadlines and the request context; the newer `subscriptions/listen` POST keeps long-lived connection semantics after its body is read and is not given those ordinary response-write or context timeouts. Runtime or client context cancellation still expires its underlying write deadline, so a slow subscription write is interrupted when its generation drains or the client disconnects. |
+| `request_timeout` | `60s` | Default timeout for ordinary requests and backend calls; must be positive. Long-lived subscriptions use a separate lifecycle after body reading; see below. |
 | `drain_timeout` | `15s` | Maximum wait for active requests during SIGTERM/SIGINT shutdown and while replacing the old runtime after SIGHUP; must be positive. |
 | `refresh_interval` | `5m` | Maximum backend catalog refresh interval. A shorter backend TTL causes an earlier refresh, with an effective interval no shorter than 5 seconds. Must be positive. |
 | `catalog_ttl` | `30s` | Private TTL advertised for MCP catalog/discovery results; may be zero but not negative. |
@@ -28,11 +77,19 @@ Configuration is one YAML document decoded with strict field checking. Unknown f
 
 Durations use Go `time.ParseDuration` syntax, such as `500ms`, `60s`, and `5m`. The path of `public_url` is the MCP entry path; the example uses `/mcp`. Percent-encoded path characters are rejected, and `/healthz`, `/readyz`, and `/.well-known/oauth-protected-resource` are reserved paths.
 
+<details>
+<summary>Request deadlines and long-lived subscriptions</summary>
+
+Default timeout for ordinary MCP requests and backend calls; must be positive. Every MCP-listener HTTP route keeps a request-body read deadline from this value until the body is consumed or closed, including unauthenticated and rejected requests. Once MCP handling proceeds, ordinary MCP POSTs also apply it to response-write deadlines and the request context; the newer `subscriptions/listen` POST keeps long-lived connection semantics after its body is read and is not given those ordinary response-write or context timeouts. Runtime or client context cancellation still expires its underlying write deadline, so a slow subscription write is interrupted when its generation drains or the client disconnects.
+
+</details>
+
 ## `auth`
 
 | Field | Description |
 | --- | --- |
 | `issuer` | Required absolute HTTPS OIDC issuer. MCPHub performs discovery (normally `/.well-known/openid-configuration`) and reads JWKS from it. It cannot be changed by SIGHUP. |
+| `sso` | Optional identity bridge; `issuer` must be the Hub `/sso` URL and managed storage is required. Fields are literal and require a restart; see [SSO](sso-and-user-management.md). |
 
 JWT requirements are: the issuer and signature must validate against this issuer; `aud` must contain the complete `server.public_url` including its path—when `aud` is a string it must equal `public_url`, and when `aud` is an array it must include `public_url`; `sub` must be non-empty; and `exp` must be present. `nbf`, when present, is checked too. Expiry, activation, and OIDC time comparisons allow 30 seconds of clock skew. The verifier becomes ready only after OIDC discovery succeeds, `jwks_uri` is an absolute HTTPS URL, and a reachable JWKS response contains at least one parseable, valid, asymmetric public verification key; symmetric `oct` keys and invalid or empty keys do not satisfy this condition. Before that first successful refresh, the MCP endpoint returns 503; after it is ready, a temporary discovery or JWKS refresh failure retains the last-known-good verifier. OIDC discovery and JWKS responses are each capped at 1 MiB.
 
@@ -40,9 +97,27 @@ For JWKS readiness, a usable key has no `use` or `use: sig`; if `key_ops` is pre
 
 Scopes are read from both JWT `scope` and `scp` claims. `scope` accepts only a space-delimited string (including an empty string or JSON `null`); `scp` accepts a space-delimited string or a string array. The two claims are merged and deduplicated; array entries may not contain whitespace. Backend access uses **all-of** semantics: `required_scopes: [a, b]` requires the token to contain both `a` and `b`. If either is missing, that backend is absent from the token's catalog view and an identified direct call returns 403 `insufficient_scope`. A backend with no `required_scopes` is not scope-gated. Protected Resource Metadata reports the deduplicated union of all backend required scopes in `scopes_supported`.
 
+## `client_authorization`
+
+The user portal and client grants require `admin.enabled: true` and managed database storage. Every field in this section requires a restart. See the [administrator workflow](admin-guide.md#enable-client-authorization) for registration and activation.
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `enabled` | `false` | Enables the user portal and client grants. Enabling admin alone does not enable this feature. |
+| `client_id` | none | Required when enabled; the ordinary-user portal's OAuth client, separate from CLI/admin clients. |
+| `client_secret_env` | none | Optional confidential-client secret variable name. With Hub SSO the portal is a public client and this must be unset. |
+| `require_client_grant` | `false` | Global enforcement, ORed with the endpoint setting. Either being true requires this module to be enabled. |
+| `max_grant_ttl` | `8h` | Maximum user grant lifetime, from `1m` to `8h`. |
+
+## `vault`
+
+Optional; requires managed database storage. `address` is required; `mount` defaults to `secret`, `prefix` to `mcphub`, and `auth_mount` to `approle`. Choose either `role_id_env` + `secret_id_env` or `token_env`, never both. All fields are literal and do not expand `${...}`; every global Vault setting requires a restart.
+
+Put credential references in `backends[].credentials`. Personal mode also requires the user portal and **that backend's own** `require_client_grant: true`; global enforcement alone does not satisfy this configuration check. See the [Vault guide](vault-accounts.md) for fields, paths, policies and callbacks.
+
 ## `admin`
 
-The administration platform is opt-in. It serves an embedded UI and JSON API from a separate listener. Local mode is loopback-only; remote mode requires OIDC administrator authentication. It manages backend and tool-group configuration; `server`, `auth`, and `admin` remain YAML/restart settings.
+The administration platform is opt-in. It serves an embedded UI and JSON API from a separate listener. Local mode is loopback-only; remote mode requires OIDC administrator authentication. It manages backend and tool-group configuration; process settings remain in YAML with the restart/reload rules in the [ownership table](#choose-a-configuration-and-apply-changes).
 
 | Field | Default | Description |
 | --- | --- | --- |
@@ -94,6 +169,8 @@ At least one backend is required in YAML-only mode. Admin mode may start empty s
 | `id` | none | External namespace and configured ID for tool/prompt names; dots are not allowed. Uppercase letters are retained in those names, while resource/template URI authorities use the lowercase ID. |
 | `url` | none | Required absolute URL. HTTPS is required by default; HTTP is accepted only when `allow_insecure_http: true` and the host is `localhost` or an IPv4/IPv6 loopback. Fragments are rejected. |
 | `required` | `false` | Required backends affect `/readyz`. A runtime disconnect makes readiness 503 while the reconnect loop continues. |
+| `require_client_grant` | `false` | Enforces client grants for this endpoint; requires the user portal. Personal Vault accounts must explicitly set it to true. |
+| `credentials` | none | Vault `shared` / `personal` source; requires global `vault`, and excludes service `oauth` and conflicting static auth headers on this backend. See [Vault](vault-accounts.md). |
 | `required_scopes` | `[]` | JWT scopes required for this backend, checked with all-of semantics; scope entries cannot contain whitespace or duplicates. |
 | `published_tools` | `[]` | Exact, case-sensitive original tool names approved for use; no wildcards. Empty publishes no tools. |
 | `tool_rules` | `[]` | Optional backend-local tool policies. Each rule has a `match` glob and at least one of `effect`, `approval`, `required_scopes`, or `resource_rules`. `effect: read` permits direct execution; `write` or an omitted classification requires approval. Matching uses Go `path.Match` against the original backend tool name, full-string and case-sensitive. |
@@ -113,6 +190,22 @@ At least one backend is required in YAML-only mode. Admin mode may start empty s
 | `scopes` | Scopes requested from the backend OAuth token endpoint. These are independent of `required_scopes`, which gate the JWT presented to MCPHub. |
 
 Backend OAuth discovery and token requests do not receive the backend's static headers; data-plane requests do and automatically reuse/refresh the client-credentials token. Discovery probes RFC 8414/OIDC metadata for an exact `issuer` and `token_endpoint` only; it does not require interactive authorization or PKCE metadata. OAuth metadata responses are capped at 1 MiB. Backend and OIDC HTTP clients do not follow redirects.
+
+Service-account OAuth example: add this entry under `backends` and set all 4 variables for it. `required: false` only changes connection-failure handling. Tools still require review and explicit publication.
+
+```yaml
+- id: crm
+  url: ${MCPHUB_CRM_BACKEND_URL}
+  required: false
+  required_scopes: [mcp:crm.read]
+  published_tools: []
+  oauth:
+    type: client_credentials
+    issuer: ${MCPHUB_CRM_OAUTH_ISSUER}
+    client_id: ${MCPHUB_CRM_CLIENT_ID}
+    client_secret: ${MCPHUB_CRM_CLIENT_SECRET}
+    scopes: [crm.read]
+```
 
 ### Endpoint rate limits
 
@@ -334,28 +427,25 @@ Register a **public native OAuth client** at that issuer with authorization-code
 
 ## Starting from the full YAML example
 
-For a source build, copy the example and set its environment variables:
+The base file configures one MCP backend and needs only the 4 variables below. It initially publishes no tools and has no user portal/write approvals. Follow its comments to set both exact published names and verified `effect: read` rules. For the console or ordinary HTTP API tools, use the [administrator deployment workflow](admin-guide.md). These commands build from source; use `mcphub` directly if already installed:
 
 ```bash
 cp config.example.yaml config.yaml
 
 # Example only; replace with real HTTPS endpoints and secrets. Do not commit secrets.
 export MCPHUB_PUBLIC_URL='https://hub.example.com/mcp'
-export MCPHUB_CONSOLE_ORIGIN='https://console.example.com'
 export MCPHUB_AUTH_ISSUER='https://idp.example.com'
 export MCPHUB_PRIMARY_BACKEND_URL='https://mcp-a.example.com/mcp'
 export MCPHUB_PRIMARY_API_KEY='replace-me'
-export MCPHUB_CRM_BACKEND_URL='https://mcp-crm.example.com/mcp'
-export MCPHUB_CRM_OAUTH_ISSUER='https://idp.example.com'
-export MCPHUB_CRM_CLIENT_ID='replace-me'
-export MCPHUB_CRM_CLIENT_SECRET='replace-me'
 
 go build -trimpath -o ./mcphub ./cmd/mcphub
 ./mcphub validate --config ./config.yaml
 ./mcphub serve --config ./config.yaml
 ```
 
-`validate` performs read-only validation and prints `configuration valid` on success. In admin mode it reads the selected existing database without changing it, or validates YAML bootstrap backends when the database does not yet exist. `serve` writes structured JSON logs to stderr. Both subcommands require `--config PATH`.
+`validate` prints `configuration valid` after checking YAML, supported expansion, configuration constraints and applicable key/DSN environment variables. In managed mode it reads an existing store without mutation, or checks YAML bootstrap when the SQLite file is absent or the store is uninitialized. PostgreSQL still requires a reachable database and credentials even before MCPHub tables exist; validation neither creates a database nor migrates its schema.
+
+**Validation is not deployment acceptance**: it does not complete IdP login, connect MCP backends, check published tool names or verify Vault path permissions. SSO upstream secrets, directory tokens, Vault credential values and CA files have additional runtime checks. `serve` applies required storage migrations and starts the service, with JSON logs on stderr. Then follow the [deployment acceptance steps](../deploy/README.md#verify-the-deployment). Both subcommands require `--config PATH`.
 
 You can also run without producing a binary:
 
@@ -423,7 +513,8 @@ SIGHUP fully loads, expands, and validates the configuration before building a c
 
 - `server.listen`
 - `server.public_url`
-- `auth.issuer`
+- all `auth` fields (including `auth.sso`)
+- all `client_authorization` and `vault` fields
 - every `admin` field
 
 These values determine bound listeners, storage/encryption identity, RFC 9728/JWT audience, and the OIDC verifier, so they cannot be changed by replacing only the in-memory runtime. In admin mode SIGHUP reloads static YAML fields and composes backends from the selected database; YAML backend changes are ignored after first import.
@@ -432,10 +523,10 @@ SIGHUP candidate startup uses a cancelable context; shutdown cancels a candidate
 
 SIGINT and SIGTERM first stop MCPHub from accepting new requests, then keep the current runtime and backend context alive while HTTP requests drain for `drain_timeout`. If the HTTP drain reaches that timeout, MCPHub force-closes the remaining HTTP connections; generation close then cancels request contexts bound to the generation before backend state is closed.
 
-When SIGHUP creates an unavailable optional backend, it inherits the previous in-memory catalog only when its catalog-source identity is unchanged: backend ID and URL, `allow_insecure_http`, every fixed header, and OAuth configuration presence plus `type`, `issuer`, `client_id`, `client_secret`, and `scopes` must match. Any credential, OAuth, or tenant-selection-header change blocks reuse. Fields that do not identify the catalog source, such as `required`, `required_scopes`, `tool_rules`, and timeouts, do not block reuse; inherited data never marks the new backend ready.
+When SIGHUP creates an unavailable optional backend, it inherits the previous in-memory catalog only when its catalog-source identity is unchanged: backend ID and URL, `allow_insecure_http`, every fixed header, the complete `credentials` configuration, and OAuth configuration presence plus `type`, `issuer`, `client_id`, `client_secret`, and `scopes` must match. Any credential, OAuth, or tenant-selection-header change blocks reuse. Fields that do not identify the catalog source, such as `required`, `required_scopes`, `tool_rules`, and timeouts, do not block reuse; inherited data never marks the new backend ready.
 
 ## Client credentials and connection boundaries
 
-The server requires both the OIDC token and an opaque `MCPHub-Grant` credential. Effective scopes are their intersection. Issuer, user, resource, endpoint UID, expiry, tool publication, resource rules and live policy are checked on every request. Scope/target changes, disabled or recreated endpoints and changed HTTP tool execution semantics require fresh consent. New tools are never automatically added to an existing grant. No grant or user token is forwarded to upstream systems.
+When strict client authorization is enabled, the server requires both the OIDC token and an opaque `MCPHub-Grant` credential. Effective scopes are their intersection. Issuer, user, resource, endpoint UID, expiry, tool publication, resource rules and live policy are checked on every request. Scope/target changes, disabled or recreated endpoints and changed HTTP tool execution semantics require fresh consent. New tools are never automatically added to an existing grant. No grant or user token is forwarded to upstream systems.
 
 Private sockets/named pipes, OS peer checks and independent IPC credentials isolate paired entries from other OS users. They do **not** prove application identity or isolate hostile processes running under the same OS account. Release publishing requires the native Windows CLI test suite, including Broker IPC, on x64 and ARM64; macOS/Linux use Unix sockets with OS peer checks. See the [design and validation record](broker-authorization-design.zh-CN.md).

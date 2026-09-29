@@ -4,7 +4,7 @@
 
 本文是管理员配置与运维专题。员工接入请阅读[用户手册](user-guide.zh-CN.md)。
 
-MCPHub 可以作为身份桥接服务接入 OIDC 或支持授权码、PKCE S256 和 Bearer UserInfo 的 OAuth2 身份源。客户端继续使用 `mcphub-cli`，无需持有上游应用密钥。当前没有配置或连接任何飞书租户；飞书兼容性需由实际应用的授权接口、UserInfo 字段、租户配置和目录适配器确认。
+MCPHub 可以作为身份桥接服务接入 OIDC 或支持授权码、PKCE S256 和 Bearer UserInfo 的 OAuth2 身份源。客户端继续使用 `mcphub-cli`，无需持有上游应用密钥。飞书配置示例仍是联调起点；兼容性需由实际应用的授权接口、UserInfo 字段、租户配置和目录适配器确认。
 
 ```text
 用户浏览器 → MCPHub /sso → 企业身份服务
@@ -19,6 +19,8 @@ mcphub-cli / 本地 Broker → MCPHub → 工具策略 → 写审批 → 后端
 ## 配置身份源和公开客户端
 
 下面是添加到现有配置的片段。MCPHub 对外和身份服务必须使用 HTTPS；网关内网监听器保持私有。`auth.issuer` 固定为 MCP 公网域名下的 `/sso`，反向代理必须转发 `/sso/*`、`/.well-known/oauth-authorization-server/sso`、`/.well-known/openid-configuration/sso` 和原有 MCP 元数据路径。
+
+`auth.sso` 下所有字段均为字面值，不展开 `${...}`；`client_secret_env`、`directory_token_env` 填变量名。整个 `auth.sso` 的修改需要重启。`bootstrap_subjects` 匹配上游原始 subject（OIDC 的 `sub` 或配置的 OAuth2 主体字段）；审批策略中的 `subjects` 则使用 Hub 签发 JWT 的内部 `sub`，请从管理界面/API 核对，不能直接复制上游 open_id。
 
 ```yaml
 server:

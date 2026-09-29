@@ -1,3 +1,6 @@
+# Run Caddy on the same host as the loopback listeners / Compose published ports.
+# {$NAME} is Caddy syntax. Values are hostnames only, e.g. hub.example.com,
+# not https:// URLs. These variables must be in the Caddy process environment.
 {$MCPHUB_HUB_HOST} {
   reverse_proxy 127.0.0.1:8080
 }

@@ -1,3 +1,11 @@
+# Host deployment: remote admin UI behind HTTPS, SQLite, external OIDC.
+# Required environment: MCPHUB_PUBLIC_URL, MCPHUB_AUTH_ISSUER,
+# MCPHUB_ADMIN_PUBLIC_URL, MCPHUB_ADMIN_CLIENT_ID, MCPHUB_CONFIG_KEY.
+# The key is Base64-encoded 32 bytes; retain the same key across restarts/upgrades.
+# See deploy/README.md / deploy/README.zh-CN.md for registration and proxy setup.
+# This example does not enable the user portal; mcphub-cli setup needs
+# client_authorization configured as shown in the administrator manual.
+
 server:
   listen: "127.0.0.1:8080"
   public_url: ${MCPHUB_PUBLIC_URL}
@@ -11,6 +19,10 @@ admin:
   client_id: ${MCPHUB_ADMIN_CLIENT_ID}
   required_scopes: [mcphub:admin]
   database_driver: sqlite
+  # Relative to this YAML file: deploy/data/mcphub.db when used from this path.
   database_path: ./data/mcphub.db
+  # Environment variable NAME, not ${...} and not the key itself.
   encryption_key_env: MCPHUB_CONFIG_KEY
+
+# Register services in the admin UI/API. YAML backends seed an empty DB only once.
 backends: []

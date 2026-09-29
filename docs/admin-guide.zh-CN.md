@@ -7,6 +7,7 @@
 推荐顺序：**部署网关 → 接入只读服务 → 显式发布工具 → 配置用户权限 → 启用客户端授权 → 验证后开放写操作**。
 
 - [部署准备与安装](#部署准备与安装) · [本地管理 UI](#本地管理-ui) · [远程管理与数据库](#远程管理员与-postgresql)
+- [登录客户端与上游凭证](#区分登录客户端与上游凭证)
 - [服务接入与工具发布](#服务接入与工具发布) · [用户与组织](#用户与组织) · [客户端授权](#启用客户端授权) · [上游账号](#配置上游账号)
 - [写审批与配置治理](#写审批与配置治理) · [控制台导航](#控制台导航) · [工具权限检查](#工具权限检查) · [授权与请求诊断](#授权与请求诊断)
 - [升级与备份](#升级与备份) · [运行维护](#运行维护) · [安全说明](#安全说明) · [已知限制与排障](#已知限制与排障提示)
@@ -37,6 +38,8 @@ go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.0
 ```
 
 `validate --config PATH` 只读检查配置，不创建数据库；`serve --config PATH` 启动服务并执行必要迁移，结构化 JSON 日志写入 stderr。旧版本升级先看[升级与备份](#升级与备份)。
+
+部署前先查[示例选择与配置生效方式](configuration.zh-CN.md#选择配置与生效方式)、[环境变量/Secret 写法](configuration.zh-CN.md#环境变量与-secret)和[部署变量清单](../deploy/README.zh-CN.md#环境变量清单)。不要把所有可选模块同时塞进基础配置。
 
 ## 本地管理 UI
 
@@ -91,6 +94,20 @@ mcphub-cli admin --profile ops get /events
 在「用户与组织」中启用用户，分配 endpoint、精确工具、Scope、资源范围和必要角色。新 SSO 用户默认待授权。部门/组同步只更新身份和成员关系，不授予本地权限；离职处理需要可靠的目录同步。管理员与审批人角色分别授予。
 
 完整配置、目录快照契约及最后一位管理员恢复见 [SSO 与用户管理](sso-and-user-management.zh-CN.md)。向员工交付 MCP URL、CLI client ID、可用服务和必要回调端口，并提供[用户接入步骤](user-guide.zh-CN.md#接入-mcp-客户端)。
+
+## 区分登录客户端与上游凭证
+
+同名的 `client_id` 属于不同认证流程，应分别注册和填写；以下域名均需替换。Hub 用户 Token 的 audience 是完整 `server.public_url`，管理员 Token 的 audience 是 `admin.public_url`，二者不能互换。
+
+| 用途 | 配置位置 | 注册回调示例 |
+| --- | --- | --- |
+| 员工 CLI 登录 Hub | CLI 的 `--client-id` | `http://127.0.0.1:PORT/oauth/callback` |
+| 普通用户门户 | `client_authorization.client_id` | `https://hub.example.com/client-auth/auth/callback` |
+| 管理员浏览器登录 | `admin.client_id` | `https://admin.example.com/auth/callback` |
+| Hub 向企业 SSO 验证身份 | `auth.sso.upstream.client_id` | `https://hub.example.com/sso/callback` |
+| 用户连接上游业务账号 | `backends[].credentials.oauth.client_id` | `https://hub.example.com/client-auth/api/accounts/callback` |
+
+`backends[].oauth` 是 Hub 自己的服务账号 OAuth `client_credentials`，没有浏览器回调；`credentials.oauth` 是用户个人授权，两者互斥。Hub 的 `required_scopes` 和上游的 `oauth.scopes` 分别由各自身份服务解释，不会自动映射或相互授予。
 
 ## 启用客户端授权
 
@@ -208,7 +225,7 @@ Dockerfile 使用 `golang:1.26-bookworm` 构建静态二进制，再放入 `gcr.
 docker build -t mcphub:local .
 docker run --rm \
   --name mcphub \
-  -p 8080:8080 \
+  -p 127.0.0.1:8080:8080 \
   --env-file .env \
   -v "$PWD/config.yaml:/etc/mcphub/config.yaml:ro" \
   mcphub:local serve --config /etc/mcphub/config.yaml
@@ -245,8 +262,18 @@ SQLite 管理模式需要可写数据库卷，两种存储都需要 `MCPHUB_CONF
 
 常见现象对应关系：
 
-1. `validate` 报 `environment variable ... is not set`：先导出示例中的所有 `${...}` 变量。
+1. `validate` 报 `environment variable ... is not set`：按所选示例的变量清单注入实际服务进程，见[基础示例](configuration.zh-CN.md#从完整-yaml-示例启动)或[远程部署](../deploy/README.zh-CN.md#环境变量清单)；`required: false` 不会跳过该后端的变量校验。
 2. `/readyz` 返回 503：查看 JSON 中 `auth_verifier_ready` 和 `required_ready`，再检查 OIDC discovery/JWKS 与 required 后端 URL。
 3. MCP 返回 401 且 challenge 带 `resource_metadata`：检查 Bearer 是否存在、签名/issuer/audience 是否正确。
 4. MCP 返回 403 `insufficient_scope`：按 challenge 中的 `scope` 补齐该后端的全部 `required_scopes`。
 5. 访问 `/mcp` 404：检查请求路径是否与 `public_url` 的路径完全一致；`public_url` 不能只写域名根路径。
+
+配置相关常见误用：
+
+| 现象 | 检查与处理 |
+| --- | --- |
+| 修改 YAML 后服务列表未变 | 托管数据库初始化后，改用控制台/API 编辑；不要删除数据库。 |
+| 配了变量但 SSO/Vault 仍使用 `${...}` | 这些字段不展开；填实际字面值，Secret 用 `*_env` 变量名。 |
+| 只有管理页，没有用户授权门户 | 另行启用 `client_authorization` 并注册普通用户客户端。 |
+| 发布后仍看不到/不能执行工具 | 同时检查原始工具名、`effect`、Token/Grant Scope 和用户策略；`validate` 不验证工具实际存在。 |
+| SQLite 看似变成空库 | 核对 YAML 的位置及解析后的 `database_path`，不要意外连接到新路径。 |

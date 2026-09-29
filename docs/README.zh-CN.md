@@ -40,7 +40,7 @@
 
 - [飞书 SSO、Vault 与企业 Agent 架构](feishu-vault-agent-architecture.zh-CN.md)：跨系统集成方案及待验收事项；附[配置示例](../deploy/config.feishu-vault.example.yaml)、[SVG](diagrams/feishu-vault-agents.svg)和 [PNG](diagrams/feishu-vault-agents.png)。
 - [27 页架构 PDF](feishu-vault-agent-architecture.zh-CN.pdf)：2026-09-26 的评审快照，当前状态以在线架构文档为准。
-- [客户端 Broker 与授权同步设计](broker-authorization-design.zh-CN.md)：设计决策及实现边界。
+- [客户端 Broker 与授权同步设计](broker-authorization-design.zh-CN.md)：首版历史快照，附 v2.0–v2.2 的 schema 与能力变化。
 - [界面截图说明](screenshots/README.md)：v2.1.0 演示环境截图及来源。
 - [v2.2.0 发行与升级说明](../RELEASE_NOTES_v2.2.0.md)、[全部发行版本](https://github.com/SamuelSupe/mcphub/releases)。
 - [贡献指南](../CONTRIBUTING.md)：开发、验证及文档维护约定。

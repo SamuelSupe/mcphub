@@ -1,3 +1,6 @@
+# Single Hub + PostgreSQL. Required variables and startup: deploy/README.md / .zh-CN.md.
+# ${VAR:?message} is Docker Compose syntax, not MCPHub YAML interpolation syntax.
+# Keep the PostgreSQL volume and matching MCPHUB_CONFIG_KEY when upgrading.
 name: mcphub
 services:
   postgres:

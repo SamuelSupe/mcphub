@@ -18,6 +18,8 @@ MCPHub v2.1.0 起提供此能力。支持 HashiCorp Vault KV v2、SQLite 和单�
 
 以下片段应合并到已有的远程管理配置。保留现有 `server`、`auth` 和 `admin` 设置；上游账号配置不代替用户登录配置。
 
+此专题中的 `vault.*` 和 `credentials.*` 使用字面值，不展开 `${...}`；`*_env` 填环境变量名。个人模式必须在 backend 自身设置 `require_client_grant: true`，即使已经开启全局严格模式。新增 YAML backend 只在首次初始化数据库时导入，已有部署应通过控制台/API 修改。
+
 ```yaml
 vault:
   address: https://vault.example.com
@@ -76,6 +78,18 @@ credentials:
 通过 Vault 自己的管理工具在 `secret/services/projects` 写入 `token` 字段。MCPHub 配置只填写挂载点内的路径 `services/projects`，不包含 `secret/` 或 `data/`。共享凭证不自动执行第三方 OAuth 刷新；轮换由 Vault 运维或上游系统负责。
 
 `discovery_path` 是仅用于 MCP 目录发现的共享凭证，要求具备最小的初始化和列目录权限。目录允许匿名访问时可以省略。管理员发布的工具必须可被此发现连接看到；个人目录可以减少可见工具或改变说明文字，但工具 schema/策略仍须匹配用户确认过的授权。个人调用不会降级使用发现凭证；共享连接的提示词、资源和通知也不会混入个人视图。
+
+### 路径与凭证字段速查
+
+| 字段 | 含义 |
+| --- | --- |
+| `vault.mount` | KV v2 挂载名，默认 `secret`；凭证路径不要再包含此挂载名或 `data/`。 |
+| `vault.prefix` | 默认 `mcphub`，只用于服务器分配的个人账号路径；不会自动加到共享/发现路径前。 |
+| `credentials.path` | 共享模式必填；个人模式不能填写。 |
+| `credentials.discovery_path` | 个人模式可选的共享发现凭证；不是用户个人账号的存储位置。 |
+| `credentials.oauth.client_secret_path` | 可选机密 OAuth 客户端 Secret 的 KV 路径，读取其中 `client_secret` 字段。 |
+| `credentials.field` / `header` / `scheme` | 默认 `token` / `Authorization` / `Bearer`；普通 API Key 使用 `X-API-Key` 与空 scheme。 |
+| `vault.ca_file` | CA 文件在 **Hub 进程/容器内部** 的路径；建议绝对路径并挂载文件。相对路径按进程工作目录解析，不是 YAML 所在目录。 |
 
 ## Vault 权限与运维
 

@@ -63,7 +63,9 @@ PostgreSQL persistence checks require a disposable database with `citext` instal
 
 ### Documentation changes
 
-Documentation must reflect the current code, not a planned design. Keep both languages of each manual, reference and README semantically equivalent, with working language links. Put employee workflows in `docs/user-guide*.md`, administration in `docs/admin-guide*.md`, and detailed fields/protocols in `docs/configuration*.md`; the README remains an overview and navigation entry. Examples must use environment-variable placeholders and must not contain live credentials.
+Documentation must reflect the current code, not a planned design. Keep both languages of each manual, reference and README semantically equivalent, with working language links. Put employee workflows in `docs/user-guide*.md`, administration in `docs/admin-guide*.md`, and detailed fields/protocols in `docs/configuration*.md`; the README remains an overview and navigation entry.
+
+Use placeholders only in fields that [support environment expansion](docs/configuration.md#environment-variables-and-secrets); use variable names for `*_env` fields and example literals elsewhere. Never include live credentials. Keep runnable examples focused on one deployment scenario, distinguish YAML fragments from complete files, and label historical designs by version. Validate changed complete examples with the real loader and check Markdown links; configuration validation is not external integration acceptance.
 
 ## 中文
 
@@ -126,4 +128,6 @@ PostgreSQL 持久化检查需要允许安装 `citext` 的临时数据库。运�
 
 ### 文档变更
 
-文档必须反映当前代码，而不是计划设计。保持各手册、参考页和 README 的中英文语义等价并确保语言链接可用。员工操作放入 `docs/user-guide*.md`，管理流程放入 `docs/admin-guide*.md`，详细字段和协议放入 `docs/configuration*.md`；README 保持项目概览和导航职责。示例使用环境变量占位符，不得包含真实凭证。
+文档必须反映当前代码，而不是计划设计。保持各手册、参考页和 README 的中英文语义等价并确保语言链接可用。员工操作放入 `docs/user-guide*.md`，管理流程放入 `docs/admin-guide*.md`，详细字段和协议放入 `docs/configuration*.md`；README 保持项目概览和导航职责。
+
+只在[支持环境展开的字段](docs/configuration.zh-CN.md#环境变量与-secret)使用占位符；`*_env` 填变量名，其余字段填示例字面值，不得包含真实凭证。完整示例聚焦单个部署场景，明确区分配置片段与完整文件，并为历史设计标注适用版本。修改完整示例后用实际加载器校验并检查 Markdown 链接；配置校验不代表外部集成验收。

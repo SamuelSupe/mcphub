@@ -19,9 +19,9 @@ See [English usage](docs/user-guide.md#connect-an-mcp-client) / [中文使用说
 
 ## Upgrade and rollback / 升级与回滚
 
-The database schema is **7** for both SQLite and PostgreSQL. SSO adds users, organization memberships and credential sessions; supported older managed stores, including v1.4.0, migrate on startup. PostgreSQL deployment remains **single instance**. Changing `database.driver` does not migrate data.
+The database schema is **7** for both SQLite and PostgreSQL. SSO adds users, organization memberships and credential sessions; supported older managed stores, including v1.4.0, migrate on startup. PostgreSQL deployment remains **single instance**. Changing `admin.database_driver` does not migrate data.
 
-SQLite/PostgreSQL 均使用 **schema 7**；SSO 新增用户、组织成员关系及凭证会话，v1.4.0 等受支持旧版托管数据库在启动时迁移。PostgreSQL 仍为**单实例**，切换 `database.driver` 不会迁移数据。
+SQLite/PostgreSQL 均使用 **schema 7**；SSO 新增用户、组织成员关系及凭证会话，v1.4.0 等受支持旧版托管数据库在启动时迁移。PostgreSQL 仍为**单实例**，切换 `admin.database_driver` 不会迁移数据。
 
 1. Before upgrading, record the old binary/configuration and stop the gateway. Back up the database and separately retain the matching `MCPHUB_CONFIG_KEY`. For SQLite, use SQLite's `.backup` command or a consistent filesystem backup including WAL state; do not copy only an active `.db` file. For PostgreSQL, use `pg_dump` to a protected backup and verify restoration into a separate database. Protect backups as secrets.
 2. Review every backend's `published_tools`. Empty or omitted lists publish nothing; existing scope wildcards do not publish tools. Manually created HTTP tools default to disabled. Existing HTTP tools keep their stored state. Classify tools deliberately: unknown/write operations require the remote approval service and cannot execute in local unauthenticated or YAML-only mode.

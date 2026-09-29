@@ -40,7 +40,7 @@ Use these for design context and historical records. Start with the manuals for 
 
 - [Feishu SSO, Vault and enterprise Agent architecture](feishu-vault-agent-architecture.zh-CN.md) (Chinese): integration design and pending acceptance work, with [configuration](../deploy/config.feishu-vault.example.yaml), [SVG](diagrams/feishu-vault-agents.svg) and [PNG](diagrams/feishu-vault-agents.png).
 - [27-page architecture PDF](feishu-vault-agent-architecture.zh-CN.pdf): the 2026-09-26 review snapshot; current status is maintained in the online architecture document.
-- [Client Broker and authorization design](broker-authorization-design.zh-CN.md) (Chinese): decisions and implementation boundaries.
+- [Client Broker and authorization design](broker-authorization-design.zh-CN.md) (Chinese): historical first-version snapshot with schema and capability changes through v2.2.
 - [Screenshot notes](screenshots/README.md): provenance of the v2.1.0 demonstration screenshots.
 - [v2.2.0 release and upgrade notes](../RELEASE_NOTES_v2.2.0.md), [all releases](https://github.com/SamuelSupe/mcphub/releases).
 - [Contributing](../CONTRIBUTING.md): development, validation and documentation conventions.

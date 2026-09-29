@@ -3,6 +3,11 @@
 # Replace every example domain and REPLACE_ME value with reviewed settings.
 # Verify the authorization/token endpoint pair with positive and negative PKCE tests.
 # SSO/Vault strings below are literal config fields; do not assume ${ENV} expansion.
+# Service environment: MCPHUB_CONFIG_KEY (persistent Base64 32-byte key),
+# MCPHUB_FEISHU_APP_SECRET, MCPHUB_VAULT_ROLE_ID, MCPHUB_VAULT_SECRET_ID.
+# Optional directory sync also needs MCPHUB_DIRECTORY_TOKEN (at least 32 bytes).
+# `validate` checks configuration shape, not real tenant/Vault connectivity;
+# these runtime secrets must also be present when starting the service.
 server:
   listen: "127.0.0.1:8080"
   public_url: https://hub.example.com/mcp
@@ -27,6 +32,7 @@ auth:
       tenant_value: REPLACE_ME_TENANT
       success_claim: code
       success_value: '0'
+    # Raw upstream open_id, used only when this user is first created.
     bootstrap_subjects: [ou_REPLACE_ME_INITIAL_ADMIN]
     # Enable after the bootstrap admin has logged in and the adapter is ready.
     # directory_token_env: MCPHUB_DIRECTORY_TOKEN
@@ -49,6 +55,7 @@ admin:
   client_id: mcphub-admin
   required_scopes: [mcphub:admin]
   database_driver: sqlite
+  # Relative to this YAML file, not the shell's current working directory.
   database_path: ./data/mcphub-feishu-example.db
   encryption_key_env: MCPHUB_CONFIG_KEY
   approvals:
@@ -103,6 +110,7 @@ backends:
           resource_arguments: [/project]
           require_different_reviewer: true
           approvers:
+            # Internal Hub user ID / JWT sub, not the raw Feishu open_id above.
             - subjects: [REPLACE_ME_HUB_REVIEWER_SUBJECT]
     credentials:
       mode: personal

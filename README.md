@@ -7,7 +7,7 @@
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-MCPHub is an aggregation gateway for remote MCP servers. A single Streamable HTTP endpoint centralizes service connections, tool publication, user permissions, client authorization and write approval.
+MCPHub exposes existing remote MCP servers and ordinary HTTP APIs as MCP tools. A single Streamable HTTP endpoint centralizes service connections, tool publication, user permissions, client authorization and write approval.
 
 Users install `mcphub-cli` on their computers, sign in through a browser and confirm access for each Agent. Administrators deploy `mcphub` and manage services, credentials and policies. The gateway runs as one instance with SQLite or PostgreSQL.
 

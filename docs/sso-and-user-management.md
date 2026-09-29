@@ -4,13 +4,15 @@
 
 This is an administrator configuration and operations guide. For employee access, use the [user manual](user-guide.md).
 
-MCPHub can bridge OIDC or OAuth2 identity providers that support authorization code, PKCE S256 and Bearer UserInfo. `mcphub-cli` remains a public client; the upstream confidential client secret stays on the server. No Feishu tenant/application is configured or connected by this change. Actual Feishu compatibility depends on its application endpoints, identity fields, tenant settings and a directory adapter.
+MCPHub can bridge OIDC or OAuth2 identity providers that support authorization code, PKCE S256 and Bearer UserInfo. `mcphub-cli` remains a public client; the upstream confidential client secret stays on the server. The Feishu example remains an integration starting point. Compatibility requires validation of the actual application endpoints, identity fields, tenant settings and directory adapter.
 
 The flow is browser → MCPHub `/sso` → enterprise identity provider → local user/group policy → MCPHub-issued access JWT → MCPHub tool policy and write approval → backend. Upstream tokens are neither MCP credentials nor backend credentials. Without `auth.sso`, existing external-JWT mode remains available.
 
 ## Configuration
 
 Add this to the existing server configuration. Terminate HTTPS at the trusted reverse proxy and keep internal listeners private. Forward `/sso/*`, `/.well-known/oauth-authorization-server/sso`, `/.well-known/openid-configuration/sso` and existing protected-resource metadata paths to the MCP listener.
+
+Every field under `auth.sso` is literal and does not expand `${...}`; `client_secret_env` and `directory_token_env` contain variable names. Changes to any `auth.sso` setting require a restart. `bootstrap_subjects` matches the raw upstream subject (`sub` for OIDC or the configured OAuth2 subject claim). Approval-policy `subjects` instead uses the internal `sub` in Hub-issued JWTs; verify it through the management UI/API rather than copying an upstream open_id.
 
 ```yaml
 auth:

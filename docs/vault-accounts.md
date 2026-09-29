@@ -18,6 +18,8 @@ Shared mode reads an administrator-selected path. Personal paths are generated b
 
 Merge this fragment into an existing remote-management configuration, retaining `server`, `auth` and `admin`. Upstream authorization is separate from signing in to MCPHub.
 
+`vault.*` and `credentials.*` are literal fields and do not expand `${...}`; `*_env` contains a variable name. Personal mode must set `require_client_grant: true` on the backend itself, even with global enforcement enabled. YAML backends are imported only during initial database bootstrap; edit existing deployments through UI/API.
+
 ```yaml
 vault:
   address: https://vault.example.com
@@ -76,6 +78,18 @@ credentials:
 Write a `token` field at `secret/services/projects` using Vault's administration tools. The configured path is relative to the KV v2 mount, without `secret/` or `data/`. Shared credentials are rotated by Vault operations or the upstream system; MCPHub does not run third-party OAuth refresh for shared KV values.
 
 `discovery_path` is a shared credential limited to initialization and catalog discovery. Omit it for an anonymous catalog. Published tools must be visible through discovery. Personal catalogs may narrow the tool list or vary descriptions, while tool schemas and policies must match the client grant. Personal calls never fall back to discovery credentials; discovery prompts, resources and notifications are excluded from personal views.
+
+### Paths and credential fields
+
+| Field | Meaning |
+| --- | --- |
+| `vault.mount` | KV v2 mount, default `secret`; do not repeat the mount or `data/` in credential paths. |
+| `vault.prefix` | Default `mcphub`; used for server-allocated personal account paths, not prepended to shared/discovery paths. |
+| `credentials.path` | Required for shared mode, forbidden for personal mode. |
+| `credentials.discovery_path` | Optional shared discovery credential in personal mode, not the user's personal account location. |
+| `credentials.oauth.client_secret_path` | Optional confidential-client KV path; reads its `client_secret` field. |
+| `credentials.field` / `header` / `scheme` | Defaults to `token` / `Authorization` / `Bearer`; API keys can use `X-API-Key` with an empty scheme. |
+| `vault.ca_file` | File path **inside the Hub process/container**; prefer an absolute path and mount the file. Relative paths use the process working directory, not the YAML directory. |
 
 ## Vault access and operations
 

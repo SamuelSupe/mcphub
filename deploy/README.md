@@ -25,6 +25,23 @@ Grant selected administrators `mcphub:admin`. `admin.required_scopes` can change
 
 Enable refresh grants and advertise `offline_access` for renewal. Browser tokens stay in server memory; browsers receive only an opaque Secure/HttpOnly/SameSite cookie. Sessions expire after eight hours and are lost on restart. This single administrator permission grants management of every backend, tool group, tool and import. Tenant isolation, read-only admin roles, detailed management RBAC, host/process control and identity-provider account administration are outside this implementation.
 
+## Environment variables
+
+Choose one example; do not configure every integration at once. Remote SQLite/PostgreSQL examples enable the admin console only. Employee `mcphub-cli setup` additionally needs [client authorization](../docs/admin-guide.md#enable-client-authorization) and registered portal/CLI clients. The table below applies to both `config.remote-*` templates and their Compose deployment; the Feishu example lists its own required variables in its [file header](config.feishu-vault.example.yaml).
+
+| Used by | Variable | Value |
+| --- | --- | --- |
+| Both remote templates | `MCPHUB_PUBLIC_URL` | Full MCP HTTPS URL, e.g. `https://hub.example.com/mcp` |
+| Both remote templates | `MCPHUB_AUTH_ISSUER` | External OIDC issuer; Hub SSO instead uses the Hub `/sso` URL as described in its guide |
+| Both remote templates | `MCPHUB_ADMIN_PUBLIC_URL` | Admin HTTPS origin, e.g. `https://admin.example.com`, without a trailing `/` |
+| Both remote templates | `MCPHUB_ADMIN_CLIENT_ID` | Registered admin browser client ID, separate from CLI/user portal IDs |
+| Both remote templates | `MCPHUB_CONFIG_KEY` | Persistent Base64-encoded 32-byte key; retain across restarts/upgrades |
+| Direct PostgreSQL deployment | `MCPHUB_DATABASE_URL` | Reachable DSN; use TLS for external databases and URL-encode passwords |
+| Compose's PostgreSQL service | `MCPHUB_POSTGRES_PASSWORD` | URL-safe password; Compose constructs the container's `MCPHUB_DATABASE_URL` |
+| Host Caddy | `MCPHUB_HUB_HOST`, `MCPHUB_ADMIN_HOST` | Hostnames only, injected into the **Caddy process**; no URL scheme or `/mcp` |
+
+MCPHub YAML `${NAME}`, Compose `${NAME:?message}` and Caddy `{$NAME}` are different syntaxes. MCPHub does not load `.env`; inject variables through the service manager/current shell for the standalone binary. Compose can select a file explicitly with `--env-file /secure/mcphub.env`, then the example's `environment` passes selected values into the container. Docker's `--env-file` directly injects container variables. Follow the consuming tool's value/quoting syntax, restrict file permissions and exclude secrets from version control. See [expansion rules and `*_env` names](../docs/configuration.md#environment-variables-and-secrets).
+
 ## Start a deployment
 
 Set these values to your actual HTTPS addresses and inject the persistent encryption key from a secret store:
@@ -45,17 +62,17 @@ mcphub validate --config deploy/config.remote-sqlite.yaml
 mcphub serve --config deploy/config.remote-sqlite.yaml
 ```
 
-Relative database paths resolve from the YAML directory. Keep the existing SQLite path and key to reuse existing data; `serve` applies any required schema migration; do not let an older binary write a schema-9 database. `mode: local` remains the default, with no login and a numeric loopback-only listener that must never be published through a proxy.
+Relative database paths resolve from the YAML directory: the repository example uses `deploy/data/mcphub.db`; copying the YAML elsewhere changes this location. Keep the existing SQLite path and key to reuse existing data; `serve` applies any required schema migration; do not let an older binary write a schema-9 database. `mode: local` remains the default, with no login and a numeric loopback-only listener that must never be published through a proxy.
 
-External PostgreSQL:
+External PostgreSQL: the example binds `:8080` / `:8081` for containers. Before running directly on a host, copy it to `config.yaml` and change both `listen` values to `127.0.0.1:8080` / `127.0.0.1:8081` or protected private addresses, then run:
 
 ```bash
 export MCPHUB_DATABASE_URL='postgres://mcphub:URL_ENCODED_PASSWORD@db.example.com:5432/mcphub?sslmode=verify-full&sslrootcert=/path/to/db-ca.pem'
-mcphub validate --config deploy/config.remote-postgres.yaml
-mcphub serve --config deploy/config.remote-postgres.yaml
+mcphub validate --config config.yaml
+mcphub serve --config config.yaml
 ```
 
-Use a dedicated database/schema. The database role needs table creation/migration rights. A DBA must preinstall `CREATE EXTENSION IF NOT EXISTS citext` or allow the application to install it on startup. Supply the connection string, database CA and encryption key to the service. `validate` is read-only and does not create tables; the first `serve` initializes the schema and imports YAML backends.
+Use a dedicated database/schema. The database role needs table creation/migration rights. A DBA must preinstall `CREATE EXTENSION IF NOT EXISTS citext` or allow the application to install it on startup. Supply the connection string, database CA and encryption key to the service. `validate` is read-only and does not create tables; the first `serve` initializes the schema and imports YAML backends. `validate` still connects to PostgreSQL; a missing database, invalid credentials or a network failure cannot pass.
 
 Alternatively use the included PostgreSQL Compose deployment:
 
@@ -72,6 +89,13 @@ Compose retains data in `postgres-data`, publishes no database port, and binds t
 Terminate TLS at a trusted proxy. Forward **all paths** of the admin hostname to its listener, preserving `Host`; route the MCP hostname to the MCP listener. `admin.public_url` must exactly match the browser HTTPS origin, without a path or trailing slash. Identity headers supplied by proxies are not trusted.
 
 The host [Caddyfile](Caddyfile) uses `MCPHUB_HUB_HOST=hub.example.com` and `MCPHUB_ADMIN_HOST=admin.example.com`. Configure DNS and certificates and run your existing Caddy, Nginx or ingress. Keep upstream HTTP listeners private; all external clients use HTTPS. Restrict probes, login rates and source networks at the proxy as appropriate.
+
+## Verify the deployment
+
+1. Run `mcphub validate --config ...` in the actual service environment. This checks configuration and applicable stored records, not backend connectivity or identity login; SSO/Vault also perform runtime credential checks.
+2. After startup, check `/healthz` and `/readyz` on the MCP listener from a trusted network. Readiness includes the identity verifier and required backends; optional backend failures can coexist with ready status, so probe each service in the console.
+3. Sign in through the HTTPS admin origin, add a service and publish a reviewed read-only tool. Complete ordinary-user login/client authorization and actually call that tool. Verify user and administrator permissions separately.
+4. If enabled, verify real SSO login, personal account connection and revocation; test approvals before enabling write tools. `configuration valid`, health probes or a template alone do not establish integration acceptance.
 
 ## Browser and CLI
 
@@ -106,7 +130,7 @@ mcphub-cli status --profile ops
 mcphub-cli logout --profile ops
 ```
 
-PUT takes the full input object. To preserve a Header secret, include its name and omit `value`; omit `client_secret` to retain an OAuth secret. Do not submit GET views containing runtime/revision/redaction fields directly as PUT bodies. Stale ETags return 409. Network errors do not replay writes; 401 allows at most one refresh/retry. Ordinary MCP clients continue using `mcphub-cli connect --profile work`; administrator profiles cannot connect to MCP.
+PUT takes the full input object. To preserve a Header secret, include its name and omit `value`; omit `client_secret` to retain an OAuth secret. Do not submit GET views containing runtime/revision/redaction fields directly as PUT bodies. Stale ETags return 409. Network errors do not replay writes; 401 allows at most one refresh/retry. Ordinary MCP clients use a separate user profile and the [user manual](../docs/user-guide.md) to generate their connection settings; administrator profiles cannot connect to MCP.
 
 ## Storage and authorization boundaries
 

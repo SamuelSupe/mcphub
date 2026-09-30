@@ -1,0 +1,14 @@
+<h2 id="first-task">Start with a clear read-only task</h2>
+<p>Ask your agent to inspect the tools, then describe the exact goal and data scope. For example: “Use the authorized query tool to find this week's tasks in project A. Only read information.” Use tool names from the client's actual catalog.</p>
+<ol><li>Confirm the service and tool.</li><li>Specify the project, resource identifier, or query scope.</li><li>Read the result and confirm that it belongs to your task.</li><li>Confirm data changes separately through <a href="approvals.html">write approval</a>.</li></ol>
+<h2 id="catalog">Why only some tools are visible</h2>
+<p>The catalog is limited by company publication policy, identity permissions, and your client grant. Setup shows what you may request; the client shows what is actually authorized. Newly added tools do not expand existing grants automatically. Confirm them again.</p>
+<p>Passing MCPHub access checks does not guarantee that the business system permits the operation. Your upstream account's roles, resource permissions, and status still matter.</p>
+<h2 id="capabilities">Tools, prompts, resources, and subscriptions</h2>
+<table><thead><tr><th>Capability</th><th>Purpose and requirements</th></tr></thead><tbody><tr><td>Tools</td><td>Queries or business operations; the wizard mainly configures this capability.</td></tr><tr><td>Prompts</td><td>Service prompt templates; both the service and client must support them, and access must be explicitly granted.</td></tr><tr><td>Resources</td><td>Read information or context exposed by the service; enable access separately.</td></tr><tr><td>Subscriptions</td><td>Receive resource-change notifications; enable both resources and subscriptions.</td></tr></tbody></table>
+<p>See the <a href="cli.html#capabilities">CLI reference</a> for additional capabilities. Resource conditions on tool arguments do not restrict resource URIs or prompts.</p>
+<h2 id="retry">Failures and uncertain results</h2>
+<p>The connector does not automatically replay operations after a network failure. Retry a query after confirming the cause. For a write, check approval and business status first to avoid duplicates. After a 429 response, wait for capacity to recover and still confirm whether a write was already accepted.</p>
+<div class="callout"><strong>Approval, execution, and success are separate stages</strong>Browser approval permits continuation. The original client must resume the call, the upstream service must accept it, and you must confirm the business result.</div>
+<h2 id="records">Investigate a call</h2>
+<p>Keep the request ID, time, service, and tool name. If no ID is shown, give your administrator a time range and task description for diagnostics. Do not send credential files.</p>

@@ -6,7 +6,7 @@ These documents cover v2.2.0. Choose a manual for your role, then use the refere
 
 ## User manual
 
-**[Online help center (Chinese)](https://samuelsupe.github.io/mcphub/)**: browse 19 task-oriented guides with search, page outlines and mobile navigation.
+**[Online help center](https://samuelsupe.github.io/mcphub/en/)**: browse 19 task-oriented guides in English and Chinese with search, page outlines and mobile navigation.
 
 **[Open the user manual](user-guide.md)**: for employees using Codex, Claude Code or another MCP client.
 
@@ -18,7 +18,7 @@ These documents cover v2.2.0. Choose a manual for your role, then use the refere
 
 ## Administrator manual
 
-**[Online administrator documentation (Chinese)](https://samuelsupe.github.io/mcphub/admin/)**: 20 chapters with the same navigation and full-text search as the user guide, published automatically from the source Markdown.
+**[Online administrator documentation](https://samuelsupe.github.io/mcphub/en/admin/)**: 20 chapters in English and Chinese with the same navigation and full-text search as the user guide, published automatically from the corresponding source Markdown.
 
 **[Open the administrator manual](admin-guide.md)**: for deployment, access control, governance and operations.
 

@@ -1,0 +1,23 @@
+<h2 id="doctor">Check the entry your client actually uses</h2>
+<pre><code>mcphub-cli doctor --profile work --client ci_example</code></pre>
+<p>The profile and ID must match your client configuration. Omit --client to check login alone. The default timeout is 15 seconds; add --timeout 30s for a slow network. The allowed range is 1 second to 2 minutes.</p>
+<p>Diagnostics check the private directory, login renewal, pairing, the live authorization, effective scopes, personal accounts, MCP initialization, and the first page of the tool catalog. They may refresh your MCPHub login token. They do not open a browser, start the Broker, create an authorization, refresh upstream credentials, or execute tools.</p>
+<p>Success or warnings only return exit code 0; a blocking problem returns 1. A successful check does not guarantee that every business call or permission will work.</p>
+<h2 id="cannot-run">Command not found or client cannot start</h2>
+<p>Run setup --help. If the command is unavailable, use its absolute path and check the CPU architecture and execution permissions. If it works in a terminal but fails in your client, check that command points to an existing file, Windows uses the exe file, and env.MCPHUB_HOME is preserved.</p>
+<h2 id="login-fail">Login and browser authorization</h2>
+<table><thead><tr><th>Symptom</th><th>Action</th></tr></thead><tbody><tr><td>The browser does not open</td><td>Open the terminal's authorization link on the same computer.</td></tr><tr><td>Timeout or callback failure</td><td>Retry login and check the fixed callback port and where the command runs.</td></tr><tr><td>Pending or disabled user</td><td>Ask your administrator to enable your user and service access, then log in again.</td></tr><tr><td>Expired link or wrong account</td><td>Check the portal user, send a new request from the terminal, and verify the new pairing code.</td></tr></tbody></table>
+<h2 id="no-tools">No tools are available</h2>
+<ol><li>Check your company account and target service.</li><li>Check that the authorization includes the required tools and scopes.</li><li>Ask your administrator to check publication and access permissions.</li><li>Authorize again when you need newly added tools.</li></ol>
+<p>If the wizard cannot discover the catalog, ask your administrator to check the version and settings. Older deployments may require a manual authorization under their guidance.</p>
+<h2 id="grant">Authorization expired, revoked, or changed</h2>
+<pre><code>mcphub-cli client authorize --profile work --client ci_example</code></pre>
+<p>Confirm in the browser, then reconnect the client. A valid login does not replace entry authorization. If an upstream account was replaced or disconnected, restore the account first, then authorize again.</p>
+<h2 id="account">Personal account problems</h2>
+<p>Connect or reconnect the service from Connected accounts in the portal. Contact your administrator if verification keeps failing. If the account is connected but a business operation is denied, check the upstream role and resource permissions.</p>
+<h2 id="http">401, 403, 429, and 503</h2>
+<table><thead><tr><th>Error</th><th>Check first</th><th>Next step</th></tr></thead><tbody><tr><td>401</td><td>Login and renewal.</td><td>Run login --profile work, then reconnect.</td></tr><tr><td>403</td><td>User status, scopes, tools, resources, and authorization.</td><td>Read the diagnostic report and ask your administrator to confirm the required access.</td></tr><tr><td>429</td><td>Rate and concurrency limits.</td><td>Wait for capacity; for a write, first verify whether it was already accepted.</td></tr><tr><td>503 or persistent unavailability</td><td>Gateway, identity provider, account service, and backend.</td><td>Save diagnostics and request IDs for your administrator.</td></tr></tbody></table>
+<h2 id="approval">Approved, but not executed</h2>
+<p>Check the required number of reviewers, the original authorization's expiry, and whether the original client called mcphub_resume_approval. Query the status and follow any expiry, resource, or policy change instructions. You cannot use a different entry to execute the approval.</p>
+<h2 id="handoff">Still blocked</h2>
+<p>Follow <a href="support.html">Contact support</a> to collect the time, entry, service, and request ID. Avoid repeatedly broadening permissions or replaying writes while troubleshooting.</p>

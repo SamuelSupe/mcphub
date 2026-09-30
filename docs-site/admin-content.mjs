@@ -9,7 +9,7 @@ const escapeAttribute = text => text.replaceAll('&', '&amp;').replaceAll('"', '&
 
 function readSection(repository, source) {
   let markdown = readFileSync(path.join(repository, source.file), 'utf8');
-  if (!source.heading) markdown = markdown.replace(/^# .*\n/, '').replace(/^\[English\].*$/m, '');
+  if (!source.heading) markdown = markdown.replace(/^# .*\n/, '').replace(/^\[(?:English|中文|简体中文)\].*$/m, '');
   const tokens = marked.lexer(markdown);
   if (!source.heading) return tokens;
   const start = tokens.findIndex(token => token.type === 'heading' && normalizeHeading(token.text) === source.heading);
@@ -25,21 +25,29 @@ function readSection(repository, source) {
     ? { ...token, depth: token.depth - depth + 2 } : token);
 }
 
-export function loadAdminContent(repository, pages) {
+export function loadAdminContent(repository, pages, language = 'zh-CN') {
   const sections = new Map();
+  const suffix = language === 'en' ? '' : '.zh-CN';
+  const userGuide = 'docs/user-guide' + suffix + '.md';
+  const userSections = language === 'en' ? [
+    ['before-you-start', 'install'], ['install-the-cli', 'install'],
+    ['connect-an-mcp-client', 'quickstart'], ['connect-a-personal-account', 'accounts'],
+    ['write-approvals', 'approvals'], ['manage-client-authorizations', 'authorizations'],
+    ['diagnostics-and-troubleshooting', 'troubleshooting'],
+    ['manual-login-and-compatible-connections', 'login'], ['local-data-and-logout', 'privacy'],
+  ] : [
+    ['接入前准备', 'install'], ['接入-mcp-客户端', 'quickstart'],
+    ['连接个人账号', 'accounts'], ['写操作审批', 'approvals'],
+    ['管理客户端授权', 'authorizations'], ['诊断与常见问题', 'troubleshooting'],
+  ];
   const destinations = new Map([
-    ['docs/admin-guide.zh-CN.md', 'admin/index.html'],
-    ['docs/configuration.zh-CN.md', 'admin/configuration.html'],
-    ['deploy/README.zh-CN.md', 'admin/deployment.html'],
-    ['docs/sso-and-user-management.zh-CN.md', 'admin/sso.html'],
-    ['docs/vault-accounts.zh-CN.md', 'admin/vault.html'],
-    ['docs/user-guide.zh-CN.md', 'index.html'],
-    ['docs/user-guide.zh-CN.md#接入前准备', 'install.html'],
-    ['docs/user-guide.zh-CN.md#接入-mcp-客户端', 'quickstart.html'],
-    ['docs/user-guide.zh-CN.md#连接个人账号', 'accounts.html'],
-    ['docs/user-guide.zh-CN.md#写操作审批', 'approvals.html'],
-    ['docs/user-guide.zh-CN.md#管理客户端授权', 'authorizations.html'],
-    ['docs/user-guide.zh-CN.md#诊断与常见问题', 'troubleshooting.html'],
+    ['docs/admin-guide' + suffix + '.md', 'admin/index.html'],
+    ['docs/configuration' + suffix + '.md', 'admin/configuration.html'],
+    ['deploy/README' + suffix + '.md', 'admin/deployment.html'],
+    ['docs/sso-and-user-management' + suffix + '.md', 'admin/sso.html'],
+    ['docs/vault-accounts' + suffix + '.md', 'admin/vault.html'],
+    [userGuide, 'index.html'],
+    ...userSections.map(([anchor, slug]) => [userGuide + '#' + anchor, slug + '.html']),
   ]);
 
   for (const page of pages) {
@@ -56,7 +64,7 @@ export function loadAdminContent(repository, pages) {
     }
   }
 
-  for (const file of ['docs/admin-guide.zh-CN.md', 'docs/configuration.zh-CN.md']) {
+  for (const file of ['docs/admin-guide' + suffix + '.md', 'docs/configuration' + suffix + '.md']) {
     const headings = marked.lexer(readFileSync(path.join(repository, file), 'utf8'))
       .filter(token => token.type === 'heading' && token.depth > 1);
     for (const token of headings) {

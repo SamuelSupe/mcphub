@@ -1,0 +1,14 @@
+<h2 id="layers">The permissions needed for a call</h2>
+<table><thead><tr><th>Layer</th><th>What it controls</th><th>Who manages it</th></tr></thead><tbody><tr><td>Identity and user status</td><td>Whether you can access MCPHub.</td><td>Company identity systems and administrators.</td></tr><tr><td>Service and tool policy</td><td>Published tools and the scope you may request.</td><td>MCPHub administrators.</td></tr><tr><td>Client authorization</td><td>An entry's tools, scopes, resource conditions, expiry, and permission to request writes.</td><td>You confirm it within administrator-defined limits.</td></tr><tr><td>Personal service account</td><td>Upstream identity and business permissions.</td><td>You and the business system.</td></tr><tr><td>Individual write approval</td><td>Whether this exact target and full arguments may be executed.</td><td>Authorized reviewers.</td></tr></tbody></table>
+<p>One layer does not replace another. Renewing sign-in does not extend client grants, and client authorization cannot bypass upstream business permissions.</p>
+<h2 id="scopes">Scopes and tool lists</h2>
+<p>A scope is a permission identifier required by a service. A tool allowlist further limits which tools can be called. For manual configuration, use names supplied by your administrator and repeat --scope as needed.</p>
+<p>If manual client add omits the tool list, it freezes the currently eligible tools; it does not keep adding newly discovered tools. The setup wizard requires you to select at least one tool explicitly.</p>
+<h2 id="resources">Limit business resources</h2>
+<p>If a tool has a project argument, <code>/project=project-a</code> limits it to project A. The path is a JSON Pointer into tool arguments; use the tool's actual definition:</p>
+<pre><code>mcphub-cli client add --profile work --name project-a-read --endpoint database-prod --tool query --resource /project=project-a</code></pre>
+<p>Resource conditions added by setup apply to every selected tool. Create separate entries for tools with different parameters, and ask your administrator to confirm fields and allowed values. Client limits cannot widen server-side access.</p>
+<h2 id="writes">Read-only access and permission to request writes</h2>
+<p>A read-only entry cannot request writes. Explicitly enable <code>--allow-write-requests</code>, or confirm write tools in setup, before submitting a write request. Write and unclassified tools still need approval for every operation.</p>
+<h2 id="change">When permissions change</h2>
+<p>Expiry, revocation, account replacement, or policy changes may reduce catalog and call permissions. Reauthorize and reconnect when prompted. Server-side revocation immediately blocks subsequent admission without waiting for local refresh. Operations already accepted upstream cannot be automatically rolled back.</p>

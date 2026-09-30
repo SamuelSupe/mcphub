@@ -1,0 +1,17 @@
+<h2 id="when">Which operations need approval?</h2>
+<p>Read-only tools execute after access checks. Write and unclassified tools require approval for each operation. Permission to request writes only allows your client to submit a request.</p>
+<h2 id="submit">1. Submit the exact operation</h2>
+<p>Ask your agent to specify the resource, complete arguments, and intended change. If the result contains <code>approval_pending</code>, <code>approval_id</code>, and <code>approval_url</code>, the operation has not executed. Keep the ID and open the returned link.</p>
+<h2 id="review">2. Have an authorized reviewer confirm it</h2>
+<ol><li>Check the requester, target service, and resource.</li><li>Review all arguments and any available preview.</li><li>Complete required step-up authentication, then approve or reject.</li><li>If two reviewers are required, two different authorized people must review independently.</li></ol>
+<p>The requester may not have approval permission and may need to give the link to a designated reviewer. Approvals expire. If no reviewer is available, authentication requirements are unmet, or the request expired, contact your administrator or submit a new request as directed.</p>
+<h2 id="resume">3. Resume from the original client</h2>
+<p>After approval, the original client calls <code>mcphub_resume_approval</code> with:</p>
+<pre><code>{ "approval_id": "the actual returned approval ID" }</code></pre>
+<p>Approval does not execute the operation automatically. Do not use a different client entry or a replacement grant to resume the original request. If authorization became invalid, confirm business status first and follow your administrator's guidance.</p>
+<h2 id="status">Check status or cancel</h2>
+<table><thead><tr><th>Action</th><th>Tool</th></tr></thead><tbody><tr><td>Check status</td><td><code>mcphub_approval_status</code></td></tr><tr><td>Cancel before execution</td><td><code>mcphub_cancel_approval</code></td></tr><tr><td>Resume after approval</td><td><code>mcphub_resume_approval</code></td></tr></tbody></table>
+<p>Each uses the original approval_id. If current tools and permissions allow it and the administrator configured a read-only status tool, add <code>query_upstream: true</code> to check the business system. This option is unavailable without that configuration.</p>
+<h2 id="uncertain">Timeouts or uncertain results</h2>
+<p>Check approval and business status first, then give your administrator the approval ID, request ID, and time. Do not repeatedly create or resume the same write. Cancellation and revocation cannot undo a write already accepted upstream.</p>
+<p>If resource versions, configuration, or permissions changed, check the target and arguments again and request approval as directed. Undo business results through the business system's formal rollback process.</p>

@@ -1,0 +1,28 @@
+<h2 id="when">When to contact your administrator</h2>
+<p>Your administrator handles pending users, unavailable services, permission changes, account service failures, reviewer settings, and persistent 503 errors. Start with <a href="troubleshooting.html">Troubleshooting</a>.</p>
+<h2 id="report">Generate a diagnostic report</h2>
+<pre><code>mcphub-cli doctor --profile work --client ci_example --json --timeout 30s &gt; mcphub-diagnostics.json</code></pre>
+<p>Use the actual entry ID. The report does not include tokens or process communication credentials. Blocking problems return a nonzero exit status, but the report already written is retained.</p>
+<h2 id="information">Include details that help locate the problem</h2>
+<ul><li>Time, timezone, and frequency.</li><li>Operating system, CPU architecture, CLI version, and AI client version.</li><li>MCPHub URL, profile, entry ID, service, and tool.</li><li>The exact error, diagnostics, request ID, or approval ID.</li><li>Expected and actual results, and any recent reauthorization, account replacement, or upgrade.</li></ul>
+<p>For a write, state whether it was not executed, was accepted, or has an uncertain result. Verify the result before retrying.</p>
+<h2 id="template">Copyable issue template</h2>
+<pre><code>Problem:
+Time and timezone:
+Operating system / CPU architecture:
+mcphub-cli version:
+AI client and version:
+MCPHub URL:
+Profile / client ID:
+Endpoint / tool:
+Request ID / approval ID:
+Steps:
+Expected result:
+Actual error:
+Write execution status or uncertainty:
+Recent changes:
+Attachment: mcphub-diagnostics.json</code></pre>
+<h2 id="sensitive">Review before sending</h2>
+<p>Do not send credential directories, login tokens, personal tokens, complete authorization URLs, or active pairing codes. Handle business identifiers and parameters according to company policy. Your administrator can look up the event using its time and request ID.</p>
+<h2 id="project">Report a product issue</h2>
+<p>Contact your internal administrator first for company access or business problems. Once a product defect is confirmed, your administrator can submit a reproduction without secrets to <a href="https://github.com/SamuelSupe/mcphub/issues" target="_blank" rel="noopener">GitHub Issues</a>. Follow the <a href="https://github.com/SamuelSupe/mcphub/blob/v2.2.0/SECURITY.md" target="_blank" rel="noopener">security reporting instructions</a> for security issues.</p>

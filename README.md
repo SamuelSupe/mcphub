@@ -13,9 +13,9 @@ Users install `mcphub-cli` on their computers, sign in through a browser and con
 
 ## Start here
 
-**[Online help center (Chinese)](https://samuelsupe.github.io/mcphub/)**: 19 end-user guides with grouped navigation, full-text search and client configuration examples.
+**[Online help center](https://samuelsupe.github.io/mcphub/en/)**: 19 end-user guides in English and Chinese, with grouped navigation, full-text search and client configuration examples.
 
-**[Online administrator manual (Chinese)](https://samuelsupe.github.io/mcphub/admin/)**: 20 chapters covering deployment, services, identity, governance and operations.
+**[Online administrator manual](https://samuelsupe.github.io/mcphub/en/admin/)**: 20 chapters in English and Chinese covering deployment, services, identity, governance and operations. Switch languages from any chapter.
 
 | Your task | Start with | Covers |
 | --- | --- | --- |

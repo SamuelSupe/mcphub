@@ -1,0 +1,20 @@
+<h2 id="terms">Understand the names</h2>
+<dl class="term-list"><dt>Profile</dt><dd>Local sign-in and connection settings, such as work; the default is default.</dd><dt>Client entry</dt><dd>A generated ci_… ID containing the authorized tools and resources for one service.</dd><dt>Service / Endpoint</dt><dd>A company-published set of business tools. Each entry connects to one service.</dd><dt>Broker</dt><dd>A local service that shares sessions and sign-in renewal across processes. connect --client starts it when needed.</dd></dl>
+<h2 id="services">Multiple services and clients</h2>
+<pre><code>mcphub-cli setup --profile work &gt; projects-mcp.json
+mcphub-cli setup --profile work &gt; tasks-mcp.json</code></pre>
+<p>Choose the target service and tools each time, use distinct client names, and merge entries into your client configuration. Separate entries for different AI clients also make revocation easier.</p>
+<h2 id="profiles">Separate companies and identities</h2>
+<p>Use different profiles for different MCPHub URLs or identities. Setup rejects mixing an existing profile with another URL or client ID. Create a new profile or explicitly sign in again:</p>
+<pre><code>mcphub-cli setup --server https://other-hub.example.com/mcp --client-id mcphub-cli --profile other-work &gt; other-mcp.json</code></pre>
+<p>Keep administrator sign-in profiles separate from everyday user profiles.</p>
+<h2 id="new-machine">Change computers or system accounts</h2>
+<ol><li>Install the connector in the new environment.</li><li>Run setup again, sign in, and authorize.</li><li>Use the newly generated paths, MCPHUB_HOME, and entry ID.</li><li>After checking the new connection, revoke unused old sessions or entries in the portal.</li></ol>
+<p>Personal upstream accounts are stored server-side per user and may not need reconnection. The new environment still needs its own client entry. Do not migrate by copying the credentials directory.</p>
+<h2 id="remote">SSH, remote development, and containers</h2>
+<p>First identify where the client actually launches the connector. The executable, private directory, broker, and callback must be available in that environment. Local absolute paths cannot be used directly on a remote machine.</p>
+<p>If no browser is available or the callback cannot be reached, ask your administrator for a supported approach. Open authorization links in an environment that can reach the corresponding local callback.</p>
+<h2 id="broker">Manage the local broker</h2>
+<pre><code>mcphub-cli broker status
+mcphub-cli broker stop</code></pre>
+<p>Stopping the broker stops local connections and keeps remote grants. The next connect starts it when needed. Run broker run in the foreground for diagnosis. If MCPHUB_HOME changes, related processes must all use the same directory.</p>

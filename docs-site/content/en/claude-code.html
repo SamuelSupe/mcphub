@@ -1,0 +1,15 @@
+<h2 id="prepare">Complete MCPHub setup first</h2>
+<p>Run the <a href="quickstart.html">setup wizard</a> and choose generic JSON. Keep the actual command, args, env, and entry ID. All values below are examples.</p>
+<h2 id="add">Add the local connector</h2>
+<p>Add a stdio connection through the Claude Code CLI. This example uses user scope:</p>
+<pre><code>claude mcp add --transport stdio --scope user work-projects --env MCPHUB_HOME=/Users/you/.mcphub -- /absolute/path/to/mcphub-cli connect --profile work --client ci_example</code></pre>
+<p>Everything after <code>--</code> is the connector and its arguments. On Windows, use the actual exe path and quote paths containing spaces.</p>
+<p>You can also merge the generated mcpServers entry into <code>.mcp.json</code> at the project root. Personal paths and entry IDs are unsuitable as shared team configuration; each person should create their own entry.</p>
+<h2 id="verify">Check the connection</h2>
+<pre><code>claude mcp list
+claude mcp get work-projects</code></pre>
+<p>Inside Claude Code, use <code>/mcp</code> to inspect status. Project servers may require trust confirmation and enablement. Saving configuration does not prove a working connection; run MCPHub doctor for the actual entry as well.</p>
+<h2 id="remove">Disable or remove a connection</h2>
+<p>Manage the client-side connection through /mcp, or remove this example with <code>claude mcp remove work-projects --scope user</code>. To stop that entry from accessing MCPHub, revoke its grant separately in your personal portal.</p>
+<h2 id="reference">Official reference</h2>
+<p>See the <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">official Claude Code MCP documentation</a> for command syntax, scopes, and server status.</p>

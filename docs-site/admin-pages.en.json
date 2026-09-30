@@ -1,0 +1,328 @@
+[
+  {
+    "slug": "admin/index",
+    "title": "Manage MCPHub",
+    "group": "Deployment",
+    "description": "Configure, verify, and maintain MCPHub from the first deployment to controlled tool access."
+  },
+  {
+    "slug": "admin/install",
+    "title": "Install and start the gateway",
+    "group": "Deployment",
+    "description": "Choose a deployment mode, install the server, and start local or remote administration.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Preparation and installation"
+      },
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Local management UI"
+      },
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Remote administrators and PostgreSQL"
+      }
+    ]
+  },
+  {
+    "slug": "admin/deployment",
+    "title": "Remote administration and databases",
+    "group": "Deployment",
+    "description": "Configure administrator identity, SQLite or PostgreSQL, HTTPS, and deployment verification.",
+    "sources": [
+      {
+        "file": "deploy/README.md"
+      }
+    ]
+  },
+  {
+    "slug": "admin/services",
+    "title": "Console and tool publication workflow",
+    "group": "Connect services",
+    "description": "Find the management pages, connect a service, publish tools explicitly, and verify a first call.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Connect services and publish tools"
+      },
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Console navigation"
+      }
+    ]
+  },
+  {
+    "slug": "admin/backends",
+    "title": "Configure MCP backends",
+    "group": "Connect services",
+    "description": "Set remote MCP connections, service credentials, publication lists, and access policies.",
+    "sources": [
+      {
+        "file": "docs/configuration.md",
+        "heading": "backends",
+        "children": false
+      }
+    ]
+  },
+  {
+    "slug": "admin/http-tools",
+    "title": "HTTP tool groups and OpenAPI",
+    "group": "Connect services",
+    "description": "Publish REST APIs as MCP tools and maintain manual interfaces and OpenAPI imports.",
+    "sources": [
+      {
+        "file": "docs/configuration.md",
+        "heading": "Tool groups and managed HTTP API tools"
+      }
+    ]
+  },
+  {
+    "slug": "admin/permissions",
+    "title": "Tool publication and access checks",
+    "group": "Connect services",
+    "description": "Define read/write classification, scopes, and resource limits, and explain access without executing tools.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Tool permission checks"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "Explicit publication and resource limits"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "Backend-local tool rules"
+      }
+    ]
+  },
+  {
+    "slug": "admin/rate-limit",
+    "title": "Configure rate limits",
+    "group": "Connect services",
+    "description": "Set service rates, burst capacity, and concurrency, and understand shared quotas and retries.",
+    "sources": [
+      {
+        "file": "docs/configuration.md",
+        "heading": "Endpoint rate limits"
+      }
+    ]
+  },
+  {
+    "slug": "admin/authentication",
+    "title": "Identity clients and authentication",
+    "group": "Identity and access",
+    "description": "Distinguish employee, portal, administrator, and upstream clients, callbacks, tokens, and scopes.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Distinguish login clients and upstream credentials"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "auth"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "External OIDC registration for the user CLI"
+      }
+    ]
+  },
+  {
+    "slug": "admin/sso",
+    "title": "SSO, users, and organizations",
+    "group": "Identity and access",
+    "description": "Connect an enterprise identity provider, assign local permissions, sync directories, and recover administrator access.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Users and organizations"
+      },
+      {
+        "file": "docs/sso-and-user-management.md"
+      }
+    ]
+  },
+  {
+    "slug": "admin/client-authorizations",
+    "title": "Enable client authorization",
+    "group": "Identity and access",
+    "description": "Enable the personal portal, register user clients, and migrate services to strict authorization.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Enable client authorization"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "client_authorization"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "Client credentials and connection boundaries"
+      }
+    ]
+  },
+  {
+    "slug": "admin/vault",
+    "title": "Vault and upstream accounts",
+    "group": "Identity and access",
+    "description": "Configure shared or personal service accounts, Vault paths, OAuth callbacks, and credential lifecycle.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Configure upstream accounts"
+      },
+      {
+        "file": "docs/vault-accounts.md"
+      }
+    ]
+  },
+  {
+    "slug": "admin/write-approvals",
+    "title": "Configure write approvals",
+    "group": "Governance and audit",
+    "description": "Define approval for each write, reviewers, argument previews, resource versions, and step-up authentication.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Write approval and configuration governance"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "One-time write approval"
+      }
+    ]
+  },
+  {
+    "slug": "admin/governance",
+    "title": "Configuration governance and audit",
+    "group": "Governance and audit",
+    "description": "Review configuration changes and configure quorum, notifications, and independent signed audit archives.",
+    "sources": [
+      {
+        "file": "docs/configuration.md",
+        "heading": "Configuration governance, quorum and operation identity"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "Approval notifications and independent audit archive"
+      }
+    ]
+  },
+  {
+    "slug": "admin/diagnostics",
+    "title": "Grant and request diagnostics",
+    "group": "Governance and audit",
+    "description": "Query or revoke client grants, explain rejected requests, and filter or export request history.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Grant and request diagnostics"
+      }
+    ]
+  },
+  {
+    "slug": "admin/upgrade",
+    "title": "Upgrade, back up, and roll back",
+    "group": "Operations",
+    "description": "Preserve the database and matching key before schema 9 migration, and restore them together for rollback.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Upgrades and backups"
+      }
+    ]
+  },
+  {
+    "slug": "admin/operations",
+    "title": "Operations and health checks",
+    "group": "Operations",
+    "description": "Check liveness and readiness, run containers, reload configuration, and shut down gracefully.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Operations"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "HTTP endpoints and RFC 9728"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "SIGHUP reload and shutdown"
+      }
+    ]
+  },
+  {
+    "slug": "admin/security",
+    "title": "Security and credential protection",
+    "group": "Operations",
+    "description": "Check HTTPS, network entry points, administrator access, logs, and encryption-key protection.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Security notes"
+      }
+    ]
+  },
+  {
+    "slug": "admin/troubleshooting",
+    "title": "Troubleshooting and supported capabilities",
+    "group": "Troubleshooting and reference",
+    "description": "Diagnose startup, readiness, authentication, tools, and configuration, and check version boundaries.",
+    "sources": [
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Known limits and troubleshooting"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "Capabilities and boundaries"
+      }
+    ]
+  },
+  {
+    "slug": "admin/configuration",
+    "title": "YAML and protocol reference",
+    "group": "Troubleshooting and reference",
+    "description": "Find configuration behavior, environment variables, server and admin fields, startup examples, and naming rules.",
+    "sources": [
+      {
+        "file": "docs/configuration.md",
+        "heading": "Choose a configuration and apply changes"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "Environment variables and secrets"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "server"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "vault"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "admin",
+        "children": false
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "Other configuration guides",
+        "children": false
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "Starting from the full YAML example"
+      },
+      {
+        "file": "docs/configuration.md",
+        "heading": "Name and URI mapping"
+      }
+    ]
+  }
+]

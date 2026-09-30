@@ -1,0 +1,21 @@
+<h2 id="generate">Generate the VS Code format</h2>
+<p>Run the <a href="quickstart.html">setup wizard</a> and choose <strong>2 · VS Code servers JSON</strong>. The output uses a top-level servers object and type: stdio.</p>
+<h2 id="configure">Choose where to save it</h2>
+<p>Run <code>MCP: Open User Configuration</code> from the command palette for personal configuration, or use <code>.vscode/mcp.json</code> in the current project. Merge the actual generated entry into the existing servers object:</p>
+<pre><code>{
+  "servers": {
+    "work-projects": {
+      "type": "stdio",
+      "command": "/absolute/path/to/mcphub-cli",
+      "args": ["connect", "--profile", "work", "--client", "ci_example"],
+      "env": { "MCPHUB_HOME": "/Users/you/.mcphub" }
+    }
+  }
+}</code></pre>
+<p>Replace example values and preserve other existing servers.</p>
+<h2 id="start">Start and check the server</h2>
+<p>Run <code>MCP: List Servers</code> from the command palette, choose your server, and start or restart it. Confirm trust when requested. Check the tool list; if it fails, inspect server output and run doctor for the corresponding entry.</p>
+<h2 id="remote">SSH and Dev Containers</h2>
+<p>The execution environment depends on VS Code configuration scope and remote setup. The connector, MCPHUB_HOME, sign-in, and authorization must all belong to the environment that actually runs it. Do not copy a local configuration directly into a container. See <a href="profiles.html">Multiple services and environments</a>.</p>
+<h2 id="reference">Official reference</h2>
+<p>See the <a href="https://code.visualstudio.com/docs/agent-customization/mcp-servers" target="_blank" rel="noopener">official VS Code MCP documentation</a> for configuration locations and management.</p>

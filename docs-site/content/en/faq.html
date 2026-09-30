@@ -1,0 +1,24 @@
+<h2 id="need-server">Do I need to install the server or Vault?</h2>
+<p>No. End users install mcphub-cli. Your administrator configures company services and tools.</p>
+<h2 id="two-ids">Are client-id and ci_… the same?</h2>
+<p>No. --client-id in login/setup identifies a registered login application. --client in connect/doctor identifies a generated client entry.</p>
+<h2 id="login-grant">Why authorize after logging in?</h2>
+<p>Login establishes your identity. Authorization determines which services, tools, and data an entry may use. Each entry is confirmed and revoked independently.</p>
+<h2 id="expiry">Why does authorization expire when login can renew?</h2>
+<p>Their lifetimes are independent. When an entry expires, run client authorize or use the wizard again, confirm in the browser, and reconnect.</p>
+<h2 id="new-tools">Do new tools appear automatically?</h2>
+<p>An existing authorization does not expand automatically. Confirm the tools you now need. If they are still unavailable, ask your administrator to check publication and permissions.</p>
+<h2 id="account-change">Why does replacing an account stop access?</h2>
+<p>Replacing or disconnecting an upstream account invalidates old authorizations. Reconnect the account and authorize the entry again. Connecting an account for the first time can satisfy an existing authorization.</p>
+<h2 id="approval">Does approved mean completed?</h2>
+<p>Approval allows the operation to continue. The original client still needs to call mcphub_resume_approval with the original ID and verify the business result.</p>
+<h2 id="cancel">Can revocation roll back an operation?</h2>
+<p>No. Revocation blocks future admission and cancels active streams. It does not undo side effects already accepted by the upstream service.</p>
+<h2 id="doctor-safe">Does doctor execute tools?</h2>
+<p>It does not execute tools or create authorizations. It may refresh your login token and performs a handshake and catalog read. It does not refresh upstream credentials.</p>
+<h2 id="share">Can a colleague reuse my configuration?</h2>
+<p>Your configuration includes local paths and your own entry. Each person should run the wizard and authorize independently.</p>
+<h2 id="logout">How do portal logout, logout, and broker stop differ?</h2>
+<p>They end your browser session, local login, and local transport respectively. See <a href="privacy.html">Logout and credential protection</a> for entry revocation and account disconnection.</p>
+<h2 id="desktop">Can I use another desktop client?</h2>
+<p>If it supports local stdio MCP and accepts command, args, and env, follow <a href="clients.html">Client configuration</a>. Use the format required by that client.</p>

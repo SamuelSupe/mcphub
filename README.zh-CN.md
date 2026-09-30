@@ -13,9 +13,9 @@ MCPHub 将已有的远端 MCP Server 和普通 HTTP API 统一提供为 MCP 工�
 
 ## 从这里开始
 
-**[在线帮助中心](https://samuelsupe.github.io/mcphub/)**：面向最终用户的 19 篇中文指南，提供分组导航、全文搜索和客户端配置示例。
+**[在线帮助中心](https://samuelsupe.github.io/mcphub/)**：面向最终用户的 19 篇中英文指南，提供分组导航、全文搜索和客户端配置示例。
 
-**[在线管理员手册](https://samuelsupe.github.io/mcphub/admin/)**：按部署、服务接入、身份权限、治理审计和运行维护浏览 20 个章节。
+**[在线管理员手册](https://samuelsupe.github.io/mcphub/admin/)**：按部署、服务接入、身份权限、治理审计和运行维护浏览 20 个中英文章节，可在当前章节切换语言。
 
 | 你的任务 | 阅读入口 | 包含内容 |
 | --- | --- | --- |

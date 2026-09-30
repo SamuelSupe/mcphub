@@ -1,0 +1,19 @@
+<h2 id="prepare">Complete MCPHub setup first</h2>
+<p>Follow <a href="quickstart.html">Your first connection</a>, run setup, and choose generic JSON. Keep the generated command, args, env, and entry ID. Run the connector and Codex on the same computer under the same system account.</p>
+<h2 id="toml">Convert the configuration to TOML</h2>
+<p>Add the following structure to Codex MCP configuration and substitute the actual setup values. The default personal configuration is usually <code>~/.codex/config.toml</code>; project configuration is <code>.codex/config.toml</code> and is subject to project trust and company policy.</p>
+<pre><code>[mcp_servers.work_projects]
+command = "/absolute/path/to/mcphub-cli"
+args = ["connect", "--profile", "work", "--client", "ci_example"]
+
+[mcp_servers.work_projects.env]
+MCPHUB_HOME = "/Users/you/.mcphub"</code></pre>
+<p>You can choose the server name; use different names for different services and avoid duplicate tables. On Windows, use TOML single-quoted paths, such as <code>command = 'C:\Tools\mcphub-cli\mcphub-cli.exe'</code>.</p>
+<h2 id="cli-add">Add it through the Codex CLI</h2>
+<pre><code>codex mcp add work_projects --env MCPHUB_HOME=/Users/you/.mcphub -- /absolute/path/to/mcphub-cli connect --profile work --client ci_example</code></pre>
+<p>Use the actual setup values and keep existing server settings. Restart the relevant connection or begin a new session afterward.</p>
+<h2 id="verify">Confirm that tools are visible</h2>
+<ol><li>Reload Codex MCP connections and review the server status and tools.</li><li>Run <code>mcphub-cli doctor --profile work --client ci_example</code> with the same ID as the configuration.</li><li>Start with an authorized read-only task and check the result.</li></ol>
+<p>If doctor succeeds but Codex fails, check executable paths, env, the system account, and company MCP policy.</p>
+<h2 id="reference">Official reference</h2>
+<p>The configuration and CLI command were checked against the MCP and configuration sections of the <a href="https://developers.openai.com/codex/codex-manual.md" target="_blank" rel="noopener">official OpenAI Codex Manual</a>. When the client changes, follow its current settings and official documentation.</p>

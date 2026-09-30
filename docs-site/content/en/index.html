@@ -1,0 +1,15 @@
+<p>MCPHub lets you use company tools in AI clients such as Codex, Claude Code, and VS Code. Sign in with your company identity, choose the tools and data each client may access, and obtain approval for individual write operations.</p>
+<div class="start-panel"><span class="small">First time here?</span><h2>Start with one successful connection</h2><p>Get your company connection details, install the connector, run the setup wizard, and add its output to your AI client.</p><a href="quickstart.html">Set up your first connection →</a></div>
+<h2 id="find-answer">Find help for your task</h2>
+<div class="path-grid">
+  <a class="path-card" href="clients.html"><span>01 · Connect</span><strong>Configure my AI client →</strong><p>Choose Codex, Claude Code, VS Code, or another MCP-compatible client.</p></a>
+  <a class="path-card" href="accounts.html"><span>02 · Accounts</span><strong>Connect a personal service account →</strong><p>Connect, reconnect, or disconnect an upstream account in your portal.</p></a>
+  <a class="path-card" href="approvals.html"><span>03 · Approvals</span><strong>Complete a write operation →</strong><p>Review a pending request and resume the approved operation from the original client.</p></a>
+  <a class="path-card" href="troubleshooting.html"><span>04 · Troubleshoot</span><strong>Fix connection and permission problems →</strong><p>Start with missing tools, expired authorization, or a 401, 403, or 503 response.</p></a>
+</div>
+<h2 id="how-it-works">The three places you will use</h2>
+<table><thead><tr><th>Entry point</th><th>What it does</th></tr></thead><tbody><tr><td>AI client</td><td>Discover tools, make calls, and check or resume approvals.</td></tr><tr><td>Local connector <code>mcphub-cli</code></td><td>Sign in, generate client configuration, and diagnose connections.</td></tr><tr><td>Personal authorization portal</td><td>Open <code>/client-auth/</code> on your company's MCPHub domain to manage your accounts and client grants.</td></tr></tbody></table>
+<div class="callout"><strong>Confirm that your company has enabled access</strong>Being able to sign in through company SSO does not automatically grant service or tool access. If your first sign-in says that access is pending, contact your MCPHub administrator.</div>
+<h2 id="scope">Who this guide is for</h2>
+<p>This guide is for employees using company tools from their own computers and people reviewing write requests. Deployment, identity services, tool publication, and operations are covered in the <a href="admin/index.html">administrator manual</a>.</p>
+<p>The guide covers MCPHub v2.2.0. Your company may enable only some services; your authorization page shows the actual tools, permissions, and approval requirements. <code>hub.example.com</code>, <code>ci_example</code>, and service names are examples. Replace them with your actual values.</p>

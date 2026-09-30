@@ -1,0 +1,20 @@
+<h2 id="choose-client">Choose your AI client</h2>
+<table><thead><tr><th>Client</th><th>Configuration</th><th>Steps</th></tr></thead><tbody><tr><td>Codex</td><td>Convert the generated connection details to TOML.</td><td><a href="codex.html">Connect Codex →</a></td></tr><tr><td>Claude Code</td><td>Add a local connection with claude mcp add.</td><td><a href="claude-code.html">Connect Claude Code →</a></td></tr><tr><td>VS Code</td><td>Select format 2 in setup and merge it into mcp.json.</td><td><a href="vscode.html">Connect VS Code →</a></td></tr><tr><td>Other stdio MCP clients</td><td>Enter command, args, and env.</td><td>Continue below.</td></tr></tbody></table>
+<h2 id="common-config">Understand the generated configuration</h2>
+<pre><code>{
+  "mcpServers": {
+    "work-projects": {
+      "command": "/absolute/path/to/mcphub-cli",
+      "args": ["connect", "--profile", "work", "--client", "ci_example"],
+      "env": { "MCPHUB_HOME": "/Users/you/.mcphub" }
+    }
+  }
+}</code></pre>
+<p>This example shows the structure. command is the actual executable path; args select your profile and real entry ID; MCPHUB_HOME points to your private credentials directory. Use setup's output and replace every example value.</p>
+<p>Escape backslashes in Windows JSON paths, for example <code>C:\\Tools\\mcphub-cli\\mcphub-cli.exe</code>. Merge existing objects instead of adding a second top-level key with the same name.</p>
+<h2 id="other-client">Configure another client</h2>
+<ol><li>Confirm that the client can launch a local stdio MCP process.</li><li>Choose format 1, generic JSON, in setup.</li><li>For mcpServers-based clients, merge the generated entry. For form-based clients, enter command, args, and environment variables separately.</li><li>Reload the MCP connection and check that tools are visible.</li><li>Run doctor with the same profile and entry ID.</li></ol>
+<div class="callout"><strong>Use the connector for client authorization</strong>This guide uses <code>mcphub-cli connect --client …</code>. Adding an HTTP URL alone may not meet your company's authorization requirements. Use an approach your administrator explicitly supports.</div>
+<h2 id="configuration-boundaries">Can I share my configuration?</h2>
+<p>Generated configuration contains no token, but includes local paths and an entry ID bound to your authorization. Other employees should run setup themselves. Sharing configuration does not sign them in or make it usable on another computer.</p>
+<p>Create a separate entry for each AI client so you can revoke it independently. Authorize each service separately.</p>

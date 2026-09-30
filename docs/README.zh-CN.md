@@ -6,7 +6,7 @@
 
 ## 用户手册
 
-**[在线帮助中心](https://samuelsupe.github.io/mcphub/)**：按实际任务浏览 19 篇用户指南，支持全文搜索、页内目录和移动端阅读。
+**[在线帮助中心](https://samuelsupe.github.io/mcphub/)**：按实际任务浏览 19 篇中英文用户指南，支持语言切换、全文搜索、页内目录和移动端阅读。
 
 **[打开用户手册](user-guide.zh-CN.md)**：面向使用 Codex、Claude Code 或其他 MCP 客户端的员工。
 
@@ -18,7 +18,7 @@
 
 ## 管理员手册
 
-**[在线管理员文档站](https://samuelsupe.github.io/mcphub/admin/)**：20 个管理任务章节，与用户指南共用导航风格和全文搜索；原始 Markdown 更新后自动发布。
+**[在线管理员文档站](https://samuelsupe.github.io/mcphub/admin/)**：20 个中英文章节，与用户指南共用导航风格和全文搜索；对应语言的原始 Markdown 更新后自动发布。
 
 **[打开管理员手册](admin-guide.zh-CN.md)**：面向负责部署、权限、安全治理和运行维护的人员。
 

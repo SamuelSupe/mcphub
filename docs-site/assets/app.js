@@ -1,3 +1,16 @@
+const labels = document.documentElement.lang === 'en' ? {
+  copy: 'Copy', copyCode: 'Copy code', copied: 'Copied', copyFailed: 'Copy manually',
+  loading: 'Preparing search…', unavailable: 'Search is unavailable. Use the chapter navigation.',
+  ready: count => `Search ${count} help articles. Enter a keyword to start.`,
+  found: count => `${count} related articles found`,
+  empty: 'No results. Try “authorization”, “account”, “doctor”, or an error code.',
+} : {
+  copy: '复制', copyCode: '复制代码', copied: '已复制', copyFailed: '请手动复制',
+  loading: '正在准备搜索…', unavailable: '搜索暂时不可用，请使用左侧目录。',
+  ready: count => `搜索 ${count} 篇帮助文档。输入关键词开始。`,
+  found: count => `找到 ${count} 篇相关文档`,
+  empty: '没有找到相关文档。试试“授权”“账号”“doctor”或错误码。',
+};
 const menu = document.querySelector('#menu-toggle');
 const sidebar = document.querySelector('#sidebar');
 function closeMenu() { sidebar.classList.remove('is-open'); menu.setAttribute('aria-expanded', 'false'); }
@@ -8,11 +21,11 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape') clos
 for (const block of document.querySelectorAll('pre')) {
   const code = block.querySelector('code');
   const button = document.createElement('button');
-  button.type = 'button'; button.className = 'copy-button'; button.textContent = '复制'; button.setAttribute('aria-label', '复制代码');
+  button.type = 'button'; button.className = 'copy-button'; button.textContent = labels.copy; button.setAttribute('aria-label', labels.copyCode);
   button.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(code.textContent); button.textContent = '已复制'; }
-    catch { button.textContent = '请手动复制'; }
-    setTimeout(() => { button.textContent = '复制'; }, 2000);
+    try { await navigator.clipboard.writeText(code.textContent); button.textContent = labels.copied; }
+    catch { button.textContent = labels.copyFailed; }
+    setTimeout(() => { button.textContent = labels.copy; }, 2000);
   });
   block.prepend(button);
 }
@@ -28,11 +41,11 @@ async function openSearch() {
   if (!dialog.open) dialog.showModal();
   input.focus();
   if (!searchIndex) {
-    status.textContent = '正在准备搜索…';
+    status.textContent = labels.loading;
     try {
       loadingIndex ??= fetch(`${root}search-index.json`).then(response => { if (!response.ok) throw new Error('search'); return response.json(); });
       searchIndex = await loadingIndex;
-    } catch { loadingIndex = undefined; status.textContent = '搜索暂时不可用，请使用左侧目录。'; return; }
+    } catch { loadingIndex = undefined; status.textContent = labels.unavailable; return; }
   }
   renderSearch();
 }
@@ -40,10 +53,10 @@ function renderSearch() {
   if (!searchIndex) return;
   const query = input.value.trim().toLowerCase();
   results.replaceChildren();
-  if (!query) { status.textContent = `搜索 ${searchIndex.length} 篇帮助文档。输入关键词开始。`; return; }
+  if (!query) { status.textContent = labels.ready(searchIndex.length); return; }
   const terms = query.split(/\s+/);
   const matches = searchIndex.filter(page => terms.every(term => `${page.title} ${page.description} ${page.text}`.toLowerCase().includes(term))).sort((a, b) => Number(b.title.toLowerCase().includes(query)) - Number(a.title.toLowerCase().includes(query)));
-  status.textContent = matches.length ? `找到 ${matches.length} 篇相关文档` : '没有找到相关文档。试试“授权”“账号”“doctor”或错误码。';
+  status.textContent = matches.length ? labels.found(matches.length) : labels.empty;
   for (const page of matches) {
     const link = document.createElement('a'); link.href = `${root}${page.slug}.html`; link.className = 'search-result';
     const group = document.createElement('span'); group.textContent = `${page.guideTitle} · ${page.group}`;

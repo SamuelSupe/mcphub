@@ -2,7 +2,7 @@
 
 [中文](admin-guide.zh-CN.md) · [Documentation](README.md) · [Project home](../README.md)
 
-[Read the online administrator manual (Chinese)](https://samuelsupe.github.io/mcphub/admin/)
+[Read the online administrator manual](https://samuelsupe.github.io/mcphub/en/admin/)
 
 For administrators responsible for deployment, service connections, access policies, approval and operations. This manual covers v2.2.0. Installation and access on employee computers are covered by the [user manual](user-guide.md).
 

@@ -117,6 +117,13 @@ kbd {
   font-size:13px;
   color:var(--muted)
 }
+.language-switch {
+  font-size:13px;
+  white-space:nowrap
+}
+.search-short {
+  display:none
+}
 #menu-toggle {
   display:none
 }
@@ -629,9 +636,7 @@ dialog::backdrop {
     font-size:18px
   }
   .brand span {
-    font-size:12px;
-    padding-left:10px;
-    margin-left:2px
+    display:none
   }
   .header-actions {
     gap:9px
@@ -641,8 +646,14 @@ dialog::backdrop {
     padding:5px 9px;
     font-size:12px
   }
-  .search-trigger kbd,.source-link {
+  .search-trigger kbd,.source-link,.search-long {
     display:none
+  }
+  .search-short {
+    display:inline
+  }
+  .language-switch {
+    font-size:12px
   }
   #menu-toggle {
     display:block;

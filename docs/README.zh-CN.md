@@ -18,6 +18,8 @@
 
 ## 管理员手册
 
+**[在线管理员文档站](https://samuelsupe.github.io/mcphub/admin/)**：20 个管理任务章节，与用户指南共用导航风格和全文搜索；原始 Markdown 更新后自动发布。
+
 **[打开管理员手册](admin-guide.zh-CN.md)**：面向负责部署、权限、安全治理和运行维护的人员。
 
 1. [部署与安装](admin-guide.zh-CN.md#部署准备与安装)

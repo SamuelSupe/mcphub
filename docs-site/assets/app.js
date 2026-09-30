@@ -21,6 +21,7 @@ const dialog = document.querySelector('#search-dialog');
 const input = document.querySelector('#search-input');
 const results = document.querySelector('#search-results');
 const status = document.querySelector('#search-status');
+const root = document.body.dataset.root || '';
 let searchIndex;
 let loadingIndex;
 async function openSearch() {
@@ -29,7 +30,7 @@ async function openSearch() {
   if (!searchIndex) {
     status.textContent = '正在准备搜索…';
     try {
-      loadingIndex ??= fetch('search-index.json').then(response => { if (!response.ok) throw new Error('search'); return response.json(); });
+      loadingIndex ??= fetch(`${root}search-index.json`).then(response => { if (!response.ok) throw new Error('search'); return response.json(); });
       searchIndex = await loadingIndex;
     } catch { loadingIndex = undefined; status.textContent = '搜索暂时不可用，请使用左侧目录。'; return; }
   }
@@ -44,8 +45,8 @@ function renderSearch() {
   const matches = searchIndex.filter(page => terms.every(term => `${page.title} ${page.description} ${page.text}`.toLowerCase().includes(term))).sort((a, b) => Number(b.title.toLowerCase().includes(query)) - Number(a.title.toLowerCase().includes(query)));
   status.textContent = matches.length ? `找到 ${matches.length} 篇相关文档` : '没有找到相关文档。试试“授权”“账号”“doctor”或错误码。';
   for (const page of matches) {
-    const link = document.createElement('a'); link.href = `${page.slug}.html`; link.className = 'search-result';
-    const group = document.createElement('span'); group.textContent = page.group;
+    const link = document.createElement('a'); link.href = `${root}${page.slug}.html`; link.className = 'search-result';
+    const group = document.createElement('span'); group.textContent = `${page.guideTitle} · ${page.group}`;
     const title = document.createElement('strong'); title.textContent = page.title;
     const excerpt = document.createElement('p');
     const hit = page.text.toLowerCase().indexOf(terms[0]);

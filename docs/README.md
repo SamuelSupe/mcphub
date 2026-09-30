@@ -18,6 +18,8 @@ These documents cover v2.2.0. Choose a manual for your role, then use the refere
 
 ## Administrator manual
 
+**[Online administrator documentation (Chinese)](https://samuelsupe.github.io/mcphub/admin/)**: 20 chapters with the same navigation and full-text search as the user guide, published automatically from the source Markdown.
+
 **[Open the administrator manual](admin-guide.md)**: for deployment, access control, governance and operations.
 
 1. [Prepare and deploy](admin-guide.md#preparation-and-installation)

@@ -1,0 +1,191 @@
+[
+  {
+    "slug": "admin/index",
+    "title": "管理 MCPHub",
+    "group": "开始部署",
+    "description": "从部署网关到安全开放工具，按职责配置、验收并持续维护。"
+  },
+  {
+    "slug": "admin/install",
+    "title": "安装与首次启动",
+    "group": "开始部署",
+    "description": "选择部署方式，安装服务端，并完成本地或远程管理的第一次启动。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "部署准备与安装" },
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "本地管理 UI" },
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "远程管理员与 PostgreSQL" }
+    ]
+  },
+  {
+    "slug": "admin/deployment",
+    "title": "远程管理与数据库部署",
+    "group": "开始部署",
+    "description": "配置管理员身份、SQLite 或 PostgreSQL、HTTPS 入口，并完成实际部署验收。",
+    "sources": [{ "file": "deploy/README.zh-CN.md" }]
+  },
+  {
+    "slug": "admin/services",
+    "title": "控制台与服务发布流程",
+    "group": "服务接入",
+    "description": "熟悉管理入口，接入服务、显式发布工具，并检查首次调用。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "服务接入与工具发布" },
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "控制台导航" }
+    ]
+  },
+  {
+    "slug": "admin/backends",
+    "title": "配置 MCP 后端",
+    "group": "服务接入",
+    "description": "设置远程 MCP 连接、服务账号凭证、发布名单和访问策略。",
+    "sources": [{ "file": "docs/configuration.zh-CN.md", "heading": "backends", "children": false }]
+  },
+  {
+    "slug": "admin/http-tools",
+    "title": "HTTP 工具组与 OpenAPI",
+    "group": "服务接入",
+    "description": "将 REST API 发布为 MCP 工具，维护手工接口和 OpenAPI 导入。",
+    "sources": [{ "file": "docs/configuration.zh-CN.md", "heading": "工具组与托管 HTTP API tool" }]
+  },
+  {
+    "slug": "admin/permissions",
+    "title": "工具发布与权限检查",
+    "group": "服务接入",
+    "description": "设置读写分类、Scope 和业务资源范围，用无副作用的检查解释权限。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "工具权限检查" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "显式发布与资源范围" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "后端本地 tool 规则" }
+    ]
+  },
+  {
+    "slug": "admin/rate-limit",
+    "title": "配置限流策略",
+    "group": "服务接入",
+    "description": "为服务设置速率、突发容量和并发限制，并理解共享额度与重试行为。",
+    "sources": [{ "file": "docs/configuration.zh-CN.md", "heading": "Endpoint 限流" }]
+  },
+  {
+    "slug": "admin/authentication",
+    "title": "身份客户端与认证配置",
+    "group": "身份与权限",
+    "description": "区分员工、门户、管理员和上游业务客户端，核对回调、Token 和 Scope。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "区分登录客户端与上游凭证" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "auth" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "用户 CLI 的外部 OIDC 注册" }
+    ]
+  },
+  {
+    "slug": "admin/sso",
+    "title": "SSO、用户与组织",
+    "group": "身份与权限",
+    "description": "接入企业身份源，分配本地权限，同步目录，并恢复管理员访问。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "用户与组织" },
+      { "file": "docs/sso-and-user-management.zh-CN.md" }
+    ]
+  },
+  {
+    "slug": "admin/client-authorizations",
+    "title": "启用客户端授权",
+    "group": "身份与权限",
+    "description": "开启个人授权中心，注册用户客户端，并逐步迁移到严格授权。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "启用客户端授权" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "client_authorization" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "客户端凭证与连接边界" }
+    ]
+  },
+  {
+    "slug": "admin/vault",
+    "title": "Vault 与上游账号",
+    "group": "身份与权限",
+    "description": "配置共享或个人业务账号，管理 Vault 路径、OAuth 回调与凭证生命周期。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "配置上游账号" },
+      { "file": "docs/vault-accounts.zh-CN.md" }
+    ]
+  },
+  {
+    "slug": "admin/write-approvals",
+    "title": "配置写操作审批",
+    "group": "治理与审计",
+    "description": "定义逐次写审批、审批人、参数预览、资源版本检查和加强认证。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "写审批与配置治理" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "单次写入审批" }
+    ]
+  },
+  {
+    "slug": "admin/governance",
+    "title": "配置治理与审计归档",
+    "group": "治理与审计",
+    "description": "审核配置变更，设置多人复核、审批通知和独立签名审计归档。",
+    "sources": [
+      { "file": "docs/configuration.zh-CN.md", "heading": "配置治理、双人审批与业务幂等" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "审批通知与独立审计归档" }
+    ]
+  },
+  {
+    "slug": "admin/diagnostics",
+    "title": "授权查询与请求诊断",
+    "group": "治理与审计",
+    "description": "查询与撤销客户端授权，定位拒绝原因，筛选和导出请求历史。",
+    "sources": [{ "file": "docs/admin-guide.zh-CN.md", "heading": "授权与请求诊断" }]
+  },
+  {
+    "slug": "admin/upgrade",
+    "title": "升级、备份与回滚",
+    "group": "运行维护",
+    "description": "在升级 schema 9 前保留数据库与匹配密钥，并按完整步骤恢复旧版本。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "升级与备份" },
+      { "file": "RELEASE_NOTES_v2.2.0.md", "heading": "Upgrade and rollback / 升级与回滚" }
+    ]
+  },
+  {
+    "slug": "admin/operations",
+    "title": "运行维护与健康检查",
+    "group": "运行维护",
+    "description": "检查存活和就绪，运行容器，热重载配置，并安排优雅关停。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "运行维护" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "HTTP 端点与 RFC 9728" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "SIGHUP 热重载与关停" }
+    ]
+  },
+  {
+    "slug": "admin/security",
+    "title": "安全配置与凭证保护",
+    "group": "运行维护",
+    "description": "核对 HTTPS、网络入口、管理权限、日志和加密密钥的保护边界。",
+    "sources": [{ "file": "docs/admin-guide.zh-CN.md", "heading": "安全说明" }]
+  },
+  {
+    "slug": "admin/troubleshooting",
+    "title": "排障与能力边界",
+    "group": "排障与参考",
+    "description": "按启动、就绪、认证、工具和配置症状排查，并核对版本支持范围。",
+    "sources": [
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "已知限制与排障提示" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "能力与边界" }
+    ]
+  },
+  {
+    "slug": "admin/configuration",
+    "title": "YAML 与协议参考",
+    "group": "排障与参考",
+    "description": "查找配置生效方式、环境变量、网关与管理字段、启动示例和命名规则。",
+    "sources": [
+      { "file": "docs/configuration.zh-CN.md", "heading": "选择配置与生效方式" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "环境变量与 Secret" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "server" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "vault" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "admin", "children": false },
+      { "file": "docs/configuration.zh-CN.md", "heading": "其他配置专题", "children": false },
+      { "file": "docs/configuration.zh-CN.md", "heading": "从完整 YAML 示例启动" },
+      { "file": "docs/configuration.zh-CN.md", "heading": "命名与 URI 映射" }
+    ]
+  }
+]

@@ -143,6 +143,42 @@ kbd {
   justify-content:space-between;
   margin:0 10px 28px
 }
+.guide-switch {
+  display:flex;
+  gap:4px;
+  padding:4px;
+  margin:0 4px 22px;
+  background:#eef2ea;
+  border-radius:8px
+}
+.guide-switch a {
+  flex:1;
+  text-align:center;
+  padding:6px 4px;
+  font-size:12px;
+  color:var(--muted);
+  border-radius:5px
+}
+.guide-switch a[aria-current] {
+  color:var(--green);
+  background:white;
+  box-shadow:0 1px 3px #173f3810;
+  font-weight:600
+}
+.guide-switch a:hover {
+  text-decoration:none;
+  color:var(--green)
+}
+.article-source {
+  margin-left:10px
+}
+.article-body blockquote {
+  margin:24px 0;
+  padding:4px 20px;
+  border-left:3px solid #89ad76;
+  color:var(--muted);
+  background:var(--wash)
+}
 .edition span {
   background:#edf1e9;
   padding:1px 7px;

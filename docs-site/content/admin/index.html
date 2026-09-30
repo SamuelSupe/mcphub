@@ -1,0 +1,16 @@
+<p>这套手册面向负责部署、服务接入、用户权限、审批和运行维护的管理员。使用 Codex、Claude Code 或 VS Code 接入工具的员工，请阅读<a href="../index.html">用户指南</a>。</p>
+<div class="start-panel"><span class="small">第一次部署</span><h2>先完成一条只读调用</h2><p>部署网关，接入一个只读服务，显式发布工具，配置测试用户，再完成登录和客户端授权。验证成功后逐步开放写操作。</p><a href="install.html">安装与首次启动 →</a></div>
+<h2 id="choose-task">按管理任务进入</h2>
+<div class="path-grid">
+  <a class="path-card" href="deployment.html"><span>01 · 部署</span><strong>搭建团队访问入口 →</strong><p>准备身份服务、HTTPS、数据库和长期保留的加密密钥。</p></a>
+  <a class="path-card" href="services.html"><span>02 · 服务</span><strong>接入并发布工具 →</strong><p>配置 MCP 后端或 HTTP 工具组，确定发布范围与读写分类。</p></a>
+  <a class="path-card" href="sso.html"><span>03 · 权限</span><strong>配置用户与组织 →</strong><p>选择身份模式，启用用户，授予业务范围并同步成员关系。</p></a>
+  <a class="path-card" href="write-approvals.html"><span>04 · 治理</span><strong>安全开放写操作 →</strong><p>设置独立审批、配置治理和审计归档，核对实际执行结果。</p></a>
+</div>
+<h2 id="deployment-order">推荐部署顺序</h2>
+<ol><li><a href="install.html">安装网关</a>，选择本地或远程管理，保留数据库和密钥。</li><li><a href="deployment.html">配置 HTTPS 与身份服务</a>，分别验证管理员和普通用户登录。</li><li><a href="services.html">接入服务</a>，在<a href="permissions.html">工具权限</a>中显式发布已审核的只读工具。</li><li><a href="sso.html">授予用户权限</a>，<a href="client-authorizations.html">启用客户端授权</a>，交付用户指南。</li><li>需要个人业务账号时配置<a href="vault.html">Vault</a>；需要写工具时配置<a href="write-approvals.html">审批</a>。</li><li>实际验证一次普通用户调用、撤销和所需审批，再按<a href="operations.html">运行维护</a>安排健康检查、备份与诊断。</li></ol>
+<h2 id="roles">明确三个管理职责</h2>
+<table><thead><tr><th>角色</th><th>主要职责</th></tr></thead><tbody><tr><td>配置管理员</td><td>接入服务、发布工具、配置权限与查询诊断。</td></tr><tr><td>写操作审批人</td><td>审核具体操作、目标、参数和预览，按策略完成独立复核。</td></tr><tr><td>安全审批人</td><td>审核配置提案；启用配置审批时负责批准并应用变更。</td></tr></tbody></table>
+<div class="callout"><strong>生产部署保持单实例</strong>MCPHub v2.2.0 支持 SQLite 或单实例 PostgreSQL。共用 PostgreSQL 不会让多个网关自动同步运行时配置。管理员权限也不会自动授予业务工具或写审批权限。</div>
+<h2 id="source">文档与验收</h2>
+<p>本手册的配置和运维章节直接来自仓库中的管理员手册、部署指南、SSO、Vault 与配置参考。示例域名和账号需替换为实际值。<code>validate</code>、健康检查或模板启动不证明身份、账号和审批集成已验收；按<a href="deployment.html#启动后验收">启动后验收</a>检查实际环境。</p>

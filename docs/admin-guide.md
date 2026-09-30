@@ -2,6 +2,8 @@
 
 [中文](admin-guide.zh-CN.md) · [Documentation](README.md) · [Project home](../README.md)
 
+[Read the online administrator manual (Chinese)](https://samuelsupe.github.io/mcphub/admin/)
+
 For administrators responsible for deployment, service connections, access policies, approval and operations. This manual covers v2.2.0. Installation and access on employee computers are covered by the [user manual](user-guide.md).
 
 Recommended sequence: **deploy the gateway → connect a read-only service → publish tools explicitly → assign user permissions → enable client authorization → validate before enabling writes**.

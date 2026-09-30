@@ -2,6 +2,8 @@
 
 [English](admin-guide.md) · [文档导航](README.zh-CN.md) · [项目首页](../README.zh-CN.md)
 
+[在线阅读：管理员文档站](https://samuelsupe.github.io/mcphub/admin/) · [在线用户指南](https://samuelsupe.github.io/mcphub/)
+
 面向负责部署、服务接入、权限策略、审批及运行维护的管理员，对应 v2.2.0。员工电脑的安装与接入步骤见[用户手册](user-guide.zh-CN.md)。
 
 推荐顺序：**部署网关 → 接入只读服务 → 显式发布工具 → 配置用户权限 → 启用客户端授权 → 验证后开放写操作**。

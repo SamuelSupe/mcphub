@@ -1,0 +1,17 @@
+<h2 id="when">哪些操作需要审批</h2>
+<p>只读工具通过权限检查后直接执行。写工具及未分类工具逐次审批；客户端「可申请写入」只表示能够提出申请。</p>
+<h2 id="submit">1. 发起具体请求</h2>
+<p>让 Agent 明确资源、完整参数与预期修改。返回 <code>approval_pending</code>、<code>approval_id</code> 和 <code>approval_url</code> 时操作尚未执行，保留 ID 并打开返回链接。</p>
+<h2 id="review">2. 由有权审批的人确认</h2>
+<ol><li>检查申请人、目标服务和资源。</li><li>核对完整参数及可用预览。</li><li>按页面要求完成加强认证，批准或拒绝。</li><li>需要两人复核时，由两位不同且有权的人分别审批。</li></ol>
+<p>申请人不一定有审批权，可能需把链接交给指定审批人。审批有有效期；缺少审批人、认证不满足或过期时联系管理员或按提示重新申请。</p>
+<h2 id="resume">3. 从原客户端继续执行</h2>
+<p>批准后，原客户端调用 <code>mcphub_resume_approval</code> 并传入：</p>
+<pre><code>{ "approval_id": "实际返回的审批 ID" }</code></pre>
+<p>批准不会自动执行。不能换客户端入口，或用替换后的授权继续执行原申请。授权失效时先确认业务状态，再按管理员指引处理。</p>
+<h2 id="status">查询与取消</h2>
+<table><thead><tr><th>操作</th><th>工具</th></tr></thead><tbody><tr><td>查询状态</td><td><code>mcphub_approval_status</code></td></tr><tr><td>执行前取消</td><td><code>mcphub_cancel_approval</code></td></tr><tr><td>批准后恢复</td><td><code>mcphub_resume_approval</code></td></tr></tbody></table>
+<p>均传入原 approval_id。当前工具和权限允许且管理员配置只读状态工具时，查询可添加 <code>query_upstream: true</code> 核查业务系统；未配置则不能使用。</p>
+<h2 id="uncertain">超时或结果不确定</h2>
+<p>先查询审批和业务状态，把审批 ID、请求 ID、时间交给管理员。不要反复创建或恢复同一写操作；取消和撤销都不能撤回上游已接受的写入。</p>
+<p>资源版本、配置或权限变化时重新核对目标和参数，按提示重新申请。撤销业务结果应使用业务系统正式回退流程。</p>

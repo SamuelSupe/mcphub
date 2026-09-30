@@ -6,6 +6,8 @@ These documents cover v2.2.0. Choose a manual for your role, then use the refere
 
 ## User manual
 
+**[Online help center (Chinese)](https://samuelsupe.github.io/mcphub/)**: browse 19 task-oriented guides with search, page outlines and mobile navigation.
+
 **[Open the user manual](user-guide.md)**: for employees using Codex, Claude Code or another MCP client.
 
 1. [Prepare and install the CLI](user-guide.md#before-you-start)

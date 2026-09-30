@@ -71,7 +71,7 @@ mcphub-cli setup --profile work > mcphub-mcp.json
 
 Follow the wizard:
 
-1. Sign in through the browser, then choose a service (endpoint) and specific tools. The list contains published tools you are eligible to request.
+1. Sign in through the browser, then return to the terminal wizard to choose a service (endpoint) and specific tools. The list contains published tools you are eligible to request.
 2. Set optional resource limits, an authorization duration and a client name. Resource limits apply to every selected tool; empty selection never grants all tools. Writes and unclassified tools require a separate confirmation and still need approval per operation.
 3. Compare the authorization scope and terminal pairing code in the browser, then confirm. Appearing in the selection catalog does not itself grant access.
 

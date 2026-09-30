@@ -6,6 +6,8 @@
 
 ## 用户手册
 
+**[在线帮助中心](https://samuelsupe.github.io/mcphub/)**：按实际任务浏览 19 篇用户指南，支持全文搜索、页内目录和移动端阅读。
+
 **[打开用户手册](user-guide.zh-CN.md)**：面向使用 Codex、Claude Code 或其他 MCP 客户端的员工。
 
 1. [准备信息与安装 CLI](user-guide.zh-CN.md#接入前准备)

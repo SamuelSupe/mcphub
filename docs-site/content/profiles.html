@@ -1,0 +1,20 @@
+<h2 id="terms">几个名称的关系</h2>
+<dl class="term-list"><dt>Profile</dt><dd>本机登录和连接设置，如 work；默认 default。</dd><dt>客户端入口</dt><dd>生成的 ci_… ID，包含一个服务的授权工具和资源范围。</dd><dt>服务 / Endpoint</dt><dd>公司发布的一组业务工具，一个入口对应一个服务。</dd><dt>Broker</dt><dd>多个本机进程共享会话和登录续期，connect --client 按需启动。</dd></dl>
+<h2 id="services">多个服务与客户端</h2>
+<pre><code>mcphub-cli setup --profile work &gt; projects-mcp.json
+mcphub-cli setup --profile work &gt; tasks-mcp.json</code></pre>
+<p>每次选目标服务和工具，使用不同客户端名称，合并条目到客户端配置。不同 AI 客户端也建议单独建入口，方便撤销。</p>
+<h2 id="profiles">分开公司和身份</h2>
+<p>不同 MCPHub 地址或身份使用不同 profile。已有 profile 指向其他地址或 client ID 时，向导拒绝混用；创建新 profile，或明确重新登录：</p>
+<pre><code>mcphub-cli setup --server https://other-hub.example.com/mcp --client-id mcphub-cli --profile other-work &gt; other-mcp.json</code></pre>
+<p>管理员登录 profile 与日常用户 profile 分开。</p>
+<h2 id="new-machine">换电脑或系统账号</h2>
+<ol><li>新环境安装连接器。</li><li>重新运行向导，登录并授权。</li><li>使用新生成的路径、MCPHUB_HOME 和入口 ID。</li><li>确认新连接后，在门户撤销不再使用的旧会话或入口。</li></ol>
+<p>个人上游账号服务端按用户保存，可能无需重连；新环境仍应建立自己的客户端入口。不要复制凭证目录迁移。</p>
+<h2 id="remote">SSH、远程开发与容器</h2>
+<p>先确认客户端实际在哪里启动连接器。可执行文件、私有目录、Broker 和回调必须在执行环境可用，本机绝对路径不能直接用于远端。</p>
+<p>缺少浏览器或无法接收回调时，请管理员确认支持的方案。授权链接应在能到达对应本机回调的环境打开。</p>
+<h2 id="broker">管理本机连接服务</h2>
+<pre><code>mcphub-cli broker status
+mcphub-cli broker stop</code></pre>
+<p>停止 Broker 只停止本机连接，保留远端授权；再次 connect 按需启动。诊断可前台运行 broker run。更改 MCPHUB_HOME 时，相关进程必须使用同一目录。</p>

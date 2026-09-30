@@ -1,0 +1,15 @@
+<h2 id="prepare">先完成 MCPHub 向导</h2>
+<p>运行 <a href="quickstart.html">接入向导</a>，选择通用 JSON。记下实际 command、args、env 和入口 ID，下列值均为示例。</p>
+<h2 id="add">添加本机连接器</h2>
+<p>通过 Claude Code CLI 添加 stdio 连接，此例使用个人范围：</p>
+<pre><code>claude mcp add --transport stdio --scope user work-projects --env MCPHUB_HOME=/Users/you/.mcphub -- /absolute/path/to/mcphub-cli connect --profile work --client ci_example</code></pre>
+<p><code>--</code> 后是连接器及其参数。Windows 使用 exe 的实际路径，带空格的路径加引号。</p>
+<p>也可将生成的 mcpServers 条目合并到项目根目录 <code>.mcp.json</code>。个人路径与入口 ID 不适合作为团队共用配置；每人应建立自己的入口。</p>
+<h2 id="verify">检查连接</h2>
+<pre><code>claude mcp list
+claude mcp get work-projects</code></pre>
+<p>进入 Claude Code 后使用 <code>/mcp</code> 查看状态，项目级服务器可能需先确认信任和启用。配置写入成功不等于连接成功，继续运行 MCPHub doctor 检查实际入口。</p>
+<h2 id="remove">停用或移除</h2>
+<p>在 /mcp 管理客户端侧连接，或使用 <code>claude mcp remove work-projects --scope user</code> 移除本例配置。要阻止该入口继续访问 MCPHub，另到个人授权中心撤销授权。</p>
+<h2 id="reference">官方参考</h2>
+<p>命令格式、配置范围和服务器状态见 <a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">Claude Code 官方 MCP 文档</a>。</p>

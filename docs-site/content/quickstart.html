@@ -1,0 +1,20 @@
+<div class="steps-inline"><span>1 获取信息</span><span>2 安装连接器</span><span>3 完成向导</span><span>4 配置客户端</span><span>5 检查连接</span></div>
+<h2 id="prepare">1. 向管理员获取接入信息</h2>
+<table><thead><tr><th>需要的信息</th><th>示例或说明</th></tr></thead><tbody><tr><td>MCPHub 完整地址</td><td><code>https://hub.example.com/mcp</code>，包含路径。</td></tr><tr><td>CLI client ID</td><td>例如 <code>mcphub-cli</code>。它是管理员登记的登录应用标识，不是后面生成的 <code>ci_…</code> 客户端入口 ID。</td></tr><tr><td>访问资格</td><td>你的公司账号已启用，并有目标服务和工具权限。</td></tr><tr><td>回调端口</td><td>仅在管理员要求固定端口时需要，例如 <code>8765</code>。</td></tr></tbody></table>
+<h2 id="install">2. 安装本机连接器</h2>
+<p>按操作系统和 CPU 架构下载 <code>mcphub-cli</code>，核对校验值并解压。具体步骤见 <a href="install.html">安装与升级</a>。确保 AI 客户端可以运行它；后续向导会使用连接器的实际绝对路径。</p>
+<h2 id="setup">3. 在使用 AI 客户端的电脑上运行向导</h2>
+<pre><code>mcphub-cli setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work &gt; mcphub-mcp.json</code></pre>
+<p><code>work</code> 是本机连接配置的名称，你可以自行命名。已有该 profile 的登录信息时，使用 <code>mcphub-cli setup --profile work &gt; mcphub-mcp.json</code>。固定回调端口可追加 <code>--callback-port 8765</code>。</p>
+<ol><li>浏览器打开后，使用公司账号登录。</li><li>回到终端，从向导列出的服务中选择一个，再选择具体工具编号。服务和工具的选择在终端中完成。</li><li>按需要设置资源条件、授权时长和客户端名称。第一次使用可先选择所需的只读工具。写入或未分类工具需要额外确认。</li><li>选择配置格式：Codex 需转换为 TOML；Claude Code 等可先选通用 JSON；VS Code 可选专用 <code>servers</code> JSON。</li><li>按终端提示打开授权页，核对浏览器与终端的配对码、目标服务、工具和数据范围，点击「确认授权」。</li></ol>
+<div class="callout"><strong>目录显示工具，不代表已经获得调用权限</strong>必须完成浏览器确认。工具选择为空时，不会自动授予全部工具。一个客户端入口连接一个服务；多个服务需要分别运行向导。</div>
+<h2 id="configure">4. 将生成配置加入 AI 客户端</h2>
+<p>打开 <code>mcphub-mcp.json</code>，保留实际生成的 <code>command</code>、<code>args</code> 和存在时的 <code>env.MCPHUB_HOME</code>。将条目合并到现有客户端配置，再重新加载 MCP 连接。向导不会修改或覆盖客户端自己的配置文件。</p>
+<p>根据客户端选择 <a href="codex.html">Codex</a>、<a href="claude-code.html">Claude Code</a> 或 <a href="vscode.html">VS Code</a> 的具体步骤。</p>
+<h2 id="check">5. 确认连接成功</h2>
+<p>客户端应显示刚才授权的工具。再用生成配置里的实际客户端 ID 检查：</p>
+<pre><code>mcphub-cli doctor --profile work --client ci_example</code></pre>
+<p>向导和诊断只验证连接、授权状态与工具目录，不会执行工具。若提示需要个人账号，到 <a href="accounts.html">个人授权中心连接账号</a> 后重试。若向导在授权后诊断失败，配置仍可能已经生成；保留它并按提示排查。</p>
+<h2 id="next">接下来怎么用</h2>
+<p>从一个明确、只读的任务开始，例如让 Agent 查找你有权访问的项目资料。查看 <a href="using-tools.html">使用工具与数据</a>；需要改动数据时，先了解 <a href="approvals.html">写操作审批</a>。</p>
+<p>请在同一电脑、同一系统账号下运行向导和 AI 客户端。SSH、容器或远程开发环境不能直接复用本机路径和连接服务，见 <a href="profiles.html">多服务与多环境</a>。</p>

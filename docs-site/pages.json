@@ -1,0 +1,116 @@
+[
+  {
+    "slug": "index",
+    "title": "欢迎使用 MCPHub",
+    "group": "开始使用",
+    "description": "把公司工具接入你熟悉的 AI 客户端，并随时掌握它能访问什么。"
+  },
+  {
+    "slug": "quickstart",
+    "title": "完成第一次接入",
+    "group": "开始使用",
+    "description": "从获取接入信息到看到工具列表，按步骤完成首次连接。"
+  },
+  {
+    "slug": "install",
+    "title": "安装与升级",
+    "group": "开始使用",
+    "description": "选择适合电脑的连接器，核对下载文件，并保持配置可用。"
+  },
+  {
+    "slug": "login",
+    "title": "登录与个人授权中心",
+    "group": "开始使用",
+    "description": "用公司身份登录，并找到自己的账号与授权。"
+  },
+  {
+    "slug": "clients",
+    "title": "选择 AI 客户端",
+    "group": "接入 AI 客户端",
+    "description": "把 MCPHub 连接器配置到你日常使用的 AI 工具中。"
+  },
+  {
+    "slug": "codex",
+    "title": "接入 Codex",
+    "group": "接入 AI 客户端",
+    "description": "将向导生成的连接信息转换为 Codex 使用的 TOML 配置。"
+  },
+  {
+    "slug": "claude-code",
+    "title": "接入 Claude Code",
+    "group": "接入 AI 客户端",
+    "description": "通过本机 stdio 连接器接入 MCPHub，并检查服务状态。"
+  },
+  {
+    "slug": "vscode",
+    "title": "接入 VS Code",
+    "group": "接入 AI 客户端",
+    "description": "使用向导生成的 servers 配置，在 VS Code 中启用公司工具。"
+  },
+  {
+    "slug": "using-tools",
+    "title": "使用工具与数据",
+    "group": "日常使用",
+    "description": "从只读任务开始，了解工具、提示词、资源和订阅。"
+  },
+  {
+    "slug": "permissions",
+    "title": "理解工具和资源权限",
+    "group": "日常使用",
+    "description": "弄清登录身份、客户端授权、数据范围和业务账号的关系。"
+  },
+  {
+    "slug": "accounts",
+    "title": "连接个人服务账号",
+    "group": "日常使用",
+    "description": "连接上游账号，处理到期、更换和断开连接。"
+  },
+  {
+    "slug": "approvals",
+    "title": "写操作审批",
+    "group": "日常使用",
+    "description": "确认本次操作，由有权审批的人批准，再从原客户端继续。"
+  },
+  {
+    "slug": "authorizations",
+    "title": "管理与撤销客户端授权",
+    "group": "管理自己的连接",
+    "description": "查看权限，重新授权、调整范围或独立撤销。"
+  },
+  {
+    "slug": "profiles",
+    "title": "多服务与多环境",
+    "group": "管理自己的连接",
+    "description": "组织不同服务、客户端和电脑上的连接。"
+  },
+  {
+    "slug": "privacy",
+    "title": "退出登录与凭证保护",
+    "group": "管理自己的连接",
+    "description": "选对退出方式，保护本机凭证，并理解撤销的影响。"
+  },
+  {
+    "slug": "troubleshooting",
+    "title": "故障排查",
+    "group": "排障与参考",
+    "description": "按症状定位登录、授权、账号和服务连接问题。"
+  },
+  {
+    "slug": "faq",
+    "title": "常见问题",
+    "group": "排障与参考",
+    "description": "快速解答授权到期、工具不可见和审批等疑问。"
+  },
+  {
+    "slug": "cli",
+    "title": "用户命令参考",
+    "group": "排障与参考",
+    "description": "接入、登录、授权、诊断和本地连接服务的常用命令。"
+  },
+  {
+    "slug": "support",
+    "title": "联系管理员与提交诊断",
+    "group": "排障与参考",
+    "description": "提供足够的定位线索，同时避免泄露凭证。"
+  }
+]

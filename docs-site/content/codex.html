@@ -1,0 +1,19 @@
+<h2 id="prepare">先完成 MCPHub 向导</h2>
+<p>按 <a href="quickstart.html">第一次接入</a> 运行 setup，选择通用 JSON。保留实际生成的 command、args、env 和入口 ID。连接器与 Codex 使用同一电脑、同一系统账号。</p>
+<h2 id="toml">将配置转换为 TOML</h2>
+<p>在 Codex MCP 配置加入下列结构，并替换为向导的实际值。个人默认配置通常为 <code>~/.codex/config.toml</code>；项目配置为 <code>.codex/config.toml</code>，受项目信任和公司策略约束。</p>
+<pre><code>[mcp_servers.work_projects]
+command = "/absolute/path/to/mcphub-cli"
+args = ["connect", "--profile", "work", "--client", "ci_example"]
+
+[mcp_servers.work_projects.env]
+MCPHUB_HOME = "/Users/you/.mcphub"</code></pre>
+<p>服务器名称可自定义，不同服务使用不同名称；不要重复同名表。Windows 可用 TOML 单引号表示路径，如 <code>command = 'C:\Tools\mcphub-cli\mcphub-cli.exe'</code>。</p>
+<h2 id="cli-add">从 Codex CLI 添加</h2>
+<pre><code>codex mcp add work_projects --env MCPHUB_HOME=/Users/you/.mcphub -- /absolute/path/to/mcphub-cli connect --profile work --client ci_example</code></pre>
+<p>填写向导实际值，保留已有服务器设置。添加后重新启动相关连接或开始新会话。</p>
+<h2 id="verify">确认工具可见</h2>
+<ol><li>重新加载 Codex 的 MCP 连接，查看服务器状态和工具。</li><li>运行 <code>mcphub-cli doctor --profile work --client ci_example</code>，检查 ID 与配置一致。</li><li>从授权范围内的只读任务开始，检查调用结果。</li></ol>
+<p>doctor 正常而 Codex 失败时，检查路径、env、系统账号和公司 MCP 策略。</p>
+<h2 id="reference">官方参考</h2>
+<p>配置格式和 CLI 添加方式已核对 <a href="https://developers.openai.com/codex/codex-manual.md" target="_blank" rel="noopener">OpenAI 官方 Codex Manual</a> 的 MCP 及配置章节。客户端变化时以当前设置和官方文档为准。</p>

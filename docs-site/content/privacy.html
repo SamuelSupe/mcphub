@@ -1,0 +1,13 @@
+<h2 id="choose">选择正确的退出方式</h2>
+<table><thead><tr><th>目标</th><th>操作</th><th>影响</th></tr></thead><tbody><tr><td>退出网页</td><td>「退出网页会话」</td><td>结束门户会话，保留本机及上游连接。</td></tr><tr><td>清除本机登录</td><td>logout --profile work</td><td>清除该 profile 秘密，断开连接，尝试撤销远端会话。</td></tr><tr><td>停止本机连接</td><td>broker stop</td><td>停止本机传输，保留远端授权。</td></tr><tr><td>阻止一个入口</td><td>门户「撤销授权」或 client revoke</td><td>该客户端授权失效。</td></tr><tr><td>移除个人服务账号</td><td>门户「断开连接」</td><td>移除上游连接，相关客户端授权失效。</td></tr></tbody></table>
+<h2 id="logout">确认远端撤销</h2>
+<pre><code>mcphub-cli logout --profile work</code></pre>
+<p>优先清除本机秘密，再尝试撤销远端。离线失败可能提示「撤销未确认」，到门户撤销旧会话。重新登录后重启连接。</p>
+<p>以上操作不吊销身份服务 Token，也不回滚已被上游接受的写入；上游授权按业务系统流程撤销。</p>
+<h2 id="storage">本机保存了什么</h2>
+<p>默认 macOS/Linux 为 <code>~/.mcphub/</code>，Windows 为 <code>%USERPROFILE%\.mcphub\</code>。可用 MCPHUB_HOME 指定其他私有目录。</p>
+<p>登录 Token 以本地 JSON 保存，<strong>不做加密</strong>。macOS/Linux 使用目录 0700、文件 0600；Windows 使用仅授权当前用户的 DACL，目录应位于支持访问控制的本地文件系统，如 NTFS。</p>
+<h2 id="protect">日常保护</h2>
+<ul><li>凭证目录不要存到共享盘或他人可读备份。</li><li>Token 和凭证文件不要贴到 AI 聊天或工单。</li><li>只授权必要工具和资源，不同客户端各建入口。</li><li>换电脑、设备遗失或怀疑被冒用时，撤销旧入口及会话，联系管理员。</li></ul>
+<h2 id="diagnostics">排障资料</h2>
+<p>doctor 报告不含 Token 或进程通信凭证；提交前仍按公司要求检查业务标识和错误内容。不要发送整个 .mcphub 目录。</p>

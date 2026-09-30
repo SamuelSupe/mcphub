@@ -1,0 +1,19 @@
+<h2 id="company-login">用公司账号登录</h2>
+<p>首次使用建议直接运行 <a href="quickstart.html">接入向导</a>，它会在需要时打开登录页。只想先登录或恢复已保存的 profile 时：</p>
+<pre><code>mcphub-cli login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+mcphub-cli status --profile work</code></pre>
+<p>已保存地址和登录应用标识时，可简写为 <code>mcphub-cli login --profile work</code>。使用管理员提供的完整 HTTPS 地址。登录后仍需完成每个客户端入口的授权。</p>
+<h2 id="browser">浏览器没有打开怎么办</h2>
+<p>在<strong>运行命令的同一台电脑</strong>打开终端给出的授权链接。登录最多等待 5 分钟接收本机回调，超时后重新执行。管理员要求固定回调端口时，追加 <code>--callback-port 8765</code>，使用实际指定的端口。</p>
+<p>SSH 终端的回调可能指向另一台机器。应在 AI 客户端实际执行连接器的环境登录，详见 <a href="profiles.html">多服务与多环境</a>。</p>
+<h2 id="pending">提示账号待授权或停用</h2>
+<p>「身份已记录，账号尚未获准访问或已被停用」表示公司身份已识别，但 MCPHub 访问尚未开通或已被移除。请管理员启用用户并分配服务、Scope 和工具权限，然后重新登录。</p>
+<p>登录失败或取消会保留原有登录；成功后重启该 profile 的已有 MCP 连接。</p>
+<h2 id="portal">打开个人授权中心</h2>
+<p>在公司 MCPHub 域名下打开 <code>https://hub.example.com/client-auth/</code>，使用公司身份登录，页面标题为「管理账号与客户端授权」。</p>
+<table><thead><tr><th>区域</th><th>用途</th></tr></thead><tbody><tr><td>确认客户端授权</td><td>核对配对码、服务、工具、业务资源条件和有效期，确认或拒绝申请。</td></tr><tr><td>已连接账号</td><td>连接个人服务账号，查看详情、重新连接或断开。</td></tr><tr><td>我的客户端</td><td>查看自己的授权，撤销单个入口或某个 Broker 会话的全部授权。</td></tr></tbody></table>
+<p>门户只管理你自己的账号和授权。团队成员权限由管理员配置。</p>
+<h2 id="expired-link">授权链接失效或不属于当前账号</h2>
+<p>检查门户当前用户是否与终端身份一致。链接过期时回到终端重新运行向导或 client authorize，核对新的配对码。失效请求不妨碍管理已有授权。</p>
+<h2 id="sessions">区分三种登录状态</h2>
+<p>网页会话、本机登录和个人上游账号彼此独立。退出网页不会撤销本机客户端；本机 logout 不会断开上游账号；断开上游账号会影响该服务相关授权。按目标选择 <a href="privacy.html">退出或撤销方式</a>。</p>

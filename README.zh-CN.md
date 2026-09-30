@@ -13,6 +13,8 @@ MCPHub 将已有的远端 MCP Server 和普通 HTTP API 统一提供为 MCP 工�
 
 ## 从这里开始
 
+**[在线帮助中心](https://samuelsupe.github.io/mcphub/)**：面向最终用户的 19 篇中文指南，提供分组导航、全文搜索和客户端配置示例。
+
 | 你的任务 | 阅读入口 | 包含内容 |
 | --- | --- | --- |
 | 在 Agent 中使用公司工具 | **[用户手册](docs/user-guide.zh-CN.md)** | 安装 CLI、接入客户端、连接个人账号、审批与排障 |

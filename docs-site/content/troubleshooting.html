@@ -1,0 +1,23 @@
+<h2 id="doctor">先检查实际使用的入口</h2>
+<pre><code>mcphub-cli doctor --profile work --client ci_example</code></pre>
+<p>profile 和 ID 必须与客户端配置一致。只查登录可省略 --client。默认 15 秒，慢网络追加 --timeout 30s，允许 1 秒至 2 分钟。</p>
+<p>诊断检查私有目录、登录续期、配对、在线授权、有效 Scope、个人账号、MCP 初始化和工具目录第一页。可能刷新登录 Token，不打开浏览器、不启动 Broker、不创建授权、不刷新上游凭证、不执行工具。</p>
+<p>成功或仅警告退出码 0；阻塞问题为 1。通过诊断不保证全部业务调用或业务权限。</p>
+<h2 id="cannot-run">命令找不到或客户端无法启动</h2>
+<p>运行 setup --help。找不到时使用绝对路径，确认架构和执行权限。终端正常而客户端失败时，检查 command 是否存在、Windows 是否为 exe，以及 env.MCPHUB_HOME 是否保留。</p>
+<h2 id="login-fail">登录与网页授权</h2>
+<table><thead><tr><th>现象</th><th>处理</th></tr></thead><tbody><tr><td>浏览器没打开</td><td>同一电脑打开终端授权链接。</td></tr><tr><td>超时 / 回调失败</td><td>重试登录，检查固定端口与执行位置。</td></tr><tr><td>待授权 / 停用</td><td>请管理员开通用户和服务，重新登录。</td></tr><tr><td>链接失效 / 账号不符</td><td>确认门户用户，从终端重发请求，核对新配对码。</td></tr></tbody></table>
+<h2 id="no-tools">没有工具</h2>
+<ol><li>确认公司账号和目标服务。</li><li>检查授权是否含所需工具和 Scope。</li><li>请管理员检查发布状态和访问权限。</li><li>新增工具后重新授权。</li></ol>
+<p>向导不支持目录发现时，请管理员确认版本与设置；旧部署可按指导手动授权。</p>
+<h2 id="grant">授权到期、撤销或范围变化</h2>
+<pre><code>mcphub-cli client authorize --profile work --client ci_example</code></pre>
+<p>浏览器确认后重建连接。登录仍有效不能替代入口授权。账号被更换或断开时，先恢复账号再重新授权。</p>
+<h2 id="account">个人账号问题</h2>
+<p>门户「已连接账号」连接或重连服务。无法验证且持续失败时联系管理员。账号已连接而业务拒绝时，检查上游角色及资源权限。</p>
+<h2 id="http">401、403、429、503</h2>
+<table><thead><tr><th>错误</th><th>优先检查</th><th>下一步</th></tr></thead><tbody><tr><td>401</td><td>登录及续期。</td><td>login --profile work，重启连接。</td></tr><tr><td>403</td><td>用户状态、Scope、工具、资源与授权。</td><td>查看诊断，管理员确认所需范围。</td></tr><tr><td>429</td><td>限流与并发额度。</td><td>等待恢复；写入先核实是否已接纳。</td></tr><tr><td>503 / 持续不可用</td><td>网关、身份、账号服务和后端。</td><td>保存诊断与请求 ID，交给管理员。</td></tr></tbody></table>
+<h2 id="approval">批准后仍未执行</h2>
+<p>检查审批人数、原授权有效期和原客户端是否调用 mcphub_resume_approval。查询状态，按到期、资源或策略变化提示处理；不可换入口执行。</p>
+<h2 id="handoff">仍不能解决</h2>
+<p>按 <a href="support.html">提交诊断</a> 收集时间、入口、服务和请求 ID，不要通过反复扩大权限或重放写入排障。</p>

@@ -1,0 +1,21 @@
+<h2 id="generate">生成专用配置</h2>
+<p>运行 <a href="quickstart.html">接入向导</a>，选 <strong>2 · VS Code servers JSON</strong>。生成配置使用顶层 servers 对象和 type: stdio。</p>
+<h2 id="configure">选择保存位置</h2>
+<p>命令面板运行 <code>MCP: Open User Configuration</code> 配置个人范围；当前项目使用 <code>.vscode/mcp.json</code>。将实际生成条目合并到原有 servers：</p>
+<pre><code>{
+  "servers": {
+    "work-projects": {
+      "type": "stdio",
+      "command": "/absolute/path/to/mcphub-cli",
+      "args": ["connect", "--profile", "work", "--client", "ci_example"],
+      "env": { "MCPHUB_HOME": "/Users/you/.mcphub" }
+    }
+  }
+}</code></pre>
+<p>替换示例值，保留已有其他服务器。</p>
+<h2 id="start">启动并检查</h2>
+<p>命令面板运行 <code>MCP: List Servers</code>，选择服务器启动或重新启动，按要求确认信任。检查工具目录；失败时查看服务器输出，再运行对应入口的 doctor。</p>
+<h2 id="remote">SSH 与 Dev Container</h2>
+<p>执行位置取决于 VS Code 配置范围和远程环境。连接器、MCPHUB_HOME、登录及授权必须属于实际执行环境；本机配置不能直接拷入容器，见 <a href="profiles.html">多服务与多环境</a>。</p>
+<h2 id="reference">官方参考</h2>
+<p>配置位置和管理方式见 <a href="https://code.visualstudio.com/docs/agent-customization/mcp-servers" target="_blank" rel="noopener">VS Code 官方 MCP 文档</a>。</p>

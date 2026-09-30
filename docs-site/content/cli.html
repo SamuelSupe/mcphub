@@ -1,0 +1,36 @@
+<p>仅列最终用户命令。域名、服务、工具、Scope 和 ci_example 都是示例，应替换为实际值。使用 --help 查看当前程序参数。</p>
+<h2 id="setup">setup · 接入向导</h2>
+<pre><code>mcphub-cli setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work &gt; mcphub-mcp.json
+mcphub-cli setup --profile work &gt; mcphub-mcp.json</code></pre>
+<p>可选 --callback-port。终端选择服务、工具、资源、时长、名称及格式，浏览器登录和确认。stdout 为无凭证配置，提示写入 stderr。</p>
+<h2 id="login">login / status / logout</h2>
+<pre><code>mcphub-cli login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+mcphub-cli login --profile work
+mcphub-cli status --profile work
+mcphub-cli logout --profile work</code></pre>
+<p>login 可重复 --scope 和指定 --callback-port。status 显示缓存登录信息，有 Broker 会话时检查授权，不输出 Token。</p>
+<h2 id="client-add">client add · 手动入口</h2>
+<pre><code>mcphub-cli client add --profile work --name project-a-read --endpoint database-prod --scope mcp:database --scope db:read --tool query --resource /project=project-a --ttl 1h</code></pre>
+<table><thead><tr><th>参数</th><th>含义</th></tr></thead><tbody><tr><td>--endpoint / --name</td><td>服务 ID 与入口名称。</td></tr><tr><td>--scope / --tool</td><td>权限与原始工具名，可重复。</td></tr><tr><td>--resource /pointer=value</td><td>工具参数资源条件，可重复。</td></tr><tr><td>--ttl</td><td>如 30m、1h，不超服务端上限（可配置 1 分钟至 8 小时）。</td></tr><tr><td>--allow-write-requests</td><td>可申请写入，每次仍需审批。</td></tr></tbody></table>
+<p>默认只读。省略工具冻结当前符合条件的工具；省略 Scope 从已有权限选择所需范围。输出 command 为 mcphub-cli，图形客户端可改实际绝对路径。</p>
+<h2 id="capabilities">额外能力</h2>
+<p>按需添加 --prompts、--resources、--subscriptions；订阅必须同时允许资源。工具参数资源条件不限制资源 URI 或提示词，应分别建立适合的入口。</p>
+<h2 id="client-manage">client list / authorize / revoke</h2>
+<pre><code>mcphub-cli client list --profile work
+mcphub-cli client authorize --profile work --client ci_example
+mcphub-cli client authorize --profile work --client ci_example --tool query --resource /project=project-b
+mcphub-cli client revoke --profile work --client ci_example</code></pre>
+<p>重新授权保留未指定设置，列表替换旧列表，需浏览器确认和重启连接。</p>
+<h2 id="doctor">doctor · 诊断</h2>
+<pre><code>mcphub-cli doctor --profile work
+mcphub-cli doctor --profile work --client ci_example
+mcphub-cli doctor --profile work --client ci_example --json --timeout 30s</code></pre>
+<p>默认 15 秒，允许 1 秒至 2 分钟。成功或仅警告退出码 0，阻塞问题 1；不执行工具，见 <a href="troubleshooting.html">排障</a>。</p>
+<h2 id="broker">connect / broker</h2>
+<pre><code>mcphub-cli connect --profile work --client ci_example
+mcphub-cli broker status
+mcphub-cli broker stop
+mcphub-cli broker run</code></pre>
+<p>connect 由客户端启动，stdout 专用于 MCP，终端直接执行可能等待输入。broker run 用于前台诊断；停止不撤销远端授权。Broker 日志位于私有目录的 broker.log。</p>
+<h2 id="legacy">兼容连接</h2>
+<p>仅管理员明确允许无需客户端授权的服务可用 connect --profile work；强制授权时必须带 --client。见 <a href="install.html#compatibility">版本条件</a>。</p>

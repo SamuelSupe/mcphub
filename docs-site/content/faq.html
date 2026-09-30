@@ -1,0 +1,24 @@
+<h2 id="need-server">需要安装服务器或 Vault 吗</h2>
+<p>不需要。最终用户安装 mcphub-cli，公司基础服务和工具由管理员配置。</p>
+<h2 id="two-ids">client-id 和 ci_… 一样吗</h2>
+<p>不一样。login/setup 的 --client-id 为登记的登录应用；connect/doctor 的 --client 为生成的客户端入口 ID。</p>
+<h2 id="login-grant">已登录为何还需授权</h2>
+<p>登录证明身份；授权决定这个入口能使用的服务、工具和数据，每个入口单独确认与撤销。</p>
+<h2 id="expiry">登录能续期，授权为何到期</h2>
+<p>两者有效期独立。入口到期后 client authorize 或重新向导，浏览器确认并重启连接。</p>
+<h2 id="new-tools">新增工具自动出现吗</h2>
+<p>已有授权不会自动扩大。重新确认需要的工具；仍不可见请管理员核对发布和权限。</p>
+<h2 id="account-change">更换账号后为何不能用</h2>
+<p>更换或断开上游账号使旧授权失效，重连后重新授权入口。首次连接可满足已有授权。</p>
+<h2 id="approval">批准表示完成了吗</h2>
+<p>批准允许继续；原客户端仍需用原 ID 调用 mcphub_resume_approval，并确认业务结果。</p>
+<h2 id="cancel">撤销能回滚操作吗</h2>
+<p>不能。撤销阻止后续接纳、取消活动流，不回滚已被上游接受的副作用。</p>
+<h2 id="doctor-safe">doctor 执行工具吗</h2>
+<p>不执行工具或创建授权，可能刷新登录 Token，完成握手和目录读取，不刷新上游凭证。</p>
+<h2 id="share">同事可以共用我的配置吗</h2>
+<p>配置包含你的本机路径和入口，每人应独立向导和授权。</p>
+<h2 id="logout">退出网页、logout、broker stop 的区别</h2>
+<p>分别结束网页会话、本机登录、本机传输。撤销入口和断开账号见 <a href="privacy.html">退出与凭证保护</a>。</p>
+<h2 id="desktop">其他桌面客户端可以用吗</h2>
+<p>支持本机 stdio MCP 并可填写 command、args、env 时，可按 <a href="clients.html">通用配置</a> 接入，格式以客户端要求为准。</p>

@@ -38,6 +38,20 @@
 
 下载后与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS) 核对 SHA-256，解压并将可执行文件放入 PATH。Windows 需要 10 或更新版本；Intel/AMD 电脑选 x64，Windows on Arm 选 ARM64。
 
+macOS/Linux 安装示例（以下为 Linux arm64，替换文件名；macOS 用 `shasum -a 256` 校验）：
+
+```bash
+sha256sum mcphub-cli_v2.2.0_linux_arm64.tar.gz
+# 与 SHA256SUMS 中同名条目逐字核对，一致后再解压。
+mkdir -p mcphub-cli-release "$HOME/.local/bin"
+tar -xzf mcphub-cli_v2.2.0_linux_arm64.tar.gz -C mcphub-cli-release
+install -m 755 mcphub-cli-release/mcphub-cli "$HOME/.local/bin/mcphub-cli"
+export PATH="$HOME/.local/bin:$PATH"
+mcphub-cli setup --help
+```
+
+此 PATH 设置用于当前终端。后续可使用 `"$HOME/.local/bin/mcphub-cli"`，或将该目录加入 shell 的 PATH；图形客户端继续使用向导生成的绝对路径。
+
 Windows PowerShell 示例（文件名按实际架构替换）：
 
 ```powershell
@@ -52,6 +66,8 @@ Expand-Archive .\mcphub-cli_v2.2.0_windows_amd64.zip -DestinationPath .\mcphub-c
 ```bash
 go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.2.0
 ```
+
+Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`，也需要加入 PATH。源码构建的文件需用 `./mcphub-cli` 运行，或按上面的 `install` 步骤安装。
 
 从源码构建可用 `go build -trimpath -o ./mcphub-cli ./cmd/mcphub-cli`。安装后确保 MCP 客户端可以找到可执行文件；向导生成的配置使用实际绝对路径。
 

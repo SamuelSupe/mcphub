@@ -22,7 +22,12 @@ tar -xzf mcphub-cli_v2.2.0_linux_amd64.tar.gz</code></pre>
 Expand-Archive .\mcphub-cli_v2.2.0_windows_amd64.zip -DestinationPath .\mcphub-cli</code></pre>
 <h2 id="run">让电脑和客户端找到连接器</h2>
 <p>将可执行文件放在固定的私有工具目录并加入 PATH，也可始终使用绝对路径。macOS/Linux 文件名为 <code>mcphub-cli</code>，Windows 为 <code>mcphub-cli.exe</code>。</p>
-<pre><code>mcphub-cli setup --help</code></pre>
+<p>macOS/Linux 在上一步解压后执行：</p>
+<pre><code>mkdir -p "$HOME/.local/bin"
+install -m 755 ./mcphub-cli "$HOME/.local/bin/mcphub-cli"
+export PATH="$HOME/.local/bin:$PATH"
+mcphub-cli setup --help</code></pre>
+<p>此 PATH 设置用于当前终端；后续可运行 <code>"$HOME/.local/bin/mcphub-cli"</code>，或将该目录加入 shell 的 PATH。Go 安装路径是 <code>go env GOBIN</code>，为空时是 <code>$(go env GOPATH)/bin</code>，也需加入 PATH。</p>
 <p>看到接入参数说明，表示当前终端可以运行连接器。未添加 PATH 的 Windows 用户可运行 <code>.\mcphub-cli\mcphub-cli.exe setup --help</code>。图形客户端的 PATH 可能不同，因此保留向导生成的绝对路径最稳妥。系统阻止执行时，把具体提示交给 IT 或管理员处理。</p>
 <h2 id="upgrade">升级已有连接器</h2>
 <ol><li>下载管理员推荐的版本，核对校验值。</li><li>退出使用连接器的客户端；Broker 正在运行时，可执行 <code>mcphub-cli broker stop</code>。</li><li>替换原路径的可执行文件。保留本机 <code>.mcphub</code> 目录，已有 profile 无需迁移。</li><li>重新启动客户端，运行 doctor 检查实际入口。文件位置改变时，更新配置中的 command。</li></ol>

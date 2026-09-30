@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -170,7 +171,12 @@ func testApprovalLifecycle(t *testing.T, s *Store) {
 		t.Fatal(err)
 	}
 	history, err := s.ApprovalHistory(ctx, interrupted.ID)
-	if err != nil || len(history) != 5 || history[len(history)-1].Detail.Outcome != "applied" {
+	// Millisecond timestamps can tie; history uses event IDs to break those ties.
+	investigated := slices.ContainsFunc(history, func(event ApprovalEvent) bool {
+		return event.Action == "investigated" && event.Actor == "reviewer" &&
+			event.Detail == (ApprovalDetail{Reason: "Checked private upstream receipt", Outcome: "applied"})
+	})
+	if err != nil || len(history) != 5 || !investigated {
 		t.Fatalf("investigation audit: %+v %v", history, err)
 	}
 	if err := s.ClaimApproval(ctx, interrupted.ID); !errors.Is(err, ErrConflict) {

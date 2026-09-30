@@ -17,7 +17,8 @@ auth:
 backends:
   - id: primary
     url: ${MCPHUB_PRIMARY_BACKEND_URL}
-    # A required backend must connect before startup/reload can succeed.
+    # Startup retries unavailable backends and keeps /readyz at 503.
+    # A reload or managed change requires the candidate's required backends to connect.
     # false only tolerates connection failure; it does not disable validation.
     required: true
     request_timeout: 30s

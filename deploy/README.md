@@ -10,10 +10,12 @@ Completed MCP POST requests are retained for 30 days by default. Set `admin.requ
 
 | Deployment | Configuration |
 | --- | --- |
-| Feishu SSO + Vault + personal MCP accounts (integration example) | [config.feishu-vault.example.yaml](config.feishu-vault.example.yaml); requires real-tenant acceptance |
-| Local administration + SQLite | [Local UI example in the administrator manual](../docs/admin-guide.md#local-management-ui) |
+| Local administration + SQLite | [config.local.yaml](config.local.yaml), [startup steps](../docs/admin-guide.md#local-management-ui) |
 | HTTPS remote administration + SQLite | [config.remote-sqlite.yaml](config.remote-sqlite.yaml) |
 | HTTPS remote administration + PostgreSQL | [config.remote-postgres.yaml](config.remote-postgres.yaml), [Compose](compose.postgres.yaml) |
+| Feishu SSO + Vault + personal MCP accounts (integration example) | [config.feishu-vault.example.yaml](config.feishu-vault.example.yaml); requires real-tenant acceptance |
+
+These links provide current configuration files, validated with current source and the v2.2.0 release binary. Files inside release archives are older snapshots; download the matching current template when following the online guide. A binary-only installation can save the selected YAML as `config.yaml` and use `--config config.yaml`, without a source checkout. The `deploy/...` paths below assume the complete repository root as the working directory.
 
 ## Identity provider
 
@@ -51,9 +53,13 @@ export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
 export MCPHUB_ADMIN_PUBLIC_URL=https://admin.example.com
 export MCPHUB_ADMIN_CLIENT_ID=mcphub-admin-web
 export MCPHUB_AUTH_ISSUER=https://idp.example.com
-# MCPHUB_CONFIG_KEY: Base64-encoded 32-byte key.
-# Generate once (openssl rand -base64 32); retain across upgrades and restarts.
+umask 077
+mkdir -p "$HOME/.config/mcphub"
+test -f "$HOME/.config/mcphub/config.key" || openssl rand -base64 32 > "$HOME/.config/mcphub/config.key"
+export MCPHUB_CONFIG_KEY="$(cat "$HOME/.config/mcphub/config.key")"
 ```
+
+This key file is a local example for a new deployment. An existing database requires its original key. Restarts, service managers and containers must use the same value; keep backups of both the database and key.
 
 SQLite:
 
@@ -74,15 +80,31 @@ mcphub serve --config config.yaml
 
 Use a dedicated database/schema. The database role needs table creation/migration rights. A DBA must preinstall `CREATE EXTENSION IF NOT EXISTS citext` or allow the application to install it on startup. Supply the connection string, database CA and encryption key to the service. `validate` is read-only and does not create tables; the first `serve` initializes the schema and imports YAML backends. `validate` still connects to PostgreSQL; a missing database, invalid credentials or a network failure cannot pass.
 
-Alternatively use the included PostgreSQL Compose deployment:
+### Use PostgreSQL Compose
+
+Compose builds Hub from source. It requires Git, Docker with Compose v2, and a **complete source checkout** containing `Dockerfile`, `go.mod`, `go.sum`, `cmd/` and `internal/`. The `deploy/` directory in a binary release archive cannot build it by itself; it fails with `Dockerfile: no such file or directory`. Fetch the current source, or use an existing complete checkout:
+
+```bash
+git clone https://github.com/SamuelSupe/mcphub.git
+cd mcphub
+```
+
+Set the five variables above and the database password in this directory, then run:
 
 ```bash
 # Use a URL-safe password here, e.g. output from openssl rand -hex 24.
 export MCPHUB_POSTGRES_PASSWORD=REPLACE_WITH_GENERATED_HEX_PASSWORD
+docker compose -f deploy/compose.postgres.yaml config --quiet
 docker compose -f deploy/compose.postgres.yaml up -d --build
 ```
 
 Compose retains data in `postgres-data`, publishes no database port, and binds the gateway HTTP ports to host loopback only. Its database connection uses `sslmode=disable` inside the private container network; use `verify-full` for an external/managed database. Do not remove a required data volume with `down -v`.
+
+If dependency downloads fail with `x509: certificate signed by unknown authority`, check the certificate chain of your enterprise HTTPS proxy. Host trust in a private CA does not automatically extend to build or runtime images. Ask operations to install the organization CA in the relevant image trust stores, then retry. The binary deployment above is another option; identity-service, Vault and database certificate trust still needs checking separately.
+
+### Prerequisites for employee setup
+
+The remote templates initially provide administration without enabling the employee setup wizard. Follow [client authorization](../docs/admin-guide.md#enable-client-authorization) to add its fragment to the complete configuration and restart. Register portal and employee CLI clients, then add a service, explicitly publish a read tool and grant its required scopes. The portal lives at `/client-auth/` on the MCP host; the HTTPS proxy must forward the whole MCP host, including portal and discovery paths. Give employees the `setup` command after completing these steps.
 
 ## HTTPS proxy
 

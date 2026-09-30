@@ -18,7 +18,7 @@
 | 场景 | 从哪里开始 | 需要准备 |
 | --- | --- | --- |
 | YAML 管理一个 MCP 后端 | [基础示例](../config.example.yaml) | 4 个环境变量；默认不发布工具，无数据库和用户门户 |
-| 本机管理、SQLite | [管理员手册](admin-guide.zh-CN.md#本地管理-ui) | 网关 URL、issuer、固定加密密钥 |
+| 本机管理、SQLite | [完整配置文件](../deploy/config.local.yaml)、[启动步骤](admin-guide.zh-CN.md#本地管理-ui) | 网关 URL、issuer、固定加密密钥 |
 | 团队远程管理 | [部署示例与变量清单](../deploy/README.zh-CN.md#环境变量清单) | 管理 URL、身份客户端、SQLite 或 PostgreSQL、HTTPS 代理 |
 | SSO / Vault 个人账号 | [SSO](sso-and-user-management.zh-CN.md)、[Vault](vault-accounts.zh-CN.md) | 在托管配置上增加所需模块；飞书示例还需真实租户验收 |
 
@@ -428,6 +428,14 @@ Backend ID 的唯一性按大小写不敏感检查。tool/prompt 名称保留配
 先在该身份服务注册一个 **公开原生 OAuth 客户端**，启用授权码、refresh token、PKCE S256，以及 token endpoint 的 `none` 认证方式。允许回调 `http://127.0.0.1:<port>/oauth/callback`；支持原生客户端的服务可允许随机回环端口，否则注册固定端口并传入 `--callback-port 8765`。Discovery 必须声明支持 S256。身份服务签发的 JWT **access token** 必须包含完整 MCPHub 公开 URL（含 `/mcp`）作为 audience，并携带 `sub`、`exp` 和所需 scope。本机无需保存 client secret。
 
 ## 从完整 YAML 示例启动
+
+在线文档使用的是[当前基础配置](../config.example.yaml)。v2.2.0 下载包中的同名旧文件还包含控制台来源和可选 CRM 环境变量；即使 CRM 的 `required: false`，也不能省略这些变量。新部署可从文档站直接下载当前文件，再设置下面 4 个变量；该文件与 v2.2.0 二进制兼容：
+
+```bash
+curl -fL https://samuelsupe.github.io/mcphub/examples/config.example.yaml -o config.yaml
+```
+
+只在新部署目录下载为 `config.yaml`；已有部署先保留原配置并逐项合并。不要混用发布包中的旧配置和当前变量清单。
 
 基础文件现在只配置一个 MCP 后端，需要下方 4 个变量。它默认不发布工具，也不开启用户门户/写审批；请按文件注释同时配置精确发布名单与已确认的 `effect: read`。需要控制台或普通 HTTP API 工具时，使用[管理员部署流程](admin-guide.zh-CN.md)。以下从源码构建，已安装二进制时可直接使用 `mcphub`：
 

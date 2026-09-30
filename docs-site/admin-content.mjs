@@ -78,6 +78,10 @@ export function loadAdminContent(repository, pages, language = 'zh-CN') {
     if (/^(?:https?:|mailto:)/.test(href)) return href;
     const [file, fragment = ''] = href.split('#');
     const repositoryPath = path.posix.normalize(path.posix.join(path.posix.dirname(sourceFile), file || path.posix.basename(sourceFile)));
+    if (!fragment && (repositoryPath === 'config.example.yaml' || /^deploy\/config\.[\w.-]+\.yaml$/.test(repositoryPath))) {
+      const pageFile = (language === 'en' ? 'en/' : '') + pageSlug;
+      return path.posix.relative(path.posix.dirname(pageFile), 'examples/' + repositoryPath);
+    }
     const key = fragment ? `${repositoryPath}#${decodeURIComponent(fragment)}` : repositoryPath;
     const destination = destinations.get(key);
     if (destination) {

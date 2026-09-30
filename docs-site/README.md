@@ -33,6 +33,6 @@ python3 -m http.server 4387 --bind 127.0.0.1 --directory dist
 
 ## 发布
 
-[GitHub Pages](https://samuelsupe.github.io/mcphub/) 使用 `.github/workflows/docs.yml`。`main` 上的站点、源 Markdown 或升级说明变更会自动构建和发布，也可手动触发。只上传 `dist`，不包含 MCPHub 配置、凭证、数据库或服务端源码。
+[GitHub Pages](https://samuelsupe.github.io/mcphub/) 使用 `.github/workflows/docs.yml`。`main` 上的站点、源 Markdown、配置模板或升级说明变更会自动构建和发布，也可手动触发。只上传 `dist`，包括 `examples/` 中未经填写的公开配置模板，不包含真实配置、凭证、数据库或服务端源码。构建直接复制仓库模板，中英文管理员页面的配置链接指向同一份文件；修改模板会重新发布。CI 使用实际服务端校验全部安装配置，并检查 Compose 展开，防止字段、变量和二进制再次脱节。
 
 用户内容依据本仓库 CLI、个人门户、用户手册和权限实现；客户端配置核对 OpenAI、Claude Code 与 VS Code 官方文档。管理员内容保持原始手册的部署、审批、身份和运维边界。下载名已与 v2.2.0 Release 资源核对；实际企业 SSO、Vault 和审批须在部署环境完成验收。

@@ -1,4 +1,6 @@
 # Single Hub + PostgreSQL. Required variables and startup: deploy/README.md / .zh-CN.md.
+# Run from a complete source checkout: build.context requires the root Dockerfile,
+# go.mod, go.sum, cmd/ and internal/. Release archives contain no build sources.
 # ${VAR:?message} is Docker Compose syntax, not MCPHub YAML interpolation syntax.
 # Keep the PostgreSQL volume and matching MCPHUB_CONFIG_KEY when upgrading.
 name: mcphub

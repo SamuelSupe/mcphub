@@ -1,0 +1,16 @@
+# Local admin + SQLite; the MCP gateway still requires a working HTTPS OIDC issuer.
+# 本地管理 + SQLite；不启用用户门户，管理端仅允许本机访问。
+# Required environment: MCPHUB_PUBLIC_URL, MCPHUB_AUTH_ISSUER, MCPHUB_CONFIG_KEY.
+# Retain the database and its matching base64 32-byte key across restarts/upgrades.
+server:
+  listen: "127.0.0.1:8080"
+  public_url: ${MCPHUB_PUBLIC_URL}
+auth:
+  issuer: ${MCPHUB_AUTH_ISSUER}
+admin:
+  enabled: true
+  mode: local
+  listen: "127.0.0.1:8081"
+  database_path: ./data/mcphub.db
+  encryption_key_env: MCPHUB_CONFIG_KEY
+backends: []

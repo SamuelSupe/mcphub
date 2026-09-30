@@ -33,11 +33,26 @@ Install `mcphub` on the gateway host and `mcphub-cli` on user computers. Adminis
 | Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_linux_amd64.tar.gz) |
 | Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_linux_arm64.tar.gz) |
 
-Download from the [v2.2.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0), verify against [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS), extract and put the executable on PATH. With Go 1.26 installed:
+Download from the [v2.2.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0) and verify against [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS). The following installs Linux arm64; change the filename for your platform and use `shasum -a 256` on macOS:
+
+```bash
+sha256sum mcphub_v2.2.0_linux_arm64.tar.gz
+# Compare exactly with the same filename in SHA256SUMS before extracting.
+mkdir -p mcphub-release "$HOME/.local/bin"
+tar -xzf mcphub_v2.2.0_linux_arm64.tar.gz -C mcphub-release
+install -m 755 mcphub-release/mcphub "$HOME/.local/bin/mcphub"
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+This PATH setting applies to the current terminal. For later runs, use `"$HOME/.local/bin/mcphub"` directly or add the tools directory to your service environment. With Go 1.26 installed:
 
 ```bash
 go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.0
 ```
+
+Go installs into `go env GOBIN`, or `$(go env GOPATH)/bin` when GOBIN is empty. Add that directory to PATH too.
+
+**An archive's documentation and configuration are release-time snapshots.** The old base configuration in v2.2.0 also requires `MCPHUB_CONSOLE_ORIGIN` and CRM variables, so it does not match the online four-variable procedure. For new deployments, download the [current base configuration](../config.example.yaml) or [local administration configuration](../deploy/config.local.yaml). Both examples have been validated with the v2.2.0 release binary. The base example has no console, database or user portal; use the [remote templates](../deploy/README.md) for team deployments.
 
 `validate --config PATH` checks configuration without creating a database. `serve --config PATH` starts the server and performs required migrations, writing structured JSON logs to stderr. Read [upgrades and backups](#upgrades-and-backups) before replacing an older version.
 
@@ -59,6 +74,19 @@ admin:
   database_path: ./data/mcphub.db
   encryption_key_env: MCPHUB_CONFIG_KEY
 backends: []
+```
+
+The configuration above is complete; you can also download the [local administration file](../deploy/config.local.yaml). Run these steps from the directory containing `config.yaml`, replacing the URLs. The example saves the key in a private user directory. Subsequent starts read the same file, and your service manager must inject the same value. Existing deployments must use their database's original key.
+
+```bash
+export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
+export MCPHUB_AUTH_ISSUER=https://idp.example.com
+umask 077
+mkdir -p "$HOME/.config/mcphub"
+test -f "$HOME/.config/mcphub/config.key" || openssl rand -base64 32 > "$HOME/.config/mcphub/config.key"
+export MCPHUB_CONFIG_KEY="$(cat "$HOME/.config/mcphub/config.key")"
+mcphub validate --config config.yaml
+mcphub serve --config config.yaml
 ```
 
 Run `mcphub validate --config config.yaml`, then `mcphub serve --config config.yaml`. Open [the local console](http://127.0.0.1:8081/) on the gateway host. The admin listener does not require login and must remain loopback-only. The gateway still needs a working OIDC issuer to become ready and authenticate MCP clients.
@@ -117,6 +145,8 @@ Enable `client_authorization.enabled`, configure its portal `client_id`, and ena
 
 Register the portal callback `https://hub.example.com/client-auth/auth/callback`. The portal is served on the MCP gateway origin, separately from the administration listener. The CLI and portal must receive JWT access tokens for the full MCP resource URL with the same `issuer + sub`. Pairwise subjects from different OIDC clients require an identity-provider configuration that gives these clients a consistent subject; email matching is not used. An optional portal client secret stays on the server through `client_secret_env`.
 
+This is a **fragment to add at the root of an existing complete YAML file**, not a replacement configuration. Set `client_id` to the registered portal client's ID.
+
 ```yaml
 client_authorization:
   enabled: true
@@ -124,6 +154,8 @@ client_authorization:
   require_client_grant: false
   max_grant_ttl: 8h
 ```
+
+Restart a directly run binary. For Compose, add the fragment to the mounted `deploy/config.remote-postgres.yaml`, then run `docker compose -f deploy/compose.postgres.yaml up -d --force-recreate mcphub` in the original deployment environment. Register a separate public employee CLI client with the [external OIDC requirements](configuration.md#external-oidc-registration-for-the-user-cli), including PKCE, callbacks and MCP audience. Publish one explicitly classified `read` tool and grant its required scopes before asking employees to run `setup`; empty `backends: []` or `published_tools: []` do not create selectable tools.
 
 Set `require_client_grant: true` on selected backends or HTTP tool groups, or globally to require it everywhere. Global and endpoint requirements are combined with OR. Existing connections without `--client` retain access only to compatible endpoints; authenticated initialization does not expose strict endpoints. Global portal settings are static process configuration and require a restart. Endpoint settings use the existing managed configuration governance.
 

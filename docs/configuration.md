@@ -18,7 +18,7 @@ This reference targets v2.2.0. Configuration is one YAML document with strict fi
 | Scenario | Starting point | Prerequisites |
 | --- | --- | --- |
 | One MCP backend managed in YAML | [Base example](../config.example.yaml) | 4 environment variables; tools initially unpublished, no database or user portal |
-| Local administration, SQLite | [Administrator manual](admin-guide.md#local-management-ui) | MCP URL, issuer, persistent encryption key |
+| Local administration, SQLite | [Complete configuration](../deploy/config.local.yaml), [startup steps](admin-guide.md#local-management-ui) | MCP URL, issuer, persistent encryption key |
 | Remote team administration | [Deployment examples and variables](../deploy/README.md#environment-variables) | Admin URL, identity clients, SQLite or PostgreSQL, HTTPS proxy |
 | SSO / Vault personal accounts | [SSO](sso-and-user-management.md), [Vault](vault-accounts.md) | Add the required modules to a managed deployment; Feishu also needs real-tenant acceptance |
 
@@ -426,6 +426,14 @@ These requirements apply when using an external issuer directly. With `auth.sso`
 Register a **public native OAuth client** at that issuer with authorization-code and refresh-token grants, PKCE S256, and token-endpoint authentication method `none`. Allow the callback `http://127.0.0.1:<port>/oauth/callback`; use an arbitrary loopback port when the provider supports native clients, or register a fixed port and pass `--callback-port 8765`. Discovery must advertise PKCE S256. The issuer must issue a signed JWT **access token** with an audience containing the exact MCPHub public URL, including `/mcp`, plus `sub`, `exp`, and the required scopes. No client secret is needed on the user's machine.
 
 ## Starting from the full YAML example
+
+The online guide uses the [current base configuration](../config.example.yaml). The older file of the same name inside the v2.2.0 archive also contains console-origin and optional CRM variables; `required: false` does not make those variables optional. For a new deployment, download the current file from the documentation site and set the four variables below. This file is compatible with the v2.2.0 binary:
+
+```bash
+curl -fL https://samuelsupe.github.io/mcphub/examples/config.example.yaml -o config.yaml
+```
+
+Download as `config.yaml` only in a new deployment directory. Preserve and merge an existing deployment's configuration. Do not combine an archive's old configuration with the current variable inventory.
 
 The base file configures one MCP backend and needs only the 4 variables below. It initially publishes no tools and has no user portal/write approvals. Follow its comments to set both exact published names and verified `effect: read` rules. For the console or ordinary HTTP API tools, use the [administrator deployment workflow](admin-guide.md). These commands build from source; use `mcphub` directly if already installed:
 

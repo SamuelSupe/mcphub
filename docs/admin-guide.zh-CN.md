@@ -33,11 +33,26 @@
 | Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_linux_amd64.tar.gz) |
 | Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_linux_arm64.tar.gz) |
 
-从 [v2.2.0 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0) 下载后核对 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS)，解压并放入 PATH。已安装 Go 1.26 时也可执行：
+从 [v2.2.0 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0) 下载后核对 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS)。以下为 Linux arm64 的安装示例；按上表替换文件名，macOS 校验命令为 `shasum -a 256`：
+
+```bash
+sha256sum mcphub_v2.2.0_linux_arm64.tar.gz
+# 与 SHA256SUMS 中同名条目逐字核对，一致后再解压。
+mkdir -p mcphub-release "$HOME/.local/bin"
+tar -xzf mcphub_v2.2.0_linux_arm64.tar.gz -C mcphub-release
+install -m 755 mcphub-release/mcphub "$HOME/.local/bin/mcphub"
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+此 PATH 设置用于当前终端；后续可直接运行 `"$HOME/.local/bin/mcphub"`，或将工具目录加入服务环境。已安装 Go 1.26 时也可执行：
 
 ```bash
 go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.0
 ```
+
+Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`；该目录也需要加入 PATH。
+
+**下载包内的文档和配置是发布时快照。** v2.2.0 包内旧基础配置还要求 `MCPHUB_CONSOLE_ORIGIN` 和 CRM 变量，不能直接照在线文档的 4 变量步骤使用。新部署请下载[当前基础配置](../config.example.yaml)或[本地管理配置](../deploy/config.local.yaml)，两个示例均已用 v2.2.0 发布版程序校验。基础配置没有控制台、数据库或用户门户；团队部署使用[远程模板](../deploy/README.zh-CN.md)。
 
 `validate --config PATH` 只读检查配置，不创建数据库；`serve --config PATH` 启动服务并执行必要迁移，结构化 JSON 日志写入 stderr。旧版本升级先看[升级与备份](#升级与备份)。
 
@@ -59,6 +74,19 @@ admin:
   database_path: ./data/mcphub.db
   encryption_key_env: MCPHUB_CONFIG_KEY
 backends: []
+```
+
+上面是完整配置，也可下载[本地管理配置文件](../deploy/config.local.yaml)。在保存 `config.yaml` 的目录运行以下步骤，替换地址。此示例将密钥保存在用户私有目录；后续启动读取同一文件，服务管理器也应注入相同值。已有部署必须使用数据库原来的密钥。
+
+```bash
+export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
+export MCPHUB_AUTH_ISSUER=https://idp.example.com
+umask 077
+mkdir -p "$HOME/.config/mcphub"
+test -f "$HOME/.config/mcphub/config.key" || openssl rand -base64 32 > "$HOME/.config/mcphub/config.key"
+export MCPHUB_CONFIG_KEY="$(cat "$HOME/.config/mcphub/config.key")"
+mcphub validate --config config.yaml
+mcphub serve --config config.yaml
 ```
 
 先运行 `mcphub validate --config config.yaml`，再运行 `mcphub serve --config config.yaml`，在网关所在机器打开[本地控制台](http://127.0.0.1:8081/)。默认 `mode: local` 无需登录，必须保持仅回环访问；远程访问请使用[远程管理](#远程管理员与-postgresql)的 `mode: remote`。网关仍需可用的 OIDC 身份服务才能就绪并认证 MCP 客户端。
@@ -117,6 +145,8 @@ mcphub-cli admin --profile ops get /events
 
 在身份服务注册门户回调 `https://hub.example.com/client-auth/auth/callback`。门户位于 MCP 服务的域名下，与管理端口分开。CLI 与门户必须取得 audience 为完整 MCP resource URL、`issuer + sub` 一致的 JWT access token。若身份服务对不同客户端返回不同的 pairwise subject，应先调整身份服务的主体策略；不会通过 email 拼接身份。门户可选的 client secret 通过服务端 `client_secret_env` 配置。
 
+以下是**追加到现有完整 YAML 根级别的片段**，不要替换整个配置文件；`client_id` 改为已注册的门户客户端 ID。
+
 ```yaml
 client_authorization:
   enabled: true
@@ -124,6 +154,8 @@ client_authorization:
   require_client_grant: false
   max_grant_ttl: 8h
 ```
+
+直接运行二进制时重启服务。Compose 部署将片段加入挂载的 `deploy/config.remote-postgres.yaml`，在原来的部署环境执行 `docker compose -f deploy/compose.postgres.yaml up -d --force-recreate mcphub`。还需单独注册员工 CLI 的公开客户端，按[外部 OIDC 注册](configuration.zh-CN.md#用户-cli-的外部-oidc-注册)配置 PKCE、回调和 MCP audience。先发布一个明确 `read` 的工具并授予用户相应 Scope，再让员工运行 `setup`；空的 `backends: []` 或 `published_tools: []` 不会自动产生可选工具。
 
 在指定 backend 或 HTTP 工具组设置 `require_client_grant: true`，可逐个迁移；全局开启则全部强制。两级条件取 OR。旧的 `connect --profile` 只能访问兼容 endpoint，登录握手不会暴露严格 endpoint。门户全局设置属于静态进程配置，修改后重启；endpoint 设置沿用现有配置治理流程。
 

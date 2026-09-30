@@ -4,6 +4,12 @@ MCPHub v2.2.0 makes request investigations durable and improves administrator sa
 
 MCPHub v2.2.0 新增持久化请求历史，完善管理员保护、登录恢复和个人账号诊断，并修复运行时授权连续性、endpoint 身份与 MCP 视图缓存耗尽问题。托管 SQLite / 单实例 PostgreSQL 从 schema 8 迁移到 **schema 9**。
 
+## Installation guidance / 安装提示
+
+The archive's `config.example.yaml` is an older comprehensive example that also requires console-origin and CRM variables. The online four-variable procedure uses the [current base configuration](https://samuelsupe.github.io/mcphub/examples/config.example.yaml), validated with this release binary. For administration, choose a complete template in the [updated installation guide](https://samuelsupe.github.io/mcphub/en/admin/install.html). The bundled Compose files require a complete source checkout to build Hub; extracting a binary archive alone is insufficient. Employee `setup` additionally requires the user portal, registered OAuth clients and published tools.
+
+包内 `config.example.yaml` 是旧的综合示例，还要求控制台来源和 CRM 变量。在线文档的 4 变量步骤使用[当前基础配置](https://samuelsupe.github.io/mcphub/examples/config.example.yaml)，已用本版二进制校验。管理部署请按[更新后的安装指南](https://samuelsupe.github.io/mcphub/admin/install.html)选择完整模板。包内 Compose 文件从源码构建 Hub，需要完整源码 checkout，不能只解压二进制包。员工 `setup` 还需要启用用户门户、注册 OAuth 客户端和发布工具。
+
 ## Changes / 主要变化
 
 1. **Last-administrator protection:** local permission edits cannot disable or remove the final effective SSO administrator. The check includes group/department inheritance and concurrent edits. Authoritative directory revocations still apply; the SSO guide documents local recovery.

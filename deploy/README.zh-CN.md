@@ -10,10 +10,12 @@ v2.2.0 新增持久化请求历史、管理员保护和登录恢复提示，SQLi
 
 | 方式 | 用途 | 配置 |
 | --- | --- | --- |
-| 飞书 SSO + Vault + 个人 MCP 账号 | 联调起点，须完成真实租户验收 | [配置示例](config.feishu-vault.example.yaml) |
-| 本地管理 + SQLite | 本机开发、单机运维；不需要管理员登录 | [管理员手册的本地管理示例](../docs/admin-guide.zh-CN.md#本地管理-ui) |
+| 本地管理 + SQLite | 本机开发、单机运维；不需要管理员登录 | [config.local.yaml](config.local.yaml)、[启动步骤](../docs/admin-guide.zh-CN.md#本地管理-ui) |
 | 远程管理 + SQLite | 单机网关，经 HTTPS 访问管理 UI/API | [config.remote-sqlite.yaml](config.remote-sqlite.yaml) |
 | 远程管理 + PostgreSQL | 企业单实例部署，数据库独立运维 | [config.remote-postgres.yaml](config.remote-postgres.yaml)、[Compose](compose.postgres.yaml) |
+| 飞书 SSO + Vault + 个人 MCP 账号 | 联调起点，须完成真实租户验收 | [配置示例](config.feishu-vault.example.yaml) |
+
+这些链接提供当前配置文件，已用当前源码及 v2.2.0 发布版二进制校验。发布包内的文件是旧快照；新部署按在线文档操作时，先下载对应的当前模板。只运行二进制时，把选中的 YAML 保存为 `config.yaml`，后续使用 `--config config.yaml`，不要求完整源码。下面的 `deploy/...` 路径则以完整仓库根目录为工作目录。
 
 ## 身份服务配置
 
@@ -53,9 +55,13 @@ export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
 export MCPHUB_ADMIN_PUBLIC_URL=https://admin.example.com
 export MCPHUB_ADMIN_CLIENT_ID=mcphub-admin-web
 export MCPHUB_AUTH_ISSUER=https://idp.example.com
-# 从 secret store 注入 MCPHUB_CONFIG_KEY：Base64 编码的 32 字节密钥。
-# 密钥只生成一次（openssl rand -base64 32），升级与重启必须保留。
+umask 077
+mkdir -p "$HOME/.config/mcphub"
+test -f "$HOME/.config/mcphub/config.key" || openssl rand -base64 32 > "$HOME/.config/mcphub/config.key"
+export MCPHUB_CONFIG_KEY="$(cat "$HOME/.config/mcphub/config.key")"
 ```
+
+此密钥文件是新部署的本机示例；已有数据库必须注入原密钥。重启、服务管理器和容器都应使用同一值，并保留数据库与密钥备份。
 
 SQLite：
 
@@ -77,15 +83,31 @@ mcphub serve --config config.yaml
 
 为 MCPHub 使用独立数据库/专用 schema。数据库用户需要创建/升级表的权限；`citext` 扩展由数据库管理员预先执行 `CREATE EXTENSION IF NOT EXISTS citext`，或允许应用在首次启动时创建。连接串、CA 和加密密钥必须在服务环境中可用。`validate` 只读，不创建表；首次 `serve` 建表并导入 YAML backends。`validate` 仍会连接 PostgreSQL；数据库尚未创建、凭证错误或网络不通时不能通过。
 
-也可使用仓库中的 PostgreSQL Compose 示例：
+### 使用 PostgreSQL Compose
+
+Compose 示例会从源码构建 Hub，要求 Git、Docker 与 Compose v2，以及包含 `Dockerfile`、`go.mod`、`go.sum`、`cmd/`、`internal/` 的**完整源码目录**。二进制 Release 包中的 `deploy/` 不能单独构建，否则会报 `Dockerfile: no such file or directory`。先获取当前源码，或进入已有完整 checkout：
+
+```bash
+git clone https://github.com/SamuelSupe/mcphub.git
+cd mcphub
+```
+
+然后在此目录设置上面的 5 个变量和数据库密码，运行：
 
 ```bash
 # 为本示例使用 URL-safe 密码，例如 openssl rand -hex 24 的结果。
 export MCPHUB_POSTGRES_PASSWORD=REPLACE_WITH_GENERATED_HEX_PASSWORD
+docker compose -f deploy/compose.postgres.yaml config --quiet
 docker compose -f deploy/compose.postgres.yaml up -d --build
 ```
 
 Compose 将数据保留在 `postgres-data` 卷中，不发布数据库端口，只将网关的 HTTP 端口绑定到宿主机回环。示例数据库连接在私有容器网络中使用 `sslmode=disable`；独立/托管数据库部署应使用 `verify-full`。不要使用 `down -v` 删除需要保留的数据。
+
+若构建下载依赖时报 `x509: certificate signed by unknown authority`，检查企业 HTTPS 代理的证书链。宿主机信任私有 CA，不代表构建镜像和运行镜像也信任；由运维将组织 CA 安装到对应镜像的信任库后重试。也可按上面的二进制方式部署，身份服务、Vault 和数据库的证书信任仍需分别检查。
+
+### 员工接入的前置条件
+
+远程模板的首次启动只提供管理平台，尚未启用用户接入向导。按[客户端授权步骤](../docs/admin-guide.zh-CN.md#启用客户端授权)将 `client_authorization` 片段加入完整配置并重启，注册门户和员工 CLI 客户端，再通过管理端添加服务、显式发布只读工具并给用户相应 Scope。门户位于 MCP 域名的 `/client-auth/`，HTTPS 代理必须转发整个 MCP 域名，不能只转发 `/mcp`。完成这些步骤后，再向员工交付 `setup` 命令。
 
 ## HTTPS 入口
 

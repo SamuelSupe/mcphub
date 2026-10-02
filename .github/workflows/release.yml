@@ -78,6 +78,9 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Check reachable vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
       - name: Check browser JavaScript syntax
         run: |
           for script in internal/app/adminui/*.js internal/app/clientportal/*.js; do
@@ -177,6 +180,7 @@ jobs:
               extracted="$(mktemp -d)"
               tar -xzf "$archive" -C "$extracted"
               test "$(go version -m "$extracted/$binary" | awk '$1 == "path" {print $2}')" = "github.com/SamuelSupe/mcphub/v2/cmd/$binary"
+              test "$(go version -m "$extracted/$binary" | awk 'NR == 1 {print $NF}')" = "$(go env GOVERSION)"
               diff -r "$GITHUB_WORKSPACE/docs" "$extracted/docs"
               for file in "$GITHUB_WORKSPACE"/LICENSE "$GITHUB_WORKSPACE"/README*.md "$GITHUB_WORKSPACE"/SECURITY.md "$GITHUB_WORKSPACE"/RELEASE_NOTES_*.md; do
                 cmp "$file" "$extracted/$(basename "$file")"
@@ -194,6 +198,7 @@ jobs:
               extracted="$(mktemp -d)"
               unzip -q "$archive" -d "$extracted"
               test "$(go version -m "$extracted/mcpbridge.exe" | awk '$1 == "path" {print $2}')" = github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge
+              test "$(go version -m "$extracted/mcpbridge.exe" | awk 'NR == 1 {print $NF}')" = "$(go env GOVERSION)"
               diff -r "$GITHUB_WORKSPACE/docs" "$extracted/docs"
               for file in "$GITHUB_WORKSPACE"/LICENSE "$GITHUB_WORKSPACE"/README*.md "$GITHUB_WORKSPACE"/SECURITY.md "$GITHUB_WORKSPACE"/RELEASE_NOTES_*.md; do
                 cmp "$file" "$extracted/$(basename "$file")"

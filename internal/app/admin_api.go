@@ -138,6 +138,8 @@ func (a *App) serveAdmin(w http.ResponseWriter, req *http.Request) {
 	}
 	path := strings.TrimPrefix(req.URL.Path, "/api/v1/")
 	switch {
+	case path == "identity-providers" || path == "identity-providers/probe":
+		a.serveIdentityProviders(w, req, path == "identity-providers/probe")
 	case path == "vault":
 		a.serveVault(w, req)
 	case path == "requests":

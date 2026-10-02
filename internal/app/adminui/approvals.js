@@ -1,4 +1,5 @@
-import { canInspectDelivery } from "./auth.js";
+import { canInspectDelivery, isLocalAccount } from "./auth.js";
+import { passwordProof } from "./local-account.js";
 import { getLocale, t } from "./i18n.js";
 
 const query = new URLSearchParams(location.search);
@@ -169,7 +170,10 @@ function renderActions(card, record) {
       card.append(element("p", t(record.step_up_verified ? "本次身份验证已通过，短时有效且仅能使用一次。" : "批准前需要加强身份验证。")));
       controls.append(button("加强身份验证", async () => {
         try {
-          const value = await request(`/approvals/${encodeURIComponent(record.id)}/verify`, { method: "POST" });
+          const proof=isLocalAccount()?await passwordProof():null;
+          if(isLocalAccount()&&!proof)return;
+          const value = await request(`/approvals/${encodeURIComponent(record.id)}/verify`, { method: "POST", ...(proof?{body:JSON.stringify(proof)}:{}) });
+          if(value.verified){snapshot="";await refreshApprovals(request);return;}
           sessionStorage.setItem("mcphub.approval", record.id); location.assign(value.authorization_url);
         } catch (error) { message.textContent = error.message; }
       }));

@@ -1,6 +1,6 @@
 # New deployment: local management UI + SQLite; add services in the console.
 # 新部署：本地管理台 + SQLite；启动后在控制台逐个添加服务。
-# Required environment: MCPHUB_PUBLIC_URL, MCPHUB_AUTH_ISSUER, MCPHUB_CONFIG_KEY.
+# Required environment: MCPHUB_PUBLIC_URL, MCPHUB_CONFIG_KEY.
 # The key is Base64-encoded 32 bytes; generate once and retain with the database.
 # Remote access uses deploy/config.remote-sqlite.yaml or config.remote-postgres.yaml.
 
@@ -8,7 +8,7 @@ server:
   listen: "127.0.0.1:8080"
   public_url: ${MCPHUB_PUBLIC_URL}
 auth:
-  issuer: ${MCPHUB_AUTH_ISSUER}
+  mode: builtin
 admin:
   enabled: true
   mode: local
@@ -17,4 +17,9 @@ admin:
   # Relative to this YAML file, not the process working directory.
   database_path: ./data/mcphub.db
   encryption_key_env: MCPHUB_CONFIG_KEY
+client_authorization:
+  enabled: true
+  require_client_grant: true
+  client_id: mcphub-portal
+
 backends: []

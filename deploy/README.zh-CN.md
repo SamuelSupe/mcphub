@@ -1,50 +1,41 @@
 # 远程管理与数据库部署
 
+> 本指南用于 v2.3.0 全新部署。内建账号与 Agent 设备授权需要 v2.3.0，v2.2.2 不包含这些功能。
+
 [English](README.md) · [管理员手册](../docs/admin-guide.zh-CN.md) · [文档导航](../docs/README.zh-CN.md)
 
-本目录对应 MCPHub v2.2.2 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
+本目录对应 MCPHub v2.3.0 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
 
-本指南面向 v2.2.2 全新部署。默认配置启用本地管理台与 SQLite；团队远程管理使用本目录模板，增加 HTTPS 管理地址和管理员身份配置。启动管理台后逐个添加后端、分别配置凭证、测试连接，再发布工具。参见 [Vault](../docs/vault-accounts.zh-CN.md)和 [SSO](../docs/sso-and-user-management.zh-CN.md)可选配置。
+本指南面向 v2.3.0 全新部署。默认配置启用本地管理台与 SQLite；团队远程管理使用本目录模板，增加 HTTPS 管理地址和管理员身份配置。启动管理台后逐个添加后端、分别配置凭证、测试连接，再发布工具。参见 [Vault](../docs/vault-accounts.zh-CN.md)和 [SSO](../docs/sso-and-user-management.zh-CN.md)可选配置。
 
 已完成的 MCP POST 请求默认保留 30 天；可将 `admin.request_retention` 设置为 `24h`–`8760h`。管理员请求诊断页支持时间筛选和 NDJSON 导出，详见[请求历史与隐私边界](../docs/admin-guide.zh-CN.md#授权与请求诊断)。请保护数据库备份和导出文件：记录不含参数、结果和 Token，但查询索引仍含可读的身份与路由元数据。
 
 | 方式 | 用途 | 配置 |
 | --- | --- | --- |
-| 本地管理 + SQLite | 本机开发、单机运维；不需要管理员登录 | [config.local.yaml](config.local.yaml)、[启动步骤](../docs/admin-guide.zh-CN.md#本地管理-ui) |
+| 本地管理 + SQLite | 本机开发、单机运维；需要内建账号登录 | [config.local.yaml](config.local.yaml)、[启动步骤](../docs/admin-guide.zh-CN.md#本地管理-ui) |
 | 远程管理 + SQLite | 单机网关，经 HTTPS 访问管理 UI/API | [config.remote-sqlite.yaml](config.remote-sqlite.yaml) |
 | 远程管理 + PostgreSQL | 企业单实例部署，数据库独立运维 | [config.remote-postgres.yaml](config.remote-postgres.yaml)、[Compose](compose.postgres.yaml) |
 | 飞书 SSO + Vault + 个人 MCP 账号 | 联调起点，须完成真实租户验收 | [配置示例](config.feishu-vault.example.yaml) |
 
-v2.2.2 服务端包已包含这些模板，下载链接提供完全相同的文件。只运行二进制时，把选中的 YAML 保存为 `config.yaml`，后续使用 `--config config.yaml`，不要求完整源码。下面的 `deploy/...` 路径以完整仓库根目录为工作目录。
+v2.3.0 服务端包包含这些模板，下载链接提供完全相同的文件。只运行二进制时，把选中的 YAML 保存为 `config.yaml`，后续使用 `--config config.yaml`，不要求完整源码。下面的 `deploy/...` 路径以完整仓库根目录为工作目录。
 
 ## 身份服务配置
 
-外部身份服务模式使用已有 `auth.issuer`；Hub 身份桥接及本地用户权限参见 [SSO 指南](../docs/sso-and-user-management.zh-CN.md)。外部 OIDC 服务需配置：
-
-1. 浏览器管理员客户端：授权码 + PKCE S256；回调为 `https://admin.example.com/auth/callback`。默认是公开客户端。如需机密客户端，设置 `admin.client_secret_env`，支持 `client_secret_basic` 和 `client_secret_post`。
-2. CLI 管理员客户端：预先注册的公开客户端，无 client secret；回调为 `http://127.0.0.1:PORT/oauth/callback`。身份服务不接受随机端口时，注册固定端口并使用 `--callback-port`。
-3. 为指定管理员授予 `mcphub:admin`（可通过 `admin.required_scopes` 改名；多个 scope 必须全部满足）。权限取自 JWT 的 `scope`/`scp`，不读取 `roles`/`groups`，普通 MCP 用户不会自动获得管理员权限。
-4. 签发可验签的 JWT **access token**，`aud` 包含完整的 `admin.public_url`，如 `https://admin.example.com`，不能只配置 MCP 的 `/mcp` audience。还需有效的 `iss`、`sub`、`exp`。授权、换码和刷新请求均携带此 `resource`。
-5. 如需续期，启用刷新授权并声明 `offline_access`。浏览器令牌仅在服务端内存中保存；浏览器只持有 Secure/HttpOnly/SameSite cookie。会话最长 8 小时，服务重启后需重新登录。
-
-这是一种管理员权限，获得该权限后可以管理全部后端、工具组、接口和导入。尚不包含租户隔离、只读管理员、细粒度管理 RBAC、远程进程/主机管控或 IDP 用户管理。
+默认使用 MCPHub 内建账号；不需要部署外部 OIDC。启动后，在服务器本机加载同一份部署环境并运行 `mcphub init-admin --config config.yaml`。首次管理员没有默认密码，网页不提供匿名初始化。企业统一登录可在管理台“身份服务”中同时配置 LDAP 与 OIDC，见[身份服务指南](../docs/enterprise-login.zh-CN.md)。本地账号与企业身份分别按组授权；高级 YAML 配置见 [SSO 专题](../docs/sso-and-user-management.zh-CN.md)。密码、MFA 与本机恢复见[内建账号](../docs/builtin-accounts.zh-CN.md)。
 
 ## 环境变量清单
 
-先选一个示例，不需要把所有集成都配置一遍。远程 SQLite/PostgreSQL 示例仅打开管理控制台；员工的 `mcpbridge setup` 还需要按[管理员手册](../docs/admin-guide.zh-CN.md#启用客户端授权)启用 `client_authorization` 并注册门户/CLI 客户端。下表对应两个 `config.remote-*` 模板及其 Compose；飞书综合示例的所需变量见[文件头部](config.feishu-vault.example.yaml)。
+按选择的模板准备以下变量。内建模式不设置 `MCPHUB_AUTH_ISSUER` 或管理员身份服务密钥。
 
-| 适用范围 | 变量 | 填写内容 |
+| 模板 | 变量 | 用途 |
 | --- | --- | --- |
-| 两个远程模板 | `MCPHUB_PUBLIC_URL` | 完整 MCP HTTPS URL，例如 `https://hub.example.com/mcp` |
-| 两个远程模板 | `MCPHUB_AUTH_ISSUER` | 外部 OIDC issuer；使用 Hub SSO 时按专题改为本网关 `/sso` |
-| 两个远程模板 | `MCPHUB_ADMIN_PUBLIC_URL` | 管理 HTTPS origin，例如 `https://admin.example.com`，不带尾部 `/` |
-| 两个远程模板 | `MCPHUB_ADMIN_CLIENT_ID` | 已注册的管理员浏览器客户端 ID，不是 CLI/用户门户 ID |
-| 两个远程模板 | `MCPHUB_CONFIG_KEY` | 固定的 Base64 编码 32 字节密钥，重启保留原值 |
-| 直接连接 PostgreSQL | `MCPHUB_DATABASE_URL` | 可连接的 DSN；外部数据库使用 TLS，密码需按 URL 编码 |
-| Compose 内置 PostgreSQL | `MCPHUB_POSTGRES_PASSWORD` | URL-safe 密码；Compose 自动生成容器内 `MCPHUB_DATABASE_URL` |
-| 宿主机 Caddy | `MCPHUB_HUB_HOST`、`MCPHUB_ADMIN_HOST` | 仅域名，分别注入 **Caddy 进程**；不要填写 URL 或 `/mcp` |
+| 默认、本地和远程 | `MCPHUB_PUBLIC_URL` | 完整 MCP HTTPS URL；签发者自动推导为同 origin 的 `/sso` |
+| 全部托管模板 | `MCPHUB_CONFIG_KEY` | 固定 Base64 32 字节配置密钥；重启和备份均保管相同值 |
+| 远程模板 | `MCPHUB_ADMIN_PUBLIC_URL` | 管理台 HTTPS origin，不包含路径 |
+| PostgreSQL 主机部署 | `MCPHUB_DATABASE_URL` | 数据库 DSN；需要生产 TLS 与独立数据库凭证 |
+| Compose PostgreSQL | `MCPHUB_POSTGRES_PASSWORD` | URL-safe 数据库密码，Compose 组成容器内 DSN |
 
-MCPHub YAML 的 `${NAME}`、Compose 的 `${NAME:?message}`、Caddy 的 `{$NAME}` 是三种不同语法。MCPHub 不加载 `.env`；直接运行二进制时由服务管理器/当前 shell 注入变量。Compose 可用 `--env-file /secure/mcphub.env` 显式选择变量文件，示例 `environment` 再将指定值传入容器；Docker 的 `--env-file` 则直接注入容器环境。环境文件中的敏感值按所用工具的语法填写，限制文件权限并排除出版本控制。字段展开范围及 `*_env` 名称写法见[配置参考](../docs/configuration.zh-CN.md#环境变量与-secret)。
+企业身份、Vault 或纯 YAML 模板的变量只在选择这些高级选项时准备。用户与后端凭证在 UI 中分别配置，不设置固定全局后端密钥。
 
 ## 启动方式
 
@@ -53,8 +44,6 @@ MCPHub YAML 的 `${NAME}`、Compose 的 `${NAME:?message}`、Caddy 的 `{$NAME}`
 ```bash
 export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
 export MCPHUB_ADMIN_PUBLIC_URL=https://admin.example.com
-export MCPHUB_ADMIN_CLIENT_ID=mcphub-admin-web
-export MCPHUB_AUTH_ISSUER=https://idp.example.com
 umask 077
 mkdir -p "$HOME/.config/mcphub"
 test -f "$HOME/.config/mcphub/config.key" || openssl rand -base64 32 > "$HOME/.config/mcphub/config.key"
@@ -92,7 +81,7 @@ git clone https://github.com/SamuelSupe/mcphub.git
 cd mcphub
 ```
 
-然后在此目录设置上面的 5 个变量和数据库密码，运行：
+然后在此目录设置所选模板需要的变量和数据库密码，运行：
 
 ```bash
 # 为本示例使用 URL-safe 密码，例如 openssl rand -hex 24 的结果。
@@ -107,7 +96,9 @@ Compose 将数据保留在 `postgres-data` 卷中，不发布数据库端口，�
 
 ### 员工接入的前置条件
 
-远程模板的首次启动只提供管理平台，尚未启用用户接入向导。按[客户端授权步骤](../docs/admin-guide.zh-CN.md#启用客户端授权)将 `client_authorization` 片段加入完整配置并重启，注册门户和员工 CLI 客户端，再通过管理端添加服务、显式发布只读工具并给用户相应 Scope。门户位于 MCP 域名的 `/client-auth/`，HTTPS 代理必须转发整个 MCP 域名，不能只转发 `/mcp`。完成这些步骤后，再向员工交付 `setup` 命令。
+远程模板已经启用个人授权中心，并自动注册门户和 MCPBridge 客户端。先在本机初始化管理员，在管理台创建用户、添加服务、显式发布只读工具并配置相应 Scope 和服务授权。需要严格客户端授权时，再按[客户端授权步骤](../docs/admin-guide.zh-CN.md#启用客户端授权)设置 Grant 要求。门户位于 MCP 域名的 `/client-auth/`，HTTPS 代理必须转发整个 MCP 域名，不能只转发 `/mcp`。完成这些步骤后，再向员工交付 `setup` 命令。
+
+在服务器本机的另一个终端加载同一份环境，运行 `mcphub init-admin --config config.yaml` 后登录。Compose 部署在容器中执行 `docker compose -f deploy/compose.postgres.yaml exec mcphub mcphub init-admin --config /etc/mcphub/config.yaml`；命令交互式读取密码。
 
 ## HTTPS 入口
 
@@ -124,43 +115,43 @@ Compose 将数据保留在 `postgres-data` 卷中，不发布数据库端口，�
 
 ## 浏览器与 CLI 用法
 
-浏览器打开 `https://admin.example.com`，点击“使用身份服务登录”。登录后可新增/编辑/启停后端、管理 HTTP 工具组和 OpenAPI，并查看包含 OIDC subject 的变更记录。“退出登录”结束当前 MCPHub 浏览器会话，不会退出身份服务的 SSO 会话。
+打开管理员 HTTPS 地址，使用本机初始化的管理员账号登录。进入「用户与组」创建用户和组，在组上分配角色和工具权限，再把用户加入组；添加后端后逐个配置地址与认证凭证，测试连接，再发布工具。
 
-CLI 使用独立管理员 profile，避免覆盖 MCP 客户端凭证：
+用户连接器使用默认已登记的 `mcpbridge`；远程管理 CLI 使用默认已登记的 `mcpbridge-admin`：
 
 ```bash
-mcpbridge login --admin --server https://admin.example.com \
-  --client-id mcphub-admin-cli --profile ops --callback-port 8400
+mcpbridge login --admin --server https://admin.example.com --client-id mcpbridge-admin --profile ops
 mcpbridge admin --profile ops get /overview
-mcpbridge admin --profile ops get /backends
-mcpbridge admin --profile ops get /tool-groups
-mcpbridge admin --profile ops get '/events?limit=50'
 ```
 
-`admin` 是管理 API 的 JSON 客户端，路径相对于 `/api/v1`，支持 `get/post/put/delete`，全部 flags 放在方法之前；后端、HTTP tools、导入/刷新均使用[配置参考中的 API 路径](../docs/configuration.zh-CN.md#工具组与托管-http-api-tool)。JSON body 使用 `--file FILE`（`-` 表示 stdin）；输出 JSON 到 stdout，ETag 到 stderr，不导出 Token。请求上限 6 MiB，与 OpenAPI 上传一致。
-
-例如创建一个停用的后端，将以下内容保存为 `backend.json`：
-
-```json
-{"id":"example","url":"https://mcp.example.com/mcp","enabled":false,"required":false,"required_scopes":["mcp:example.read"],"headers":[]}
-```
-
-```bash
-mcpbridge admin --profile ops --file backend.json post /backends
-mcpbridge admin --profile ops get /backends/example
-# 把 backend.json 的 enabled 改为 true，使用刚读取的 ETag（此处仅示例）
-mcpbridge admin --profile ops --file backend.json --if-match '"1"' put /backends/example
-mcpbridge admin --profile ops post /backends/example/probe
-mcpbridge status --profile ops
-mcpbridge logout --profile ops
-```
-
-PUT 使用完整输入对象；保留 Header 时提供名称并省略 `value`，保留 OAuth secret 时省略 `client_secret`。不要直接将包含 runtime/revision/脱敏标记的 GET 响应作为 PUT 输入。失效 ETag 返回 409，不覆盖他人的变更。网络失败不重放写入；401 最多刷新并重试一次。普通 MCP 客户端使用独立用户 profile；按[用户手册](../docs/user-guide.zh-CN.md)生成配置，不能使用管理员 profile。
+管理 API 的 Bearer Token 必须具有管理 audience 和管理员 scope；普通 MCP Token 不提供管理权限。浏览器写请求还要求正确 Origin 和会话 CSRF。密码重置、停用和 MFA 绑定会撤销相关会话。企业账号在企业身份服务管理密码；默认本地管理员保留用于恢复。
 
 ## 数据和权限边界
 
-两种数据库都以事务保存配置和审计，Header/OAuth secret 使用相同 AES-256-GCM 加密；SQLite 文件保持 0600。审计 actor 为远程管理员 JWT `sub`；本地操作为 `local`，后台刷新为 `system`。审计是配置变更历史，不是不可篡改的合规日志或所有 HTTP 请求日志。
+两种数据库都以事务保存配置和审计，Header/OAuth secret 使用相同 AES-256-GCM 加密；SQLite 文件保持 0600。审计 actor 为已认证用户的内部 subject；无身份的高级本地管理记录为 `local`，后台刷新为 `system`。审计是配置变更历史，不是不可篡改的合规日志或所有 HTTP 请求日志。
 
 备份数据库并单独保管 `MCPHUB_CONFIG_KEY`。新建部署时选择数据库驱动；工具组和 OpenAPI 通过 UI/API 管理。网关保持单活。远程 MCP endpoint 支持[个人上游账号](../docs/vault-accounts.zh-CN.md)。外部身份服务签发的 JWT 撤销依赖供应商；Hub 自管 SSO 还会校验当前本地会话与用户权限。退出 Hub 不等于撤销上游业务账号或身份服务的全局会话。
 
 MCP backend 和 HTTP 工具组可在管理 UI 的“限流策略”中设置 `requests_per_second`、`burst`、`max_concurrent`，也可通过管理 API 的 `rate_limit` 对象保存。默认全为 0、不限流；所有用户共享 endpoint 额度。策略保存在所选数据库，实时计数在当前进程内。详见[限流语义](../docs/configuration.zh-CN.md#endpoint-限流)。
+
+## Agent 链接授权
+
+内建签发者部署可将用户登录与客户端同意合并在一个网页中。本机、SSH 或容器上的 Agent 都可以使用，不需要浏览器回调到 Agent 机器。使用同一系统用户和同一 `MCPHUB_HOME` 私有目录执行：
+
+```bash
+mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "项目助手" --json
+mcpbridge pair finish --request pr_example --wait --json
+mcpbridge connect --profile work --client ci_example
+```
+
+替换实际返回的请求与客户端 ID。向用户展示 `verification_uri_complete` 和 `user_code`；用户核对配对码后，以本地账号、LDAP 或 OIDC 登录，选择服务、工具、资源限制和期限，再确认。工具默认不勾选，写能力默认关闭。无 `--wait` 时只检查一次；`pending_user` 仍需用户确认，`ready` 表示私有凭证保存与 MCP 连接检查完成。默认申请最长 1 小时，受网关上限约束；申请 5 分钟到期，轮询初始间隔 5 秒。`--ttl` 接受秒数（至少 60），`--endpoint`、重复 `--tool` / `--scope` 可收窄请求。
+
+Agent 没有命令执行能力时，将 stdio 连接参数设为：
+
+```json
+["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "项目助手", "--interactive-auth"]
+```
+
+会话立即初始化，仅开放 `mcpbridge_auth_start` 与 `mcpbridge_auth_status`。前者复用同一个未过期申请；后者可能领取、保存凭证并检查连接，按结果的 `interval` 调用。ready 后刷新工具列表；不支持 `notifications/tools/list_changed` 时改用返回的 `connect --profile … --client …` 重新连接。失败的业务调用不会排队或自动重试，撤销或到期后需明确重新授权。
+
+每次配对只授权一个服务及工具能力；提示词、资源 URI 或订阅使用原有向导。权限受当前组和已确认范围共同约束，新工具不会自动扩权。所有私有凭证留在 MCPBridge，禁止复制 Token 给 Agent。失败不会覆盖原有可用 profile；换用户或服务器需另建 profile。纯外部签发者继续使用 PKCE 登录与 setup。

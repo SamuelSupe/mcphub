@@ -1,5 +1,5 @@
 <h2 id="layers">一次调用需要哪些权限</h2>
-<table><thead><tr><th>范围</th><th>决定什么</th><th>管理者</th></tr></thead><tbody><tr><td>身份与用户状态</td><td>能否访问 MCPHub。</td><td>公司身份系统和管理员。</td></tr><tr><td>服务与工具策略</td><td>已发布工具及可申请范围。</td><td>MCPHub 管理员。</td></tr><tr><td>客户端授权</td><td>入口的工具、Scope、资源条件、有效期、写申请资格。</td><td>你确认，受管理员上限约束。</td></tr><tr><td>个人服务账号</td><td>上游身份和业务权限。</td><td>你与业务系统。</td></tr><tr><td>具体写审批</td><td>本次目标与完整参数能否执行。</td><td>有权审批的人。</td></tr></tbody></table>
+<table><thead><tr><th>范围</th><th>决定什么</th><th>管理者</th></tr></thead><tbody><tr><td>身份与用户状态</td><td>能否访问 MCPHub。</td><td>公司身份系统和管理员。</td></tr><tr><td>所属组</td><td>从有效组继承角色、Scope、工具和业务资源权限；多组取并集。</td><td>MCPHub 管理员；企业来源成员关系由身份源维护。</td></tr><tr><td>服务与工具策略</td><td>已发布工具及可申请范围。</td><td>MCPHub 管理员。</td></tr><tr><td>客户端授权</td><td>入口的工具、Scope、资源条件、有效期、写申请资格。</td><td>你确认，受管理员上限约束。</td></tr><tr><td>个人服务账号</td><td>上游身份和业务权限。</td><td>你与业务系统。</td></tr><tr><td>具体写审批</td><td>本次目标与完整参数能否执行。</td><td>有权审批的人。</td></tr></tbody></table>
 <p>拥有一层不能替代其他层。登录续期不会延长客户端授权；客户端授权不能绕过上游业务权限。</p>
 <h2 id="scopes">Scope 与工具列表</h2>
 <p>Scope 是服务要求的权限标识，工具允许列表进一步限定可调用工具。手动指定时使用管理员提供的名称，可重复 --scope。</p>

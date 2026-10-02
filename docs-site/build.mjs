@@ -31,7 +31,7 @@ rmSync(output, { recursive: true, force: true });
 for (const page of pages) mkdirSync(path.dirname(path.join(output, page.file)), { recursive: true });
 cpSync(path.join(root, 'assets'), path.join(output, 'assets'), { recursive: true });
 for (const file of [
-  'config.example.yaml', 'deploy/config.local.yaml', 'deploy/config.remote-sqlite.yaml',
+  'config.example.yaml', 'deploy/compose.postgres.yaml', 'deploy/config.local.yaml', 'deploy/config.remote-sqlite.yaml',
   'deploy/config.remote-postgres.yaml', 'deploy/config.feishu-vault.example.yaml',
   'deploy/config.yaml-only.example.yaml',
 ]) {

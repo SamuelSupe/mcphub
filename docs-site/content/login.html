@@ -1,4 +1,7 @@
+<p>远程或无浏览器 Agent 优先使用<a href="device-auth.html">Agent 链接授权</a>：在一个网页中登录并选择权限，或使用 --interactive-auth 提供认证工具。以下原有向导仍可使用。</p>
+<p>企业登录可使用 OIDC 或 LDAP。LDAP 用户在授权页的「账号来源」选择 LDAP；首次登录后联系管理员启用账号并分配组权限。</p>
 <h2 id="company-login">用公司账号登录</h2>
+<p>默认部署使用管理员创建的 MCPHub 账号和密码；已启用 MFA 时还需动态验证码。企业登录为可选入口。本地与企业身份分别管理，同名也不共享组权限。个人门户的「我的账号」可修改本地密码和绑定 MFA，修改密码后已有会话退出；忘记密码时联系管理员重置。</p>
 <p>首次使用建议直接运行 <a href="quickstart.html">接入向导</a>，它会在需要时打开登录页。只想先登录或恢复已保存的 profile 时：</p>
 <pre><code>mcpbridge login --server https://hub.example.com/mcp --client-id mcpbridge --profile work
 mcpbridge status --profile work</code></pre>
@@ -7,7 +10,7 @@ mcpbridge status --profile work</code></pre>
 <p>在<strong>运行命令的同一台电脑</strong>打开终端给出的授权链接。登录最多等待 5 分钟接收本机回调，超时后重新执行。管理员要求固定回调端口时，追加 <code>--callback-port 8765</code>，使用实际指定的端口。</p>
 <p>SSH 终端的回调可能指向另一台机器。应在 AI 客户端实际执行连接器的环境登录，详见 <a href="profiles.html">多服务与多环境</a>。</p>
 <h2 id="pending">提示账号待授权或停用</h2>
-<p>「身份已记录，账号尚未获准访问或已被停用」表示公司身份已识别，但 MCPHub 访问尚未开通或已被移除。请管理员启用用户并分配服务、Scope 和工具权限，然后重新登录。</p>
+<p>「身份已记录，账号尚未获准访问或已被停用」表示公司身份已识别，但 MCPHub 访问尚未开通或已被移除。请管理员启用用户并加入具备服务、Scope 和工具权限的组，然后重新登录。</p>
 <p>登录失败或取消会保留原有登录；成功后重启该 profile 的已有 MCP 连接。</p>
 <h2 id="portal">打开个人授权中心</h2>
 <p>在公司 MCPHub 域名下打开 <code>https://hub.example.com/client-auth/</code>，使用公司身份登录，页面标题为「管理账号与客户端授权」。</p>

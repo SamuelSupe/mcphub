@@ -35,7 +35,7 @@
   </svg>
   <a class="skip-link" href="#main-content">跳转到内容</a>
   <section id="auth-panel" class="auth-panel" aria-labelledby="auth-title">
-    <div class="auth-card"><div class="auth-brand">MCPHub<button class="language-button" id="auth-language-toggle" type="button" aria-label="Switch to English">EN</button></div><h1 id="auth-title">管理员登录</h1><p id="auth-message" role="status">正在检查登录状态…</p><div class="auth-actions"><a id="admin-login" class="primary" href="/auth/login" hidden>使用身份服务登录</a><a id="approver-login" class="secondary" href="/auth/login?role=approver">以审批人身份登录</a><a class="secondary" href="/auth/login?role=security">以安全管理员身份登录</a><button id="auth-retry" class="secondary" type="button">重试</button></div><p class="auth-boundary">管理入口仅面向获授权的管理员与审批员。</p></div>
+    <div class="auth-card"><div class="auth-brand">MCPHub<button class="language-button" id="auth-language-toggle" type="button" aria-label="Switch to English">EN</button></div><h1 id="auth-title">管理员登录</h1><p id="auth-message" role="status">正在检查登录状态…</p><div id="local-login" hidden></div><div class="auth-actions"><a id="admin-login" class="secondary" href="/auth/login" hidden>企业登录（OIDC / LDAP）</a><details class="auth-role-options"><summary>其他管理角色</summary><a id="approver-login" class="secondary" href="/auth/login?role=approver">以审批人身份登录</a><a class="secondary" href="/auth/login?role=security">以安全管理员身份登录</a></details><button id="auth-retry" class="secondary" type="button" hidden>重试</button></div><p class="auth-boundary">管理入口仅面向获授权的管理员与审批员。</p></div>
   </section>
   <div class="app-shell" hidden>
     <aside class="sidebar" id="sidebar">
@@ -52,7 +52,8 @@
         <a class="nav-item" href="#tool-groups"><svg class="icon"><use href="#i-braces"/></svg><span>HTTP 工具组</span><span class="nav-count" id="nav-group-count">—</span></a>
         </div><div class="nav-group"><p class="nav-section-label">访问控制</p>
         <a class="nav-item" href="#tool-policies"><svg class="icon"><use href="#i-shield"/></svg><span>工具权限</span></a>
-        <a class="nav-item" href="#identities"><svg class="icon"><use href="#i-users"/></svg><span>用户与组织</span></a>
+        <a class="nav-item" href="#identities"><svg class="icon"><use href="#i-users"/></svg><span>用户与组</span></a>
+        <a class="nav-item" href="#identity-providers"><svg class="icon"><use href="#i-network"/></svg><span>身份服务</span></a>
         <a class="nav-item" href="#client-grants"><svg class="icon"><use href="#i-monitor"/></svg><span>客户端授权</span></a>
         </div><div class="nav-group"><p class="nav-section-label">治理与审计</p>
         <a class="nav-item" href="#approvals"><svg class="icon"><use href="#i-checklist"/></svg><span>审批中心</span></a>
@@ -65,10 +66,10 @@
     <main id="main-content" tabindex="-1">
       <header class="topbar">
         <div class="topbar-leading"><button class="icon-button" id="open-navigation" type="button" aria-label="打开导航" aria-controls="navigation-dialog" aria-expanded="false"><svg class="icon"><use href="#i-menu"/></svg></button><div class="breadcrumb"><span id="breadcrumb-group">总览</span><span aria-hidden="true">/</span><strong id="breadcrumb-page">概览</strong></div></div>
-        <div class="topbar-actions"><span id="admin-identity" class="admin-identity" hidden><span id="admin-subject"></span><button class="text-button" id="admin-logout" type="button">退出登录</button></span><span class="sync-status" id="sync-status" role="status">正在读取配置…</span><button class="language-button" id="language-toggle" type="button" aria-label="Switch to English">EN</button></div>
+        <div class="topbar-actions"><span id="admin-identity" class="admin-identity" hidden><span id="admin-subject"></span><button class="text-button" id="my-account" type="button" hidden>我的账号</button><button class="text-button" id="admin-logout" type="button">退出登录</button></span><span class="sync-status" id="sync-status" role="status">正在读取配置…</span><button class="language-button" id="language-toggle" type="button" aria-label="Switch to English">EN</button></div>
       </header>
       <div class="content">
-        <div class="page-heading"><div><h1 id="page-title" tabindex="-1">概览</h1><p id="page-description">集中管理服务接入、访问权限与调用治理。</p></div><div class="page-actions"><button class="secondary" id="refresh-button" type="button"><svg class="icon"><use href="#i-refresh"/></svg><span>刷新</span></button><button class="primary" id="register-button" type="button" hidden><svg class="icon"><use href="#i-plus"/></svg><span>添加 MCP 后端</span></button><button class="primary" id="new-group-button" type="button" hidden><svg class="icon"><use href="#i-plus"/></svg><span>创建工具组</span></button></div></div>
+        <div class="page-heading"><div><h1 id="page-title" tabindex="-1">概览</h1><p id="page-description">集中管理服务接入、访问权限与调用治理。</p></div><div class="page-actions"><button class="secondary" id="refresh-button" type="button"><svg class="icon"><use href="#i-refresh"/></svg><span>刷新</span></button><button class="primary" id="register-button" type="button" hidden><svg class="icon"><use href="#i-plus"/></svg><span>添加 MCP 后端</span></button><button class="primary" id="new-group-button" type="button" hidden><svg class="icon"><use href="#i-plus"/></svg><span>创建 HTTP 工具组</span></button></div></div>
         <div class="page-error" id="page-error" role="alert" hidden><svg class="icon"><use href="#i-info"/></svg><span id="page-error-message"></span><button class="text-button" id="retry-button" type="button">重试</button></div>
 
         <section data-page="overview" aria-label="概览">
@@ -78,6 +79,14 @@
             <a href="#tool-groups"><svg class="icon"><use href="#i-braces"/></svg><span>HTTP 工具组</span><strong id="metric-groups">—</strong></a>
             <a href="#tool-groups"><svg class="icon"><use href="#i-grid"/></svg><span>可用 HTTP 工具</span><strong id="metric-tools">—</strong></a>
           </div>
+          <section class="overview-panel setup-steps">
+            <h2>配置顺序</h2>
+            <ol>
+              <li><a href="#backends">1. 接入服务并测试连接</a><p>已有 MCP 服务添加后端；REST API 创建 HTTP 工具组。</p></li>
+              <li><a href="#tool-policies">2. 发布工具并设置读写规则</a><p>只发布需要的工具，未分类工具需要审批。</p></li>
+              <li><a href="#identities">3. 创建用户组并分配权限</a><p>在组上授权工具与 Scope，再添加用户。</p></li>
+            </ol>
+          </section>
           <div class="overview-grid">
             <section class="overview-panel services-panel" aria-labelledby="services-title">
               <div class="section-inline"><h2 id="services-title">服务状态</h2><a href="#backends">管理服务<svg class="icon"><use href="#i-arrow"/></svg></a></div>
@@ -88,12 +97,12 @@
             <section class="overview-panel governance-panel" aria-labelledby="governance-title">
               <h2 id="governance-title">访问与治理</h2>
               <a class="governance-link" href="#tool-policies"><svg class="icon"><use href="#i-shield"/></svg><span><strong>工具权限</strong><small>明确发布范围与读写策略</small></span><svg class="icon arrow"><use href="#i-chevron"/></svg></a>
-              <a class="governance-link" href="#identities"><svg class="icon"><use href="#i-users"/></svg><span><strong>用户与组织</strong><small>管理角色与业务资源授权</small></span><svg class="icon arrow"><use href="#i-chevron"/></svg></a>
+              <a class="governance-link" href="#identities"><svg class="icon"><use href="#i-users"/></svg><span><strong>用户与组</strong><small>管理角色与业务资源授权</small></span><svg class="icon arrow"><use href="#i-chevron"/></svg></a>
               <a class="governance-link" href="#client-grants"><svg class="icon"><use href="#i-monitor"/></svg><span><strong>客户端授权</strong><small>查看并撤销客户端授权</small></span><svg class="icon arrow"><use href="#i-chevron"/></svg></a>
             </section>
           </div>
           <section class="overview-panel recent-panel"><div class="section-inline"><h2>最近变更</h2><a href="#activity">查看全部<svg class="icon"><use href="#i-arrow"/></svg></a></div><ol class="event-list compact-events" id="recent-event-list"><li class="event-empty">正在读取配置…</li></ol></section>
-          <section class="overview-panel onboarding-band"><div><h2>接入新的服务</h2><p>添加 MCP 后端或创建工具组，开始统一管理。</p></div><div class="page-actions"><button class="primary" data-create="backend" type="button"><svg class="icon"><use href="#i-plus"/></svg><span>添加 MCP 后端</span></button><button class="secondary" data-create="group" type="button">创建工具组</button></div></section>
+          <section class="overview-panel onboarding-band"><div><h2>接入新的服务</h2><p>添加 MCP 后端或创建工具组，开始统一管理。</p></div><div class="page-actions"><button class="primary" data-create="backend" type="button"><svg class="icon"><use href="#i-plus"/></svg><span>添加 MCP 后端</span></button><button class="secondary" data-create="group" type="button">创建 HTTP 工具组</button></div></section>
         </section>
 
         <section data-page="backends" aria-label="MCP 后端" hidden>
@@ -106,13 +115,13 @@
         <section data-page="tool-groups" aria-label="HTTP 工具组" hidden>
           <div class="context-note"><svg class="icon"><use href="#i-info"/></svg><p>一个工具组共享服务地址、上游凭证和访问权限。创建后可添加接口或导入 OpenAPI。</p></div>
           <div class="list-toolbar"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="group-search" type="search" placeholder="搜索组名或 API 地址" aria-label="搜索工具组"></label><span class="list-count" id="group-count"></span></div>
-          <div class="list-panel"><div class="list-columns" aria-hidden="true"><span>工具组 / API 地址</span><span>工具 / 上游认证</span><span>访问权限</span><span>状态 / 操作</span></div><div class="backend-list" id="tool-group-list" aria-busy="true"></div><div class="empty-state" id="tool-group-empty" hidden><span class="empty-symbol"><svg class="icon"><use href="#i-braces"/></svg></span><h2>把已有 API 变成 AI 工具</h2><p>先创建工具组，再手工添加接口或从 OpenAPI 文档导入。</p><button class="primary" id="empty-group-button" type="button">创建工具组</button></div><div class="empty-state" id="group-no-results" hidden><h3>没有找到匹配的工具组</h3><p>试试其他关键词，或清除筛选条件。</p><button class="secondary" id="clear-group-search" type="button">清除筛选</button></div></div>
+          <div class="list-panel"><div class="list-columns" aria-hidden="true"><span>工具组 / API 地址</span><span>工具 / 上游认证</span><span>访问权限</span><span>状态 / 操作</span></div><div class="backend-list" id="tool-group-list" aria-busy="true"></div><div class="empty-state" id="tool-group-empty" hidden><span class="empty-symbol"><svg class="icon"><use href="#i-braces"/></svg></span><h2>把已有 API 变成 AI 工具</h2><p>先创建工具组，再手工添加接口或从 OpenAPI 文档导入。</p><button class="primary" id="empty-group-button" type="button">创建 HTTP 工具组</button></div><div class="empty-state" id="group-no-results" hidden><h3>没有找到匹配的工具组</h3><p>试试其他关键词，或清除筛选条件。</p><button class="secondary" id="clear-group-search" type="button">清除筛选</button></div></div>
         </section>
 
         <section data-page="tool-policies" aria-label="工具权限" hidden>
           <p class="context-note">先确认发布范围，再标记读写类型。未分类工具需要审批；所有匹配规则共同生效，写规则优先。</p>
           <div class="policy-toolbar">
-            <label class="field"><span>目标服务</span><select id="policy-endpoint"><option value="">选择 endpoint</option></select></label>
+            <label class="field"><span>目标服务</span><select id="policy-endpoint"><option value="">选择目标服务</option></select></label>
             <label class="field"><span>搜索工具</span><input id="policy-search" type="search" placeholder="原始工具名或描述"></label>
             <label class="field"><span>筛选</span><select id="policy-filter"><option value="all">全部工具</option><option value="unknown">未分类</option><option value="unpublished">未发布</option><option value="read">只读</option><option value="write">写入</option></select></label>
             <button class="secondary" id="policy-reload" type="button">刷新工具</button>
@@ -123,16 +132,64 @@
           <details class="policy-help"><summary>客户端接入与排障</summary><p>登录 → 登记客户端入口 → 浏览器确认范围 → 将生成的 MCP 配置添加到客户端。</p><pre>mcpbridge doctor --profile work --client ci_example</pre><p>doctor 检查凭证、客户端授权、Broker 和 MCP 目录，不调用工具、不自动打开浏览器。省略 --client 可检查普通连接。</p></details>
         </section>
 
-        <section data-page="identities" aria-label="用户与组织" hidden>
-          <p class="field-note">外部 SSO 只确认身份。用户首次登录默认待授权；部门和用户组权限与用户直接权限合并，写操作仍需审批。</p>
-          <div class="policy-toolbar">
-            <label class="field">搜索用户或组织<input id="identity-search" type="search"></label>
+        <section data-page="identities" aria-label="用户与组" hidden>
+          <p class="field-note">先创建组并分配角色、工具和 Scope，再将用户加入组。内建账号与企业身份的组分别管理；写操作仍需审批。</p>
+          <div class="identity-create-actions"><button id="create-local-user" class="primary" type="button" hidden>创建用户</button><button id="create-group" class="secondary" type="button" hidden>创建组</button></div><div class="policy-toolbar">
+            <label class="field">搜索用户或组<input id="identity-search" type="search"></label>
             <label class="field">类型<select id="identity-kind"><option value="">全部</option><option value="user">用户</option><option value="group">用户组</option><option value="department">部门</option></select></label>
           </div>
           <p id="identity-feedback" role="status"></p>
           <datalist id="identity-endpoints"></datalist>
           <div id="identity-list" class="identity-list"></div>
           <div class="pagination"><button id="identity-prev" class="secondary" type="button" disabled>上一页</button><button id="identity-next" class="secondary" type="button" disabled>下一页</button></div>
+        </section>
+
+        <section data-page="identity-providers" aria-label="身份服务" hidden>
+          <p class="context-note">LDAP 与 OIDC 可同时启用。本地管理员始终保留；企业用户首次登录后，在「用户与组」启用账号并为组分配权限。</p>
+          <p id="identity-provider-feedback" role="status"></p>
+          <form id="identity-provider-form" class="identity-provider-form">
+            <section class="overview-panel">
+              <div class="section-inline"><h2>OIDC</h2><label class="checkbox-field"><input name="oidc_enabled" type="checkbox">启用 OIDC</label></div>
+              <p class="field-note">在身份服务中注册以下回调地址。连接测试检查发现文档与签名密钥；客户端密钥须通过实际登录验证。</p>
+              <label class="field">回调地址<input id="identity-provider-callback" readonly></label>
+              <div class="form-grid">
+                <label class="field">Issuer URL<input name="oidc_issuer" type="url" placeholder="https://id.example.com"></label>
+                <label class="field">Client ID<input name="oidc_client_id" maxlength="256"></label>
+                <label class="field">Client Secret<input name="oidc_client_secret" type="password" autocomplete="new-password" maxlength="4096"></label>
+                <label class="field">客户端认证方式<select name="oidc_token_auth_method"><option value="client_secret_post">client_secret_post</option><option value="client_secret_basic">client_secret_basic</option></select></label>
+              </div><details class="advanced"><summary>身份映射与租户限制</summary><div class="form-grid">
+                <label class="field">请求 Scopes<input name="oidc_scopes" placeholder="openid profile email"></label>
+                <label class="field">显示名称 Claim<input name="oidc_name_claim" placeholder="name"></label>
+                <label class="field">组 Claim<input name="oidc_groups_claim" placeholder="groups"></label>
+                <label class="field">部门 Claim<input name="oidc_departments_claim"></label>
+                <label class="field">租户 Claim（可选）<input name="oidc_tenant_claim"></label>
+                <label class="field">允许的租户值<input name="oidc_tenant_value"></label>
+              </div></details>
+              <p class="field-note">Subject 固定使用 sub。OIDC、本地账号与 LDAP 的组分别授权，不按名称合并。</p>
+              <button class="secondary" type="button" data-probe-identity="oidc">测试 OIDC 连接</button>
+            </section>
+            <section class="overview-panel">
+              <div class="section-inline"><h2>LDAP</h2><label class="checkbox-field"><input name="ldap_enabled" type="checkbox">启用 LDAP</label></div>
+              <p class="field-note">使用 LDAPS，或 ldap:// 的 StartTLS。始终验证证书；服务账号需有用户及组搜索权限。空密码不会用于登录。</p>
+              <div class="form-grid">
+                <label class="field">LDAP URL<input name="ldap_url" placeholder="ldaps://ldap.example.com:636"></label>
+                <label class="field">服务账号 Bind DN<input name="ldap_bind_dn" placeholder="cn=reader,dc=example,dc=com"></label>
+                <label class="field">服务账号密码<input name="ldap_bind_password" type="password" autocomplete="new-password" maxlength="4096"></label>
+                <label class="field">用户搜索 Base DN<input name="ldap_user_base_dn" placeholder="ou=people,dc=example,dc=com"></label>
+                <label class="field">用户搜索过滤器<input name="ldap_user_filter" placeholder="(&amp;(objectClass=person)(uid={{username}}))"></label>
+                <label class="field">用户稳定 ID 属性<input name="ldap_user_id_attribute" placeholder="entryUUID / objectGUID"></label>
+                <label class="field">用户显示名称属性<input name="ldap_name_attribute" placeholder="cn"></label>
+                <label class="field">组搜索 Base DN（可选）<input name="ldap_group_base_dn" placeholder="ou=groups,dc=example,dc=com"></label>
+                <label class="field">组搜索过滤器<input name="ldap_group_filter" placeholder="(&amp;(objectClass=groupOfNames)(member={{dn}}))"></label>
+                <label class="field">组稳定 ID 属性<input name="ldap_group_id_attribute" placeholder="entryUUID / objectGUID"></label>
+                <label class="field">组显示名称属性<input name="ldap_group_name_attribute" placeholder="cn"></label>
+              </div>
+              <label class="field">自定义 CA 证书（PEM，可选）<textarea name="ldap_root_ca_pem" rows="5" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
+              <p class="field-note">用户过滤器使用 {{username}}；组过滤器使用 {{dn}} 或 {{username}}。输入会转义。组关系在登录时刷新，不支持嵌套组；LDAP 密码登录不等于 MFA。</p>
+              <button class="secondary" type="button" data-probe-identity="ldap">测试 LDAP 连接</button>
+            </section>
+            <div class="provider-save-bar"><p class="field-note">密钥加密保存，留空保留原值。保存立即生效，并撤销发生变更的身份服务会话。</p><button class="primary" id="save-identity-providers" type="submit">保存身份服务</button></div>
+          </form>
         </section>
 
         <section data-page="client-grants" aria-label="客户端授权" hidden>
@@ -204,14 +261,14 @@
         <section class="form-section">
           <div class="section-heading"><span>01</span><div><h3>连接信息</h3><p>填写服务地址，并设置工具名称前缀。</p></div></div>
           <div class="field-grid">
-            <label class="field full"><span>后端标识</span><input id="field-id" name="id" required pattern="[A-Za-z0-9_-]{1,32}" placeholder="primary" autocomplete="off"><small>用于公开工具名称，例如 primary.search；创建后不可修改。</small></label>
+            <label class="field full"><span>后端标识</span><input id="field-id" name="id" required pattern="[A-Za-z0-9_-]{1,32}" placeholder="docs" autocomplete="off"><small>用于公开工具名称，例如 docs.search；创建后不可修改。</small></label>
             <label class="field full"><span>MCP 服务地址</span><input id="field-url" name="url" type="url" required placeholder="https://mcp.example.com/mcp"><small>支持 Streamable HTTP 协议的 MCP 入口地址。</small></label>
             <label class="switch-row"><input id="field-enabled" type="checkbox" checked><span class="switch" aria-hidden="true"></span><span><strong>启用后端</strong><small>停用时保留配置，不连接服务</small></span></label>
           </div>
         </section>
         <section class="form-section">
           <div class="section-heading"><span>02</span><div><h3>上游认证</h3><p>MCPHub 连接此服务时使用的凭证。</p></div></div>
-          <div class="segmented" role="group" aria-label="认证方式">
+          <input id="field-auth-mode" type="hidden"><div class="segmented" role="group" aria-label="认证方式">
             <button type="button" data-auth="headers" class="active" aria-pressed="true">Header 凭证</button><button type="button" data-auth="oauth" aria-pressed="false">OAuth 2.0</button><button type="button" data-auth="both" aria-pressed="false">组合</button><button type="button" data-auth="vault" aria-pressed="false">Vault</button><button type="button" data-auth="none" aria-pressed="false">无需认证</button>
           </div>
           <div id="headers-panel"><div class="header-labels" aria-hidden="true"><span>Header 名称</span><span>凭证值</span></div><div class="repeat-list" id="headers-list"></div><button class="text-button" id="add-header" type="button">＋ 添加 Header</button></div>
@@ -247,9 +304,9 @@
         </section>
         <section class="form-section">
           <div class="section-heading"><span>03</span><div><h3>客户端访问权限</h3><p>控制哪些客户端可以通过 MCPHub 调用此后端。</p></div></div>
-          <label class="field full"><span>所需 Scope</span><textarea id="field-scopes" rows="2" placeholder="mcp:primary.read, mcp:primary.write"></textarea><small>使用逗号、空格或换行分隔</small></label>
-          <p class="field-note">留空允许所有已认证客户端访问；填写多个时必须全部满足。</p>
-          <label class="field full"><span>已发布工具</span><textarea id="field-published-tools" rows="3" placeholder="search, get_project"></textarea><small>填写原始工具名，逗号、空格或换行分隔；不支持通配符。留空不发布任何工具，新增工具需手动发布。</small></label>
+          <label class="field full"><span>所需 Scope</span><textarea id="field-scopes" rows="2" placeholder="mcp:docs.read, mcp:docs.write"></textarea><small>使用逗号、空格或换行分隔</small></label>
+          <p class="field-note">留空不追加 Scope 要求；填写多个时必须全部满足。仍需用户组授权，且工具必须已发布。</p>
+          <h4>已发布工具</h4><p class="field-note">仅发布勾选的工具；新增工具不会自动发布。</p><div id="published-tool-options"></div><details class="advanced"><summary>高级：手动填写工具名称</summary><label class="field full"><span>已发布工具</span><textarea id="field-published-tools" rows="3" placeholder="search, get_project"></textarea><small>填写原始工具名，逗号、空格或换行分隔；不支持通配符。留空不发布任何工具，新增工具需手动发布。</small></label></details>
           <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">匹配规则全部生效。effect 填 read 或 write；未分类也需要审批，write 优先。资源参数使用 JSON Pointer 和精确允许值。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="field-rules" rows="5" spellcheck="false" placeholder='[{"match":"search","effect":"read","required_scopes":["mcp:read"],"resource_rules":[{"argument":"/project","allowed_values":["work"]}]}]'></textarea></label></details>
         </section>
         <details class="advanced"><summary><span>限流策略</span><small>默认不限流</small></summary>
@@ -282,7 +339,7 @@
 
   <dialog class="editor-dialog" id="group-dialog" aria-labelledby="group-dialog-title">
     <form id="group-form" method="dialog" novalidate>
-      <header><div><h2 id="group-dialog-title">新建工具组</h2><p>组内工具共享 API 地址、上游凭证和访问权限。</p></div><button class="icon-button dialog-close" type="button" aria-label="关闭">×</button></header>
+      <header><div><h2 id="group-dialog-title">新建 HTTP 工具组</h2><p>组内工具共享 API 地址、上游凭证和访问权限。</p></div><button class="icon-button dialog-close" type="button" aria-label="关闭">×</button></header>
       <div class="dialog-scroll">
         <div id="group-detail" hidden>
           <div class="subpanel-header"><div><h3>组内工具</h3><p id="group-public-prefix"></p></div><div><button class="secondary" id="add-http-tool" type="button">＋ 添加接口</button><button class="primary" id="add-openapi-import" type="button">导入 OpenAPI</button></div></div>
@@ -312,7 +369,7 @@
           </section>
           <section class="form-section">
             <div class="section-heading"><span>03</span><div><h3>客户端访问权限</h3><p>组内所有工具统一要求这些 Scope。</p></div></div>
-            <label class="field"><span>所需 Scope</span><input id="group-scopes" placeholder="crm.read, crm.write"><small>留空允许所有已认证客户端访问；填写多个时必须全部满足。</small></label>
+            <label class="field"><span>所需 Scope</span><input id="group-scopes" placeholder="crm.read, crm.write"><small>留空不追加 Scope 要求；填写多个时必须全部满足。仍需用户组授权，且工具必须已发布。</small></label>
             <details class="advanced"><summary><span>工具级规则</span><small>可选</small></summary><p class="field-note">匹配规则全部生效。effect 填 read 或 write；未分类也需要审批，write 优先。资源参数使用 JSON Pointer 和精确允许值。</p><label class="field"><span>Tool Rules（JSON）</span><textarea id="group-rules" rows="4" spellcheck="false" placeholder='[{"match":"lookup","effect":"read","required_scopes":["crm.read"],"resource_rules":[{"argument":"/project","allowed_values":["work"]}]}]'></textarea></label></details>
           </section>
           <details class="advanced"><summary><span>限流策略</span><small>默认不限流</small></summary>
@@ -328,7 +385,7 @@
         <p class="form-hint" id="group-create-help">创建工具组后，继续添加接口或导入 OpenAPI 文档。</p>
         <div class="form-error" id="group-error" role="alert" hidden></div>
       </div>
-      <footer><button class="danger text-button" id="delete-group" type="button" hidden>删除工具组</button><span class="action-spacer"></span><button class="secondary" id="probe-group" type="button" hidden>测试连接</button><button class="primary" id="save-group" type="submit">创建工具组</button></footer>
+      <footer><button class="danger text-button" id="delete-group" type="button" hidden>删除工具组</button><span class="action-spacer"></span><button class="secondary" id="probe-group" type="button" hidden>测试已保存连接</button><button class="primary" id="save-group" type="submit">创建 HTTP 工具组</button></footer>
     </form>
   </dialog>
 
@@ -371,13 +428,13 @@
         <div class="operation-list" id="operation-list"></div>
         <div class="form-error" id="import-error" role="alert" hidden></div>
       </div>
-      <footer><span class="action-spacer"></span><button class="primary pressable" id="save-import" type="submit" disabled>导入选中 Operations</button></footer>
+      <footer><span class="action-spacer"></span><button class="primary pressable" id="save-import" type="submit" disabled>导入选中接口</button></footer>
     </form>
   </dialog>
 
   <dialog id="policy-editor" class="policy-dialog" aria-labelledby="policy-editor-title">
     <form id="policy-edit-form">
-      <header><h2 id="policy-editor-title">编辑工具规则</h2><button class="icon-button" type="button" data-policy-close>×</button></header>
+      <header><h2 id="policy-editor-title">编辑工具规则</h2><button class="icon-button" type="button" data-policy-close aria-label="关闭">×</button></header>
       <div class="policy-dialog-body">
         <p id="policy-inherited" class="context-note"></p>
         <label class="switch-row" id="policy-publish-label"><input type="checkbox" id="policy-published"><span class="switch" aria-hidden="true"></span><span>发布此工具</span></label>
@@ -404,12 +461,12 @@
   </dialog>
   <dialog id="access-check-dialog" class="policy-dialog" aria-labelledby="access-check-title">
     <form id="access-check-form">
-      <header><h2 id="access-check-title">权限检查</h2><button class="icon-button" type="button" data-policy-close>×</button></header>
+      <header><h2 id="access-check-title">权限检查</h2><button class="icon-button" type="button" data-policy-close aria-label="关闭">×</button></header>
       <div class="policy-dialog-body">
         <p id="access-check-target"></p>
         <p class="context-note">输入的 Scope 是管理员假设条件，不代表已验证的用户权限。检查不执行工具，也不创建审批或占用执行额度。</p>
         <label class="field"><span>假设调用者拥有的 Scope</span><textarea id="access-check-scopes" rows="2" placeholder="多个 Scope 用空格或逗号分隔"></textarea></label>
-        <div class="field-grid"><label class="field"><span>用户 Subject（检查 Grant 时必填）</span><input id="access-check-subject" maxlength="1024"></label><p class="field-note">SSO 模式需填写用户与组织页面中的 MCPHub 用户 ID。</p><label class="field"><span>Grant ID（可选）</span><input id="access-check-grant" maxlength="128"></label></div>
+        <div class="field-grid"><label class="field"><span>用户 Subject（检查 Grant 时必填）</span><input id="access-check-subject" maxlength="1024"></label><p class="field-note">SSO 模式需填写用户与组页面中的 MCPHub 用户 ID。</p><label class="field"><span>Grant ID（可选）</span><input id="access-check-grant" maxlength="128"></label></div>
         <label class="field"><span>工具调用参数（JSON）</span><textarea id="access-check-arguments" rows="5" spellcheck="false">{}</textarea></label>
         <p class="field-note">结果仅代表当前配置下的检查，不授予执行权。参数 Schema、实时限流、预览、资源版本和上游权限仍在实际执行时检查。</p>
         <div id="access-check-result" aria-live="polite"></div>

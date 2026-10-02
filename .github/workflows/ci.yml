@@ -60,11 +60,17 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Check reachable vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
       - name: Check browser JavaScript syntax
         run: |
           for script in internal/app/adminui/*.js internal/app/clientportal/*.js; do
             node --input-type=module --check < "$script"
           done
+
+      - name: Test console configuration examples
+        run: node --test internal/app/testdata/adminui-i18n.test.mjs
 
       - name: Build binaries
         run: |

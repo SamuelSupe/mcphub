@@ -25,9 +25,7 @@ services:
     command: ["serve", "--config", "/etc/mcphub/config.yaml"]
     environment:
       MCPHUB_PUBLIC_URL: ${MCPHUB_PUBLIC_URL:?Set the HTTPS MCP URL}
-      MCPHUB_AUTH_ISSUER: ${MCPHUB_AUTH_ISSUER:?Set the OIDC issuer}
       MCPHUB_ADMIN_PUBLIC_URL: ${MCPHUB_ADMIN_PUBLIC_URL:?Set the HTTPS admin origin}
-      MCPHUB_ADMIN_CLIENT_ID: ${MCPHUB_ADMIN_CLIENT_ID:?Set the browser OAuth client ID}
       MCPHUB_CONFIG_KEY: ${MCPHUB_CONFIG_KEY:?Set and retain a base64 32-byte encryption key}
       MCPHUB_DATABASE_URL: postgres://mcphub:${MCPHUB_POSTGRES_PASSWORD:?Set a URL-safe database password}@postgres:5432/mcphub?sslmode=disable
     ports:

@@ -12,6 +12,12 @@
     "description": "Get your connection details, complete authorization, and check your first MCP connection."
   },
   {
+    "slug": "device-auth",
+    "title": "Pair an Agent with a link",
+    "group": "Getting started",
+    "description": "Start pairing locally or remotely, then sign in and select access on one web page."
+  },
+  {
     "slug": "install",
     "title": "Install the connector",
     "group": "Getting started",

@@ -110,6 +110,17 @@
     ]
   },
   {
+    "slug": "admin/accounts",
+    "title": "Built-in accounts, passwords and MFA",
+    "group": "Identity and access",
+    "description": "Initialize accounts locally, create users and groups, assign group permissions, and manage passwords, disabling and MFA.",
+    "sources": [
+      {
+        "file": "docs/builtin-accounts.md"
+      }
+    ]
+  },
+  {
     "slug": "admin/authentication",
     "title": "Identity clients and authentication",
     "group": "Identity and access",
@@ -130,14 +141,25 @@
     ]
   },
   {
+    "slug": "admin/identity-providers",
+    "title": "LDAP and OIDC identity services",
+    "group": "Identity and access",
+    "description": "Configure and test LDAP and OIDC in the console, then grant enterprise access through groups.",
+    "sources": [
+      {
+        "file": "docs/enterprise-login.md"
+      }
+    ]
+  },
+  {
     "slug": "admin/sso",
-    "title": "SSO, users, and organizations",
+    "title": "SSO, users, and groups",
     "group": "Identity and access",
     "description": "Connect an enterprise identity provider, assign local permissions, sync directories, and recover administrator access.",
     "sources": [
       {
         "file": "docs/admin-guide.md",
-        "heading": "Users and organizations"
+        "heading": "Users and groups"
       },
       {
         "file": "docs/sso-and-user-management.md"
@@ -161,6 +183,10 @@
       {
         "file": "docs/configuration.md",
         "heading": "Client credentials and connection boundaries"
+      },
+      {
+        "file": "docs/admin-guide.md",
+        "heading": "Agent link authorization"
       }
     ]
   },

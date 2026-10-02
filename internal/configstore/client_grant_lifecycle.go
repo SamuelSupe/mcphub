@@ -25,6 +25,15 @@ func (s *Store) CreateClientGrant(ctx context.Context, g ClientGrant, sessionPro
 		return ClientGrant{}, "", "", err
 	}
 	defer tx.Rollback()
+	g, exchange, proof, err := s.createClientGrantTx(ctx, tx, g, sessionProof, ttl, maximum)
+	if err == nil {
+		err = tx.Commit()
+	}
+	return g, exchange, proof, err
+}
+
+func (s *Store) createClientGrantTx(ctx context.Context, tx *transaction, g ClientGrant, sessionProof string, ttl, maximum time.Duration) (ClientGrant, string, string, error) {
+	var err error
 	now := time.Now().UTC()
 	var pending, active int
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM client_grants WHERE issuer=? AND subject=? AND status IN ('pending','confirmed') AND request_expires_at>?", g.Issuer, g.Subject, now.UnixMilli()).Scan(&pending); err != nil {
@@ -65,13 +74,7 @@ func (s *Store) CreateClientGrant(ctx context.Context, g ClientGrant, sessionPro
 	if err == nil {
 		err = s.grantEvent(ctx, tx, g, "client_authorization_requested")
 	}
-	if err == nil {
-		err = tx.Commit()
-	}
-	if err != nil {
-		return ClientGrant{}, "", "", err
-	}
-	return g, exchange, sessionProof, nil
+	return g, exchange, sessionProof, err
 }
 
 // Only the browser controller calls this after authenticating the owner and
@@ -120,6 +123,8 @@ func (s *Store) ExchangeClientGrant(ctx context.Context, id, issuer, subject, ex
 	if len(exchange) < 32 || len(exchange) > 256 {
 		return ClientGrant{}, "", ErrGrantInvalid
 	}
+	s.identityMu.Lock()
+	defer s.identityMu.Unlock()
 	s.grantMu.Lock()
 	defer s.grantMu.Unlock()
 	g, err := s.GetClientGrant(ctx, id, issuer, subject)
@@ -139,6 +144,9 @@ func (s *Store) ExchangeClientGrant(ctx context.Context, id, issuer, subject, ex
 		return ClientGrant{}, "", err
 	}
 	defer tx.Rollback()
+	if err := s.validateDeviceExchange(ctx, tx, id); err != nil {
+		return ClientGrant{}, "", err
+	}
 	var active int
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM client_grants WHERE issuer=? AND subject=? AND status='active' AND expires_at>? AND NOT (session_id=? AND client_id=?)", issuer, subject, time.Now().UnixMilli(), g.SessionID, g.ClientID).Scan(&active); err != nil {
 		return ClientGrant{}, "", err
@@ -175,6 +183,9 @@ func (s *Store) ExchangeClientGrant(ctx context.Context, id, issuer, subject, ex
 		if err := s.revokeGrantTx(ctx, tx, previous, "client_authorization_replaced"); err != nil {
 			return ClientGrant{}, "", err
 		}
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE device_authorizations SET status='completed' WHERE grant_id=? AND status='redeemed'", g.GrantID); err != nil {
+		return ClientGrant{}, "", err
 	}
 	g.Status = "active"
 	if err := s.grantEvent(ctx, tx, g, "client_authorization_activated"); err != nil {
@@ -298,19 +309,24 @@ func clientGroupPolicy(cfg httptool.GroupConfig) string {
 	}{cfg.BaseURL, cfg.RequiredScopes, cfg.ToolRules, cfg.Headers, cfg.OAuth})
 }
 func (s *Store) ClientEndpointPolicy(ctx context.Context, id string) (string, string, error) {
-	backend, err := s.Get(ctx, id)
+	return s.clientEndpointPolicyFrom(ctx, s.db, id)
+}
+
+func (s *Store) clientEndpointPolicyFrom(ctx context.Context, db identityReader, id string) (string, string, error) {
+	const columns = "SELECT id,enabled,config_json,secrets,revision,created_at,updated_at,last_probe_at,last_probe_ok,last_probe_json FROM "
+	b, err := s.scanRecord(db.QueryRowContext(ctx, columns+"backends WHERE id=? COLLATE NOCASE", id))
 	if err == nil {
-		if !backend.Enabled {
+		if !b.Enabled {
 			return "", "", ErrGrantReconfirmation
 		}
-		return backend.Config.EndpointUID, clientBackendPolicy(backend.Config), nil
+		return b.Config.EndpointUID, clientBackendPolicy(b.Config), nil
 	}
-	if !errors.Is(err, ErrNotFound) && !errors.Is(err, sql.ErrNoRows) {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return "", "", err
 	}
-	group, err := s.GetToolGroup(ctx, id)
-	if err != nil || !group.Config.Enabled {
+	g, err := s.scanToolGroup(db.QueryRowContext(ctx, columns+"tool_groups WHERE id=? COLLATE NOCASE", id))
+	if err != nil || !g.Config.Enabled {
 		return "", "", ErrGrantReconfirmation
 	}
-	return group.Config.EndpointUID, clientGroupPolicy(group.Config), nil
+	return g.Config.EndpointUID, clientGroupPolicy(g.Config), nil
 }

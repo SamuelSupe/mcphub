@@ -1,4 +1,7 @@
+<p>For remote or headless Agents, use <a href="device-auth.html">link authorization</a>: sign in and choose access on one page, or use --interactive-auth for authentication tools. The existing setup flow below remains available.</p>
+<p>Enterprise sign-in supports OIDC or LDAP. LDAP users select LDAP in the authorization page’s account-source field. After your first sign-in, ask an administrator to enable your account and grant group access.</p>
 <h2 id="company-login">Sign in with your company identity</h2>
+<p>Default deployments use a MCPHub username and password supplied by your administrator. If MFA is enabled, also enter the authenticator code. Enterprise sign-in is optional. Local and enterprise identities are separate; using the same name does not share group permissions. In the portal, <strong>My account</strong> lets local users change passwords and enroll MFA; password changes sign out existing sessions. Ask your administrator to reset a forgotten password.</p>
 <p>For your first connection, use the <a href="quickstart.html">setup wizard</a>; it opens sign-in when needed. To sign in first or restore a saved profile:</p>
 <pre><code>mcpbridge login --server https://hub.example.com/mcp --client-id mcpbridge --profile work
 mcpbridge status --profile work</code></pre>
@@ -7,7 +10,7 @@ mcpbridge status --profile work</code></pre>
 <p>Open the terminal's authorization link on <strong>the same computer that runs the command</strong>. Sign-in waits up to five minutes for the local callback; run it again after a timeout. If a fixed callback port is required, add <code>--callback-port 8765</code> using the actual assigned port.</p>
 <p>An SSH terminal may expect a callback on a different machine. Sign in where your AI client actually runs the connector. See <a href="profiles.html">Multiple services and environments</a>.</p>
 <h2 id="pending">If access is pending or your account is disabled</h2>
-<p>A message saying that your identity was recorded but access is not granted or the account is disabled means the company identity was recognized, but MCPHub access has not been enabled or has been removed. Ask your administrator to enable the user and assign services, scopes, and tool permissions, then sign in again.</p>
+<p>A message saying that your identity was recorded but access is not granted or the account is disabled means the company identity was recognized, but MCPHub access has not been enabled or has been removed. Ask your administrator to enable the user and add them to groups with the required services, scopes, and tool permissions, then sign in again.</p>
 <p>Failed or cancelled sign-in keeps your previous credentials. After a successful sign-in, restart existing MCP connections for that profile.</p>
 <h2 id="portal">Open your personal authorization portal</h2>
 <p>Open <code>https://hub.example.com/client-auth/</code> on your company's MCPHub domain and sign in with your company identity. The portal manages accounts and client authorizations.</p>

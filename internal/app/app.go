@@ -145,6 +145,10 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 		portal := config.AdminConfig{PublicURL: u.Scheme + "://" + u.Host, ClientID: cfg.ClientAuthorization.ClientID, ClientSecretEnv: cfg.ClientAuthorization.ClientSecretEnv}
 		app.userAuth = newAdminAuthorization(portal, cfg.Auth.Issuer, authManager)
 		app.userAuth.userPortal, app.userAuth.resource = true, cfg.Server.PublicURL
+		if cfg.Auth.Builtin() {
+			app.userAuth.local, app.userAuth.loginScopes = ssoServer, rt.allScopes()
+			app.userAuth.accountHandler = func(w http.ResponseWriter, r *http.Request) { app.serveLocalAccount(w, r, app.userAuth) }
+		}
 	}
 	app.server = &http.Server{
 		Addr:              cfg.Server.Listen,
@@ -155,7 +159,7 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 		MaxHeaderBytes:    1 << 20,
 	}
 	if cfg.Admin.Enabled {
-		if cfg.Admin.Remote() {
+		if cfg.Admin.Remote() || cfg.Auth.Builtin() {
 			var adminManager tokenVerifier
 			if ssoServer != nil {
 				adminManager = ssoServer.Verifier(cfg.Admin.PublicURL)
@@ -165,12 +169,20 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 				adminManager = manager
 			}
 			app.adminAuth = newAdminAuthorization(cfg.Admin, cfg.Auth.Issuer, adminManager)
+			if cfg.Auth.Builtin() {
+				app.adminAuth.local = ssoServer
+				app.adminAuth.loginScopes = append(append(append([]string{}, cfg.Admin.RequiredScopes...), cfg.Admin.Approvals.Scopes()...), cfg.Admin.Approvals.PolicyChanges.Scopes()...)
+				app.adminAuth.accountHandler = func(w http.ResponseWriter, r *http.Request) { app.serveLocalAccount(w, r, app.adminAuth) }
+			}
 		}
 		app.adminServer = &http.Server{
 			Addr: cfg.Admin.Listen, Handler: app.adminHandler(),
 			ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 			ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 2 * time.Minute, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 1 << 20,
 		}
+	}
+	if cfg.Auth.Builtin() && cfg.ClientAuthorization.Enabled && app.userAuth != nil {
+		ssoServer.SetDeviceHandlers(app.createDeviceAuthorization, app.deviceAuthorizationToken)
 	}
 	return app, nil
 }

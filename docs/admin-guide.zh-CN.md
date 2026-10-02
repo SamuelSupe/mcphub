@@ -1,26 +1,28 @@
 # MCPHub 管理员手册
 
+> 本指南用于 v2.3.0 全新部署。内建账号与 Agent 设备授权需要 v2.3.0，v2.2.2 不包含这些功能。
+
 [English](admin-guide.md) · [文档导航](README.zh-CN.md) · [项目首页](../README.zh-CN.md)
 
 [在线阅读：管理员文档站](https://samuelsupe.github.io/mcphub/admin/) · [在线用户指南](https://samuelsupe.github.io/mcphub/)
 
-面向负责部署、服务接入、权限策略、审批及运行维护的管理员，对应 v2.2.2。员工电脑的安装与接入步骤见[用户手册](user-guide.zh-CN.md)。
+面向负责部署、服务接入、权限策略、审批及运行维护的管理员，对应 v2.3.0。员工电脑的安装与接入步骤见[用户手册](user-guide.zh-CN.md)。
 
-推荐顺序：**启动管理台 → 添加后端 → 测试连接 → 发布工具 → 配置用户权限 → 验证实际调用**。
+推荐顺序：**启动管理台 → 添加后端 → 测试连接 → 发布工具 → 配置组权限 → 验证实际调用**。
 
 - [部署准备与安装](#部署准备与安装) · [本地管理 UI](#本地管理-ui) · [远程管理与数据库](#远程管理员与-postgresql)
 - [登录客户端与上游凭证](#区分登录客户端与上游凭证)
-- [服务接入与工具发布](#服务接入与工具发布) · [用户与组织](#用户与组织) · [客户端授权](#启用客户端授权) · [上游账号](#配置上游账号)
+- [服务接入与工具发布](#服务接入与工具发布) · [用户与组](#用户与组) · [客户端授权](#启用客户端授权) · [上游账号](#配置上游账号)
 - [写审批与配置治理](#写审批与配置治理) · [控制台导航](#控制台导航) · [工具权限检查](#工具权限检查) · [授权与请求诊断](#授权与请求诊断)
 - [备份与恢复](#备份与恢复) · [运行维护](#运行维护) · [安全说明](#安全说明) · [已知限制与排障](#已知限制与排障提示)
 
 ## 部署准备与安装
 
-准备可用的身份服务、MCP HTTPS 地址、可写持久化目录，以及独立保存的配置加密密钥。远程管理另外配置管理员 HTTPS origin 与身份客户端。网关保持**单活**；PostgreSQL 不提供 Hub 多实例运行时协调。
+准备 MCP HTTPS 地址、可写持久化目录，以及独立保存的配置加密密钥。远程管理另外配置管理员 HTTPS origin，并在本机初始化管理员账号。网关保持**单活**；PostgreSQL 不提供 Hub 多实例运行时协调。
 
 | 模式 | 适用场景 | 入口 |
 | --- | --- | --- |
-| 本地管理 + SQLite | 在网关所在机器开发或维护 | [下方最小配置](#本地管理-ui)，免登录且只绑定回环 |
+| 本地管理 + SQLite | 在网关所在机器开发或维护 | [下方最小配置](#本地管理-ui)，内建账号登录，只绑定回环 |
 | 远程管理 + SQLite / PostgreSQL | 团队使用、审批与集中管理 | [部署指南](../deploy/README.zh-CN.md)，独立管理员登录和 HTTPS |
 | YAML 管理 | 不启用控制台、仅发布明确只读的工具 | [高级纯 YAML 示例](../deploy/config.yaml-only.example.yaml) |
 
@@ -28,33 +30,33 @@
 
 | 平台 | 服务端下载 |
 | --- | --- |
-| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_linux_arm64.tar.gz) |
+| macOS Intel | `mcphub_v2.3.0_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `mcphub_v2.3.0_darwin_arm64.tar.gz` |
+| Linux amd64 | `mcphub_v2.3.0_linux_amd64.tar.gz` |
+| Linux arm64 | `mcphub_v2.3.0_linux_arm64.tar.gz` |
 
-从 [v2.2.2 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2) 下载后核对 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/SHA256SUMS)。以下为 Linux arm64 的安装示例；按上表替换文件名，macOS 校验命令为 `shasum -a 256`：
+从 [v2.3.0 发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0) 下载服务端包和 `SHA256SUMS`，核对校验值后解压。以下为 Linux arm64 的安装示例；按上表替换文件名，macOS 校验命令为 `shasum -a 256`：
 
 ```bash
-sha256sum mcphub_v2.2.2_linux_arm64.tar.gz
+sha256sum mcphub_v2.3.0_linux_arm64.tar.gz
 # 与 SHA256SUMS 中同名条目逐字核对，一致后再解压。
 mkdir -p mcphub-release "$HOME/.local/bin"
-tar -xzf mcphub_v2.2.2_linux_arm64.tar.gz -C mcphub-release
+tar -xzf mcphub_v2.3.0_linux_arm64.tar.gz -C mcphub-release
 install -m 755 mcphub-release/mcphub "$HOME/.local/bin/mcphub"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-安装后运行 `mcphub --version`，应显示 `mcphub 2.2.2 (server)`。`validate`、`serve` 是服务端命令；`mcpbridge` 是用户连接器，供用户连接 Agent，不能启动或校验网关。源码更新不会自动替换目录里的旧二进制；要使用刚安装的程序路径。
+安装后运行 `mcphub --version`，应显示 `mcphub 2.3.0 (server)`。`validate`、`serve` 是服务端命令；`mcpbridge` 是用户连接器，供用户连接 Agent，不能启动或校验网关。源码更新不会自动替换目录里的旧二进制；要使用刚安装的程序路径。
 
-此 PATH 设置用于当前终端；后续可直接运行 `"$HOME/.local/bin/mcphub"`，或将工具目录加入服务环境。已安装 Go 1.26 时也可执行：
+此 PATH 设置用于当前终端；后续可直接运行 `"$HOME/.local/bin/mcphub"`，或将工具目录加入服务环境。已安装 Go 1.26.8 时也可执行：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.2
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.3.0
 ```
 
 Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`；该目录也需要加入 PATH。
 
-**v2.2.2 服务端包与在线指南包含相同模板。** 默认 `config.example.yaml` 启用本地管理台、SQLite 和 `backends: []`，只需要网关地址、OIDC issuer 和配置加密密钥。启动管理台后，逐个添加服务，分别填写凭证、测试连接，再发布已审核的工具并配置权限。团队远程管理使用远程模板；不启用控制台时选择独立的[高级纯 YAML 示例](../deploy/config.yaml-only.example.yaml)。
+**v2.3.0 服务端包与指南包含相同模板。** 默认 `config.example.yaml` 启用本地管理台、SQLite 和 `backends: []`，只需要网关地址和配置加密密钥。启动管理台后，逐个添加服务，分别填写凭证、测试连接，再发布已审核的工具并配置权限。团队远程管理使用远程模板；不启用控制台时选择独立的[高级纯 YAML 示例](../deploy/config.yaml-only.example.yaml)。
 
 `validate --config PATH` 校验配置，不创建 SQLite 数据库；`serve --config PATH` 初始化新数据库并启动服务，JSON 日志写到 stderr。
 
@@ -62,14 +64,13 @@ Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`；该目
 
 ## 本地管理 UI
 
-默认模板适用于全新部署，管理台只监听网关所在机器的 `127.0.0.1:8081`，无需管理员登录。远程访问按[远程部署指南](../deploy/README.zh-CN.md)配置 HTTPS 和管理员身份。
+默认模板启用内建账号、本地管理台、SQLite、个人授权中心和 `backends: []`。管理台只监听网关机器的 `127.0.0.1:8081`，仍须账号登录。远程访问使用远程模板和 HTTPS。
 
-解压服务端包后，把包内 `config.example.yaml` 复制为 `config.yaml`；也可下载[相同的在线模板](../config.example.yaml)。在新部署目录中执行，替换两个 HTTPS 地址：
+复制包内模板，在新部署目录中配置公开地址和固定密钥：
 
 ```bash
 cp mcphub-release/config.example.yaml config.yaml
 export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
-export MCPHUB_AUTH_ISSUER=https://idp.example.com
 umask 077
 mkdir -p secrets
 test -f secrets/config.key || openssl rand -base64 32 > secrets/config.key
@@ -78,23 +79,33 @@ mcphub validate --config config.yaml
 mcphub serve --config config.yaml
 ```
 
-默认模板只要求以上三个变量。`MCPHUB_CONFIG_KEY` 是 Base64 编码的 32 字节密钥，只生成一次，重启时从同一个私有文件读取。服务管理器也需要注入这三个变量；MCPHub 不自动加载 `.env`。数据库位于配置文件旁的 `data/mcphub.db`，需要可写目录。
+在服务器本机的另一个终端进入同一目录，加载相同的两个变量，初始化管理员：
 
-打开[本地管理台](http://127.0.0.1:8081/)，初始服务列表为空。进入 **MCP 后端 → 添加 MCP 后端**，逐个填写地址与独立凭证，**测试连接**后保存，再到 **工具权限**设置明确的 `read` 分类、发布名单和所需 scope。按[服务接入流程](#服务接入与工具发布)实际调用一个只读工具。管理台启动不代表身份源可用；网关 `/readyz` 返回 200 还需要可用的 OIDC issuer。
+```bash
+export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
+export MCPHUB_CONFIG_KEY="$(cat secrets/config.key)"
+mcphub init-admin --config config.yaml --username admin
+```
+
+密码在终端隐藏输入，至少 12 个字符；没有默认密码，也没有匿名网页初始化接口。打开[本地管理台](http://127.0.0.1:8081/)，登录后在「用户与组」创建用户和组、配置组权限并维护成员关系，再按 **添加后端 → 测试连接 → 发布工具** 接入服务。
+
+默认只要求公开地址和配置密钥，不设置 `MCPHUB_AUTH_ISSUER` 或固定后端变量。密钥是 Base64 编码的 32 字节，只生成一次，重启时使用同一私有文件；服务管理器也必须注入这两个变量，MCPHub 不自动加载 `.env`。数据库在 YAML 文件旁的 `data/mcphub.db`。
+
+内建签发者由公开 origin 推导到 `/sso`。空后端新部署的 `/readyz` 可返回 200，不依赖外部 OIDC。就绪不证明公开 HTTPS 或业务后端已验收。MCPBridge 与远程用户需要公开 HTTPS、OAuth 元数据和用户门户路由可达。密码、停用、MFA 与本机恢复见[内建账号](builtin-accounts.zh-CN.md)。
 
 ## 远程管理员与 PostgreSQL
 
 支持独立管理员登录、远程 UI/API、`mcpbridge admin` 与按管理员身份记录的配置审计。管理员 JWT 使用 `admin.public_url` 作为 audience，且必须具有 `admin.required_scopes`（默认 `mcphub:admin`）；普通 MCP 用户的登录凭证不会自动获得管理权限。
 
 ```bash
-mcpbridge login --admin --server https://admin.example.com --client-id mcphub-admin-cli --profile ops
+mcpbridge login --admin --server https://admin.example.com --client-id mcpbridge-admin --profile ops
 mcpbridge admin --profile ops get /overview
 mcpbridge admin --profile ops get /backends
 mcpbridge admin --profile ops get /tool-groups
 mcpbridge admin --profile ops get /events
 ```
 
-数据库可选 SQLite（默认）或 PostgreSQL（`database_driver: postgres` 与 `database_dsn_env`）。本版支持单实例网关；PostgreSQL 不代表已支持多实例运行时同步。完整的 OIDC 注册、浏览器登录、API 写入、数据库与 HTTPS 代理部署见 [部署指南](../deploy/README.zh-CN.md)。
+数据库可选 SQLite（默认）或 PostgreSQL（`database_driver: postgres` 与 `database_dsn_env`）。本版支持单实例网关；PostgreSQL 不代表已支持多实例运行时同步。完整的账号初始化、可选 OIDC 注册、浏览器登录、API 写入、数据库与 HTTPS 代理部署见 [部署指南](../deploy/README.zh-CN.md)。
 
 ## 服务接入与工具发布
 
@@ -108,13 +119,11 @@ mcpbridge admin --profile ops get /events
 
 字段和 API 见[后端配置](configuration.zh-CN.md#backends)、[HTTP 工具组](configuration.zh-CN.md#工具组与托管-http-api-tool)、[发布与资源规则](configuration.zh-CN.md#显式发布与资源范围)、[限流](configuration.zh-CN.md#endpoint-限流)。
 
-## 用户与组织
+## 用户与组
 
-选择身份模式后再分配权限：直接使用外部 OIDC 时由身份服务签发 Scope；启用 `auth.sso` 桥接时，由 MCPHub 管理用户、部门/组的本地授权。上游企业应用密钥只保留在服务器。
+默认使用[内建账号](builtin-accounts.zh-CN.md)。在「用户与组」先创建组，为组分配管理员、审批人、安全审核角色，以及服务、工具、Scope 和业务资源权限，再把用户加入组。新建本地账号可以登录，但未授权工具不能调用。
 
-在「用户与组织」中启用用户，分配 endpoint、精确工具、Scope、资源范围和必要角色。新 SSO 用户默认待授权。部门/组同步只更新身份和成员关系，不授予本地权限；离职处理需要可靠的目录同步。管理员与审批人角色分别授予。
-
-完整配置、目录快照契约及最后一位管理员恢复见 [SSO 与用户管理](sso-and-user-management.zh-CN.md)。向员工交付 MCP URL、CLI client ID、可用服务和必要回调端口，并提供[用户接入步骤](user-guide.zh-CN.md#接入-mcp-客户端)。
+企业 LDAP/OIDC 可选，在管理台的 [身份服务](enterprise-login.zh-CN.md) 页面同时配置。企业身份和本地账号分别授权，不按姓名自动合并；新企业用户默认待授权。`auth.sso.upstream` 保留为高级 YAML 初始连接方式。
 
 ## 区分登录客户端与上游凭证
 
@@ -132,7 +141,9 @@ mcpbridge admin --profile ops get /events
 
 ## 启用客户端授权
 
-启用 `client_authorization.enabled`、配置用户门户 `client_id`，并启用托管数据库。支持 SQLite 和 **单实例 MCPHub + PostgreSQL**，新数据库使用 schema 9，重启时保留数据库与匹配密钥。
+默认模板已经启用个人授权中心，并自动注册 `mcphub-portal` 和 MCPBridge 客户端，无需部署身份服务或手工注册这些客户端。下列自定义注册要求适用于外部认证的高级部署；内建模式只需在改变客户端 ID、回调或资源地址时配置相应注册。
+
+启用 `client_authorization.enabled`、配置用户门户 `client_id`，并启用托管数据库。支持 SQLite 和 **单实例 MCPHub + PostgreSQL**，新数据库使用 schema 10，重启时保留数据库与匹配密钥。
 
 在身份服务注册门户回调 `https://hub.example.com/client-auth/auth/callback`。门户位于 MCP 服务的域名下，与管理端口分开。CLI 与门户必须取得 audience 为完整 MCP resource URL、`issuer + sub` 一致的 JWT access token。若身份服务对不同客户端返回不同的 pairwise subject，应先调整身份服务的主体策略；不会通过 email 拼接身份。门户可选的 client secret 通过服务端 `client_secret_env` 配置。
 
@@ -141,12 +152,12 @@ mcpbridge admin --profile ops get /events
 ```yaml
 client_authorization:
   enabled: true
-  client_id: mcphub-user-portal
+  client_id: mcphub-portal
   require_client_grant: false
   max_grant_ttl: 8h
 ```
 
-直接运行二进制时重启服务。Compose 部署将片段加入挂载的 `deploy/config.remote-postgres.yaml`，在原来的部署环境执行 `docker compose -f deploy/compose.postgres.yaml up -d --force-recreate mcphub`。还需单独注册员工 CLI 的公开客户端，按[外部 OIDC 注册](configuration.zh-CN.md#用户-cli-的外部-oidc-注册)配置 PKCE、回调和 MCP audience。先发布一个明确 `read` 的工具并授予用户相应 Scope，再让员工运行 `setup`；空的 `backends: []` 或 `published_tools: []` 不会自动产生可选工具。
+直接运行二进制时重启服务。Compose 部署将片段加入挂载的 `deploy/config.remote-postgres.yaml`，在原来的部署环境执行 `docker compose -f deploy/compose.postgres.yaml up -d --force-recreate mcphub`。还需单独注册员工 CLI 的公开客户端，按[外部 OIDC 注册](configuration.zh-CN.md#用户-cli-的外部-oidc-注册)配置 PKCE、回调和 MCP audience。先发布一个明确 `read` 的工具并为组授予相应 Scope，并将用户加入组，再让员工运行 `setup`；空的 `backends: []` 或 `published_tools: []` 不会自动产生可选工具。
 
 在指定 backend 或 HTTP 工具组设置 `require_client_grant: true`，可逐个设置；全局开启则全部强制。两级条件取 OR。不带 `--client` 的连接只能访问未强制客户端授权的 endpoint，登录握手不会暴露严格 endpoint。门户全局设置属于静态进程配置，修改后重启；endpoint 设置沿用现有配置治理流程。
 
@@ -160,7 +171,7 @@ client_authorization:
 
 ## 写审批与配置治理
 
-明确只读的已发布工具在权限通过后执行；写工具和未分类工具需逐次审批。本地免登录和仅 YAML 模式只能执行明确只读的已发布工具，写审批需要远程管理。
+明确只读的已发布工具在权限通过后执行；写工具和未分类工具需逐次审批。内建账号可通过已登录的管理台审批；仅 YAML 和无身份的高级本地模式不能审批写操作。
 
 | 角色 | 职责 |
 | --- | --- |
@@ -182,19 +193,28 @@ client_authorization:
 | 服务接入 | MCP 后端 | 接入 Streamable HTTP MCP 服务；搜索、按状态筛选、测试连接、启停，以及配置发布范围、上游凭证和限流。 |
 | 服务接入 | HTTP 工具组 | 将 REST API 转成 MCP 工具；手工添加接口或从 OpenAPI 导入，共享连接、凭证和访问策略。 |
 | 访问控制 | 工具权限 | 查看显式发布状态、读写分类、最终 Scope、业务资源规则和审批要求；编辑规则或执行无副作用的权限检查。 |
-| 访问控制 | 用户与组织 | 管理 SSO 用户、部门和用户组的本地启停、角色、Scope、工具与资源权限；展开单条记录后编辑。 |
+| 访问控制 | 用户与组 | 创建用户和组，管理账号状态与组成员关系；在组／部门上配置角色、Scope、工具与资源权限。身份源维护的企业成员关系只读。 |
+| 访问控制 | 身份服务 | 同时配置 LDAP 与 OIDC，验证连接、替换加密凭证及启停企业登录；本地管理员保留。 |
 | 访问控制 | 客户端授权 | 按用户、客户端、endpoint 与状态筛选授权；查看完整范围、关联请求，或撤销授权。 |
 | 治理与审计 | 审批中心 | 按权限审核写操作与配置变更，核对预览、审批进度、执行结果与审计记录。 |
 | 治理与审计 | 请求诊断 | 查看近期调用结果、拒绝原因和耗时；展开请求详情，直接定位对应的工具权限。 |
 | 治理与审计 | 变更记录 | 查看最近 50 条管理变更及操作者；敏感凭证不会展示。 |
 
-推荐工作顺序：**接入服务 → 显式发布与读写分类 → 配置用户/组织权限 → 客户端登录与授权 → 审批和诊断**。用户使用 `mcpbridge setup` / `connect` 接入，在个人授权门户确认自己的客户端范围；管理员在管理控制台维护整体策略。SSO 身份源、管理员登录、数据库和审计投递等部署设置继续通过 YAML 和环境变量配置，详细步骤见 [SSO 与用户管理](sso-and-user-management.zh-CN.md)。
+推荐工作顺序：**接入服务 → 显式发布与读写分类 → 配置组权限并维护成员关系 → 客户端登录与授权 → 审批和诊断**。用户使用 `mcpbridge setup` / `connect` 接入，在个人授权门户确认自己的客户端范围；管理员在管理控制台维护整体策略。默认内建模式的 LDAP 与 OIDC 在 [身份服务 UI](enterprise-login.zh-CN.md) 配置。监听地址、数据库和审计投递等部署设置继续通过 YAML 和环境变量配置。
 
-两类编辑器都按 **连接信息 → 上游认证 → 客户端访问权限** 配置。上游 Header/OAuth 是 MCPHub 调用服务的凭证；所需 Scope 决定客户端能否使用后端或工具组：留空允许所有已认证客户端，填写多个时必须**全部满足**。在**已发布工具**中填写审核通过的原始工具名；发现新工具不会自动发布。工具级规则可为选定操作追加 Scope 和资源参数限制；高级连接配置按需展开。编辑已有凭证时，值留空会保留原值；删除 Header 行会移除对应凭证。
+两类编辑器都按 **连接信息 → 上游认证 → 客户端访问权限** 配置。新 MCP 后端默认选择「无需认证」；服务需要认证时，明确选择 Header、OAuth 或 Vault。上游凭证用于 MCPHub 调用服务。所需 Scope 留空只表示不追加 Scope 要求，内建及企业用户仍需组授权，且工具必须已发布；填写多个 Scope 时必须**全部满足**。
 
-多个 MCP endpoint 可复用相同的所需 Scope。未启用 SSO 桥接时，由外部身份服务签发对应 Scope；启用 `auth.sso` 后，可在用户与组织中维护用户和部门/用户组的本地授权，成员关系由已验证的登录声明或目录快照同步。HTTP 工具组用于同一 REST API 内共享连接与权限，不用于组合多个 MCP 后端。工具发布、Scope、业务资源、客户端授权和写审批共同约束调用。
+测试 MCP 连接后，在**已发布工具**中勾选审核通过的工具。编辑已有后端时读取当前目录；目录暂时不可用不会移除已保存的工具名。高级输入可手动填写原始工具名，发现新工具不会自动发布。连接地址、认证或超时变更后，新后端和关键后端必须重新测试；只调整工具发布范围不需要重测。列表分别显示发布与发现数量。工具级规则可在「工具权限」逐个编辑，或使用高级 JSON；未分类工具仍需审批。HTTP 工具组的「测试已保存连接」检查持久化配置，修改连接后应先保存。
+
+在「用户与组」编辑组权限时，选择目标服务并勾选其已发布工具，追加所需 Scope 和资源条件，再分配组成员。切换目标服务会清空当前授权条目的工具选择，避免将同名工具意外带到另一个服务。工具名手动输入保留在高级选项中。编辑已有凭证时，值留空会保留原值；删除 Header 行会移除对应凭证。
+
+导入 OpenAPI 时，选择文档地址或上传规格文件，解析后勾选需要导入的接口。更换来源会清空原预览和选择，需重新解析后才能导入；只导入勾选的接口。
+
+多个 MCP endpoint 可复用相同的所需 Scope。未启用 SSO 桥接时，由外部身份服务签发对应 Scope；启用 `auth.sso` 后，只在用户与组中的部门／组上授权，用户继承所在有效组的权限。本地管理的成员关系在控制台维护；企业身份源成员关系由已验证的登录声明或目录快照同步。HTTP 工具组用于同一 REST API 内共享连接与权限，不用于组合多个 MCP 后端。工具发布、Scope、业务资源、客户端授权和写审批共同约束调用。
 
 语言控件可切换中文与 English。窄屏使用抽屉导航，支持键盘与 Escape 关闭。刷新会重新读取当前配置并显示最近成功更新时间；失败时保留错误提示与重试入口。概览数据来自实际配置和连接状态；请求历史按数据库保留期查询，不代表完整监控或不可篡改的审计归档。
+
+关闭编辑器、刷新配置、切换页面或筛选用户与组时，如有未保存的修改，控制台会询问是否放弃；选择取消可继续编辑。切换语言会保留打开的编辑器草稿；「用户与组」重新生成表单前会询问是否放弃。浏览器关闭或重新加载也会触发原生提醒。保存期间表单暂时锁定，避免返回结果覆盖新的输入；修改不会自动保存，包含凭证的草稿也不会写入浏览器存储。
 
 ## 工具权限检查
 
@@ -216,7 +236,7 @@ client_authorization:
 
 请求记录在处理完成后写入；写入失败不会重放或改变业务操作，服务器记录错误，页面提示本次运行的记录缺口。进程在写入前崩溃、进行中的请求和 GET 流不在此记录中；它不能替代审批审计的独立归档。未启用托管数据库的部署只保留原有短期内存诊断。
 
-`GET /api/v1/requests` 新增 `since`、`until`（RFC3339，按完成时间筛选），实际窗口在 `window_start`／`window_end` 中返回。`format=ndjson` 导出最多 10,000 条，仍受管理员鉴权和相同筛选限制；响应头 `X-MCPHub-Next-Cursor` 非零时可作为 `cursor` 继续导出，或在 UI 缩小时间范围。请求历史持久化在新部署的 **schema 9** 数据库中，备份时保存数据库及匹配密钥。
+`GET /api/v1/requests` 新增 `since`、`until`（RFC3339，按完成时间筛选），实际窗口在 `window_start`／`window_end` 中返回。`format=ndjson` 导出最多 10,000 条，仍受管理员鉴权和相同筛选限制；响应头 `X-MCPHub-Next-Cursor` 非零时可作为 `cursor` 继续导出，或在 UI 缩小时间范围。请求历史持久化在新部署的 **schema 10** 数据库中，备份时保存数据库及匹配密钥。
 
 以下 API 仅位于**管理监听器**，个人门户不开放跨用户查询：
 
@@ -242,7 +262,7 @@ mcpbridge admin --profile ops get '/requests?endpoint=database-prod&outcome=scop
 
 ### Docker 部署
 
-Dockerfile 使用 `golang:1.26-bookworm` 构建静态二进制，再放入 `gcr.io/distroless/static-debian12:nonroot`；最终容器没有 shell，进程以 nonroot 用户运行。
+Dockerfile 使用 `golang:1.26.8-bookworm` 构建静态二进制，再放入 `gcr.io/distroless/static-debian12:nonroot`；最终容器没有 shell，进程以 nonroot 用户运行。
 
 ```bash
 docker build -t mcphub:local .
@@ -256,7 +276,7 @@ docker run --rm \
 
 容器内监听地址应与端口映射匹配（示例为 `:8080`）。`--env-file` 只为进程注入环境变量，配置以只读方式挂载；请限制宿主机 `config.yaml` 和 `.env` 的权限。镜像入口点已经是 `/usr/local/bin/mcphub`，因此 `serve`/`validate` 直接作为参数传入。
 
-SQLite 管理模式需要可写数据库卷，两种存储都需要 `MCPHUB_CONFIG_KEY`。本地模式绑定容器回环，普通端口映射无法访问它。远程容器部署使用 `mode: remote`、OIDC 管理员权限与 HTTPS 代理，参见[PostgreSQL Compose 示例](../deploy/README.zh-CN.md)。
+SQLite 管理模式需要可写数据库卷，两种存储都需要 `MCPHUB_CONFIG_KEY`。本地模式绑定容器回环，普通端口映射无法访问它。远程容器部署使用 `mode: remote`、内建管理员账号与 HTTPS 代理，参见[PostgreSQL Compose 示例](../deploy/README.zh-CN.md)。
 
 ## 安全说明
 
@@ -270,13 +290,13 @@ SQLite 管理模式需要可写数据库卷，两种存储都需要 `MCPHUB_CONF
 - MCP 监听器的所有 HTTP 路由在 request body 被消费或关闭前都保持 `request_timeout` 读取 deadline，因此未认证或被拒绝请求的慢 body 也有界。`subscriptions/listen` POST 只有在 body 读完后才不受普通 response 写入和 request context timeout 限制。
 - 后端 SSE 响应保持 streaming passthrough。progress 检查每个 event 最多缓存 1 MiB；超大 event 原样转发但跳过 progress 检查。
 - 已确认的 2026 resource subscription ID 会把更新映射回原订阅 URI，包括 update event URI 不同的情况；timeout、取消订阅和 session/重连清理会删除映射。
-- 本地管理模式无登录，只允许数字回环地址；远程管理模式要求独立 audience 和管理员 scope，使用 HTTPS、精确 Host/Origin、Cookie CSRF 校验和严格 CSP。
+- 内建本地管理要求账号登录，且只允许数字回环地址；远程管理模式要求独立 audience 和管理员 scope，使用 HTTPS、精确 Host/Origin、Cookie CSRF 校验和严格 CSP。
 - `MCPHUB_CONFIG_KEY` 应放在 YAML 和数据库备份之外安全保存。SQLite 文件权限为 `0600`，但恢复其中 Secret 必须保留完全相同的 32 字节密钥。
 
 ## 已知限制与排障提示
 
 - 管理平台持久化 backend、工具组配置以及写入审批和审计记录；当前仍没有指标、持久化 MCP 目录、跨实例共享订阅或高可用协调，每个进程维护自己的后端连接、目录和 token view。
-- 当前版本不提供内置账号、stdio 后端接入、独立旧式 GET SSE 端点、原生 TLS、动态租户、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本地 `connect` 命令提供到 HTTP 网关的 stdio 连接；TLS 和外部限流由反向代理负责。
+- 当前版本不提供 stdio 后端接入、独立旧式 GET SSE 端点、原生 TLS、动态租户、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。本地 `connect` 命令提供到 HTTP 网关的 stdio 连接；TLS 和外部限流由反向代理负责。
 - 个人凭证当前覆盖远程 MCP endpoint；HTTP 工具组、动态云/数据库凭证及供应商专用 SaaS OAuth 适配不在本版范围内。
 - 聚合器只声明并实现 tools、prompts、resources（含订阅）和 completions 能力；后端声明的其他能力不会自动变成网关能力。非法名称、非法 URI 模板和 SDK 拒绝的元数据会被省略。
 - 后端断线时保留 last-known-good 目录，但调用需要实时连接；required 后端会使 `/readyz` 变为 503，optional 后端不会阻塞整体就绪。
@@ -300,3 +320,25 @@ SQLite 管理模式需要可写数据库卷，两种存储都需要 `MCPHUB_CONF
 | 只有管理页，没有用户授权门户 | 另行启用 `client_authorization` 并注册普通用户客户端。 |
 | 发布后仍看不到/不能执行工具 | 同时检查原始工具名、`effect`、Token/Grant Scope 和用户策略；`validate` 不验证工具实际存在。 |
 | SQLite 看似变成空库 | 核对 YAML 的位置及解析后的 `database_path`，不要意外连接到新路径。 |
+
+## Agent 链接授权
+
+内建签发者部署可将用户登录与客户端同意合并在一个网页中。本机、SSH 或容器上的 Agent 都可以使用，不需要浏览器回调到 Agent 机器。使用同一系统用户和同一 `MCPHUB_HOME` 私有目录执行：
+
+```bash
+mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "项目助手" --json
+mcpbridge pair finish --request pr_example --wait --json
+mcpbridge connect --profile work --client ci_example
+```
+
+替换实际返回的请求与客户端 ID。向用户展示 `verification_uri_complete` 和 `user_code`；用户核对配对码后，以本地账号、LDAP 或 OIDC 登录，选择服务、工具、资源限制和期限，再确认。工具默认不勾选，写能力默认关闭。无 `--wait` 时只检查一次；`pending_user` 仍需用户确认，`ready` 表示私有凭证保存与 MCP 连接检查完成。默认申请最长 1 小时，受网关上限约束；申请 5 分钟到期，轮询初始间隔 5 秒。`--ttl` 接受秒数（至少 60），`--endpoint`、重复 `--tool` / `--scope` 可收窄请求。
+
+Agent 没有命令执行能力时，将 stdio 连接参数设为：
+
+```json
+["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "项目助手", "--interactive-auth"]
+```
+
+会话立即初始化，仅开放 `mcpbridge_auth_start` 与 `mcpbridge_auth_status`。前者复用同一个未过期申请；后者可能领取、保存凭证并检查连接，按结果的 `interval` 调用。ready 后刷新工具列表；不支持 `notifications/tools/list_changed` 时改用返回的 `connect --profile … --client …` 重新连接。失败的业务调用不会排队或自动重试，撤销或到期后需明确重新授权。
+
+每次配对只授权一个服务及工具能力；提示词、资源 URI 或订阅使用原有向导。权限受当前组和已确认范围共同约束，新工具不会自动扩权。所有私有凭证留在 MCPBridge，禁止复制 Token 给 Agent。失败不会覆盖原有可用 profile；换用户或服务器需另建 profile。纯外部签发者继续使用 PKCE 登录与 setup。

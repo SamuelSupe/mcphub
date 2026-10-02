@@ -82,6 +82,10 @@ func (a *App) serveClientAuthorization(w http.ResponseWriter, req *http.Request,
 			a.serveAccounts(w, req, rt, info, session, strings.TrimPrefix(path, "/api/accounts"))
 			return
 		}
+		if strings.HasPrefix(path, "/api/device") {
+			a.deviceBrowser(w, req, rt, info, strings.TrimPrefix(path, "/api"))
+			return
+		}
 		a.clientAuthorizationRoute(w, req, rt, info, true, strings.TrimPrefix(path, "/api"))
 		return
 	}

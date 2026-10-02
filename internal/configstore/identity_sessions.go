@@ -11,12 +11,13 @@ import (
 )
 
 type SSOSession struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"user_id"`
-	ClientID  string    `json:"client_id"`
-	Resource  string    `json:"resource"`
-	Scopes    []string  `json:"scopes"`
-	ExpiresAt time.Time `json:"expires_at"`
+	CredentialVersion int64     `json:"credential_version,omitempty"`
+	ID                string    `json:"id"`
+	UserID            string    `json:"user_id"`
+	ClientID          string    `json:"client_id"`
+	Resource          string    `json:"resource"`
+	Scopes            []string  `json:"scopes"`
+	ExpiresAt         time.Time `json:"expires_at"`
 }
 
 func (s *Store) SSOSigningKey(ctx context.Context) (ed25519.PrivateKey, error) {
@@ -56,12 +57,26 @@ func (s *Store) SSOSigningKey(ctx context.Context) (ed25519.PrivateKey, error) {
 }
 
 func (s *Store) CreateSSOSession(ctx context.Context, session SSOSession, refresh bool) (SSOSession, string, error) {
-	session.ID = "ss_" + rand.Text()
+	s.identityMu.Lock()
+	defer s.identityMu.Unlock()
+	p, err := s.effectiveIdentity(ctx, session.UserID)
+	if err != nil || p.CredentialVersion != session.CredentialVersion {
+		return session, "", ErrIdentityDenied
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return session, "", err
 	}
 	defer tx.Rollback()
+	session, token, err := s.createSSOSessionTx(ctx, tx, session, refresh)
+	if err == nil {
+		err = tx.Commit()
+	}
+	return session, token, err
+}
+
+func (s *Store) createSSOSessionTx(ctx context.Context, tx *transaction, session SSOSession, refresh bool) (SSOSession, string, error) {
+	session.ID = "ss_" + rand.Text()
 	data, err := json.Marshal(session)
 	if err != nil {
 		return session, "", err
@@ -78,9 +93,6 @@ func (s *Store) CreateSSOSession(ctx context.Context, session SSOSession, refres
 		token = rand.Text() + rand.Text()
 		_, err = tx.ExecContext(ctx, "INSERT INTO sso_refresh(hash,session_id,used) VALUES(?,?,0)", SecretHash(token), session.ID)
 	}
-	if err == nil {
-		err = tx.Commit()
-	}
 	return session, token, err
 }
 
@@ -96,6 +108,50 @@ func readSSOSession(ctx context.Context, db identityReader, id string) (SSOSessi
 
 func (s *Store) SSOSession(ctx context.Context, id string) (SSOSession, error) {
 	return readSSOSession(ctx, s.db, id)
+}
+
+func revokeIdentitySessions(ctx context.Context, tx *transaction, users ...string) error {
+	if len(users) == 0 {
+		return nil
+	}
+	owners := make(map[string]bool, len(users))
+	for _, id := range users {
+		owners[id] = true
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT data FROM sso_sessions")
+	if err != nil {
+		return err
+	}
+	ids := []string{}
+	for rows.Next() {
+		var data []byte
+		var session SSOSession
+		if err = rows.Scan(&data); err == nil {
+			err = json.Unmarshal(data, &session)
+		}
+		if err != nil {
+			break
+		}
+		if owners[session.UserID] {
+			ids = append(ids, session.ID)
+		}
+	}
+	if err == nil {
+		err = rows.Err()
+	}
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, sessionID := range ids {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM sso_refresh WHERE session_id=?", sessionID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM sso_sessions WHERE id=?", sessionID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) SSORefreshSession(ctx context.Context, token string) (SSOSession, error) {

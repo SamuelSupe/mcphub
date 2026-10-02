@@ -15,8 +15,17 @@ func (a *App) serveClientPortal(w http.ResponseWriter, req *http.Request) {
 	}
 	var file, contentType string
 	switch req.URL.Path {
+	case "/client-auth/device", "/client-auth/device/":
+		file, contentType = "device.html", "text/html; charset=utf-8"
+	case "/client-auth/device.js":
+		file, contentType = "device.js", "text/javascript; charset=utf-8"
 	case "/client-auth/":
 		file, contentType = "index.html", "text/html; charset=utf-8"
+	case "/client-auth/local-account.js":
+		data, _ := adminAssets.ReadFile("adminui/local-account.js")
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Write(data)
+		return
 	case "/client-auth/accounts.js":
 		file, contentType = "accounts.js", "text/javascript; charset=utf-8"
 	case "/client-auth/app.js":

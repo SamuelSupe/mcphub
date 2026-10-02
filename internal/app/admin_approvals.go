@@ -104,7 +104,7 @@ func (app *App) makeApprovalView(a configstore.Approval, identity adminIdentity)
 }
 
 func (a *App) serveAdminApprovals(w http.ResponseWriter, req *http.Request, suffix string) {
-	if !a.currentConfig().Admin.Remote() || a.adminAuth == nil {
+	if a.adminAuth == nil {
 		if suffix == "" && req.Method == http.MethodGet {
 			writeJSON(w, 200, map[string]any{"enabled": false, "approvals": []approvalView{}})
 		} else {
@@ -158,6 +158,13 @@ func (a *App) serveAdminApprovals(w http.ResponseWriter, req *http.Request, suff
 			if !view.CanReview || view.AlreadyApproved || value.Status != "pending" || !view.StepUpRequired {
 				writeAPIError(w, 409, "approval_conflict", "当前请求不允许加强身份验证", "")
 				return
+			}
+			if a.currentConfig().Auth.Builtin() {
+				user, err := a.store.Identity(req.Context(), identity.info.UserID)
+				if err == nil && user.Provider == config.LocalIdentityProvider {
+					a.verifyLocalApproval(w, req, id, identity)
+					return
+				}
 			}
 			if value.Intent.Kind == "configuration" {
 				query := req.URL.Query()

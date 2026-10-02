@@ -69,7 +69,7 @@ func NewWithHTTPTools(cfg *config.Config, manager *backend.Manager, httpTools *h
 
 // ConfigureApprovals is called before the runtime starts serving requests.
 func (h *Hub) ConfigureApprovals(store *configstore.Store, limits *ratelimit.Registry) {
-	if h.cfg.Admin.Enabled && h.cfg.Admin.Remote() {
+	if h.cfg.Admin.Enabled && (h.cfg.Admin.Remote() || h.cfg.Auth.Builtin()) {
 		h.approvalStore, h.approvalLimits = store, limits
 	}
 }

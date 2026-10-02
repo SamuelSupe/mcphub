@@ -1,6 +1,6 @@
 # MCPHub 帮助中心
 
-中英文用户指南与管理员手册，以 MCPHub v2.2.2 为基准。每种语言包含 19 篇用户指南和 20 篇管理员章节，共 78 页。静态多页站点，浏览器端无框架或第三方依赖；构建使用 Node.js 20 以上与 Marked。
+中英文用户指南与管理员手册，以 MCPHub v2.3.0 候选版本为基准，尚未公开发布。每种语言包含 19 篇用户指南和 22 篇管理员章节，共 82 页，覆盖内建账号、组权限与可选企业 SSO。静态多页站点，浏览器端无框架或第三方依赖；构建使用 Node.js 20 以上与 Marked。
 
 - `pages.json`、`pages.en.json` 与 `content/*.html`、`content/en/*.html`：用户指南的顺序、导航和两种语言的正文。
 - `admin-pages.json`、`admin-pages.en.json`：管理员章节，按对应语言的源 Markdown 文件和标题组织。
@@ -33,6 +33,6 @@ python3 -m http.server 4387 --bind 127.0.0.1 --directory dist
 
 ## 发布
 
-[GitHub Pages](https://samuelsupe.github.io/mcphub/) 使用 `.github/workflows/docs.yml`。`main` 和 PR 变更只构建检查；正式 Release 发布后自动部署，也可手动触发。发行包先以草稿形式验收，确认后公开并同步站点。只上传 `dist`，包括 `examples/` 中未经填写的公开配置模板，不包含真实配置、凭证、数据库或服务端源码。构建直接复制仓库模板，中英文管理员页面的配置链接指向同一份文件；修改模板会重新发布。CI 使用实际服务端校验全部安装配置，并检查 Compose 展开，防止字段、变量和二进制再次脱节。
+[GitHub Pages](https://samuelsupe.github.io/mcphub/) 使用 `.github/workflows/docs.yml`。`main` 和 PR 变更只构建检查；正式 Release 发布后自动部署，也可手动触发。发行包先以草稿形式验收，确认后公开并同步站点。只上传 `dist`，包括 `examples/` 中未经填写的公开配置模板，不包含真实配置、凭证、数据库或服务端源码。构建直接复制仓库模板，中英文管理员页面的配置链接指向同一份文件；发布站点时同步模板。CI 使用实际服务端校验全部安装配置，并检查 Compose 展开，防止字段、变量和二进制再次脱节。
 
-用户内容依据本仓库 CLI、个人门户、用户手册和权限实现；客户端配置核对 OpenAI、Claude Code 与 VS Code 官方文档。管理员内容保持原始手册的部署、审批、身份和运维边界。下载名遵循 v2.2.2 Release 资源命名，发布流程校验包内配置与文档并实际启动解压后的程序；实际企业 SSO、Vault 和审批须在部署环境完成验收。
+用户内容依据本仓库 CLI、个人门户、用户手册和权限实现；客户端配置核对 OpenAI、Claude Code 与 VS Code 官方文档。管理员内容保持原始手册的部署、审批、身份和运维边界。候选安装页使用 v2.3.0 包名，并明确尚无公开下载；发布流程校验包内配置与文档并实际启动解压后的程序。实际企业 SSO、Vault 和审批仍须在目标部署环境完成验收。

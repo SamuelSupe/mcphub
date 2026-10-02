@@ -19,21 +19,25 @@ import (
 	"github.com/SamuelSupe/mcphub/v2/internal/authn"
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
 	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/sso"
 )
 
 const adminSessionCookie = "__Host-mcphub-admin"
 const adminLoginCookie = "__Host-mcphub-login"
 
 type adminAuthorization struct {
-	userPortal bool
-	resource   string
-	cfg        config.AdminConfig
-	issuer     string
-	verifier   tokenVerifier
-	client     *http.Client
-	mu         sync.Mutex
-	sessions   map[string]*adminSession
-	logins     map[string]adminLogin
+	local          *sso.Server
+	accountHandler func(http.ResponseWriter, *http.Request)
+	loginScopes    []string
+	userPortal     bool
+	resource       string
+	cfg            config.AdminConfig
+	issuer         string
+	verifier       tokenVerifier
+	client         *http.Client
+	mu             sync.Mutex
+	sessions       map[string]*adminSession
+	logins         map[string]adminLogin
 }
 
 type adminSession struct {
@@ -101,14 +105,14 @@ func (a *App) secureAdmin(next http.Handler) http.Handler {
 			return
 		}
 		if req.URL.Path == "/auth/session" && req.Method == http.MethodGet {
-			if !cfg.Remote() {
+			if a.adminAuth == nil {
 				writeJSON(w, http.StatusOK, map[string]any{"mode": "local", "authenticated": true, "subject": "local"})
 				return
 			}
 			a.adminAuth.serveSession(w, req)
 			return
 		}
-		if cfg.Remote() {
+		if a.adminAuth != nil {
 			if a.adminAuth.servePublic(w, req) {
 				return
 			}
@@ -143,6 +147,16 @@ func (a *App) secureAdmin(next http.Handler) http.Handler {
 }
 
 func (a *adminAuthorization) servePublic(w http.ResponseWriter, req *http.Request) bool {
+	if a.local != nil && a.local.Builtin() {
+		if req.URL.Path == "/auth/local-login" {
+			a.localLogin(w, req)
+			return true
+		}
+		if strings.HasPrefix(req.URL.Path, "/auth/account") && a.accountHandler != nil {
+			a.accountHandler(w, req)
+			return true
+		}
+	}
 	switch req.URL.Path {
 	case "/.well-known/oauth-protected-resource":
 		if req.Method != http.MethodGet {
@@ -183,7 +197,7 @@ func (a *adminAuthorization) servePublic(w http.ResponseWriter, req *http.Reques
 			delete(a.sessions, cookie.Value)
 			a.mu.Unlock()
 		}
-		setAdminCookie(w, a.sessionCookie(), "", -1)
+		a.setCookie(w, a.sessionCookie(), "", -1)
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		return false
@@ -286,6 +300,10 @@ func (a *adminAuthorization) session(req *http.Request) *adminSession {
 }
 
 func (a *adminAuthorization) serveSession(w http.ResponseWriter, req *http.Request) {
+	if a.local != nil && a.local.Builtin() {
+		a.serveLocalSession(w, req)
+		return
+	}
 	session := a.session(req)
 	if session == nil {
 		writeJSON(w, http.StatusOK, map[string]any{"mode": "remote", "authenticated": false})
@@ -314,16 +332,30 @@ func (a *App) adminMutationContext(req *http.Request) context.Context {
 }
 
 func (a *adminAuthorization) sessionCookie() string {
+	if a.local != nil && a.local.Builtin() && !a.userPortal && !a.cfg.Remote() {
+		return "mcphub-local-admin"
+	}
 	if a.userPortal {
 		return "__Host-mcphub-user"
 	}
 	return adminSessionCookie
 }
 func (a *adminAuthorization) loginCookie() string {
+	if a.local != nil && a.local.Builtin() && !a.userPortal && !a.cfg.Remote() {
+		return "mcphub-local-login"
+	}
 	if a.userPortal {
 		return "__Host-mcphub-user-login"
 	}
 	return adminLoginCookie
+}
+
+func (a *adminAuthorization) setCookie(w http.ResponseWriter, name, value string, maxAge int) {
+	if a.local != nil && a.local.Builtin() && !a.userPortal && !a.cfg.Remote() {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
+		return
+	}
+	setAdminCookie(w, name, value, maxAge)
 }
 func (a *adminAuthorization) homePath() string {
 	if a.userPortal {

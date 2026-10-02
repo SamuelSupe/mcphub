@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
@@ -17,26 +18,31 @@ import (
 var ErrIdentityDenied = errors.New("user is pending, disabled, or permissions changed; contact the MCPHub administrator")
 
 type Identity struct {
-	ID               string                     `json:"id"`
-	Provider         string                     `json:"provider"`
-	Kind             string                     `json:"kind"`
-	ExternalID       string                     `json:"external_id"`
-	Name             string                     `json:"name"`
-	Enabled          bool                       `json:"enabled"`
-	DirectoryActive  bool                       `json:"directory_active"`
-	DirectoryManaged bool                       `json:"directory_managed"`
-	Groups           []string                   `json:"groups"`
-	Permissions      config.IdentityPermissions `json:"permissions"`
-	Revision         int64                      `json:"revision"`
-	UpdatedAt        time.Time                  `json:"updated_at"`
+	CredentialVersion int64                      `json:"credential_version,omitempty"`
+	ID                string                     `json:"id"`
+	Provider          string                     `json:"provider"`
+	Kind              string                     `json:"kind"`
+	ExternalID        string                     `json:"external_id"`
+	Name              string                     `json:"name"`
+	Enabled           bool                       `json:"enabled"`
+	DirectoryActive   bool                       `json:"directory_active"`
+	DirectoryManaged  bool                       `json:"directory_managed"`
+	ManagedLocally    bool                       `json:"managed_locally,omitempty"`
+	Groups            []string                   `json:"groups"`
+	Permissions       config.IdentityPermissions `json:"permissions"`
+	Revision          int64                      `json:"revision"`
+	UpdatedAt         time.Time                  `json:"updated_at"`
 }
 
 type EffectiveIdentity struct {
-	ID               string                     `json:"id"`
-	Provider         string                     `json:"provider"`
-	DirectoryManaged bool                       `json:"directory_managed"`
-	Version          string                     `json:"version"`
-	Permissions      config.IdentityPermissions `json:"permissions"`
+	Name              string                     `json:"name,omitempty"`
+	CredentialVersion int64                      `json:"credential_version,omitempty"`
+	ID                string                     `json:"id"`
+	Provider          string                     `json:"provider"`
+	DirectoryManaged  bool                       `json:"directory_managed"`
+	ManagedLocally    bool                       `json:"managed_locally,omitempty"`
+	Version           string                     `json:"version"`
+	Permissions       config.IdentityPermissions `json:"permissions"`
 }
 
 type identityCall struct {
@@ -74,7 +80,11 @@ func (s *Store) Identity(ctx context.Context, id string) (Identity, error) {
 }
 
 func (s *Store) Identities(ctx context.Context) ([]Identity, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT data FROM identities ORDER BY kind,external_id")
+	return readIdentities(ctx, s.db, "ORDER BY kind,external_id")
+}
+
+func readIdentities(ctx context.Context, db identityReader, clause string, args ...any) ([]Identity, error) {
+	rows, err := db.QueryContext(ctx, "SELECT data FROM identities "+clause, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +127,10 @@ func ensureIdentity(ctx context.Context, tx *transaction, provider, kind, extern
 }
 
 func (s *Store) UpdateIdentity(ctx context.Context, id string, revision int64, enabled bool, permissions config.IdentityPermissions) (Identity, error) {
+	return s.updateIdentity(ctx, id, revision, enabled, permissions, nil)
+}
+
+func (s *Store) updateIdentity(ctx context.Context, id string, revision int64, enabled bool, permissions config.IdentityPermissions, groups *[]string) (Identity, error) {
 	if err := permissions.Validate(); err != nil {
 		return Identity{}, err
 	}
@@ -134,7 +148,21 @@ func (s *Store) UpdateIdentity(ctx context.Context, id string, revision int64, e
 	if p.Revision != revision {
 		return p, ErrConflict
 	}
+	if p.Kind == "user" && (len(permissions.Roles)+len(permissions.Scopes)+len(permissions.Access) > 0) {
+		return p, ErrUserPermissions
+	}
+	if groups != nil {
+		if err := replaceUserGroups(ctx, tx, &p, *groups); err != nil {
+			return p, err
+		}
+	}
 	p.Enabled, p.Permissions = enabled, permissions
+	if !enabled && p.Kind == "user" && p.Provider == config.LocalIdentityProvider {
+		p.CredentialVersion++
+		if err := revokeIdentitySessions(ctx, tx, p.ID); err != nil {
+			return p, err
+		}
+	}
 	if err := s.checkLastAdministrator(ctx, tx, p); err != nil {
 		return Identity{}, err
 	}
@@ -171,12 +199,19 @@ func (s *Store) SyncIdentity(ctx context.Context, provider, subject, name string
 		p.DirectoryActive = !directory || bootstrap
 		p.DirectoryManaged = directory && bootstrap
 		if bootstrap {
-			p.Permissions.Roles = []string{"admin"}
+			group, err := administratorGroup(ctx, tx, provider)
+			if err != nil {
+				return p, err
+			}
+			p.Groups = []string{group.ID}
 		}
 	}
 	p.Name = name
 	if !directory {
-		p.Groups = nil
+		p.Groups, err = locallyManagedGroups(ctx, tx, p.Groups)
+		if err != nil {
+			return p, err
+		}
 		for kind, ids := range map[string][]string{"group": groups, "department": departments} {
 			for _, id := range ids {
 				if id == "" || len(id) > 256 {
@@ -185,6 +220,10 @@ func (s *Store) SyncIdentity(ctx context.Context, provider, subject, name string
 				g, err := ensureIdentity(ctx, tx, provider, kind, id)
 				if err != nil {
 					return p, err
+				}
+				// Upstream claims cannot join administrator-managed policy groups.
+				if g.ManagedLocally {
+					return p, ErrGroupMembership
 				}
 				if g.Revision == 0 {
 					g.Name = id
@@ -215,18 +254,36 @@ func (s *Store) EffectiveIdentity(ctx context.Context, id string) (EffectiveIden
 }
 
 func (s *Store) effectiveIdentity(ctx context.Context, id string) (EffectiveIdentity, error) {
-	p, err := s.Identity(ctx, id)
+	return s.effectiveIdentityFrom(ctx, s.db, id)
+}
+
+func (s *Store) effectiveIdentityFrom(ctx context.Context, db identityReader, id string) (EffectiveIdentity, error) {
+	p, err := readIdentity(ctx, db, "id=?", id)
 	if err != nil {
 		return EffectiveIdentity{}, err
 	}
 	if p.Kind != "user" || !p.Enabled || !p.DirectoryActive {
 		return EffectiveIdentity{}, ErrIdentityDenied
 	}
-	permissions := p.Permissions
-	for _, gid := range p.Groups {
-		g, err := s.Identity(ctx, gid)
+	permissions := config.IdentityPermissions{}
+	groups := map[string]Identity{}
+	if len(p.Groups) > 0 {
+		args := make([]any, len(p.Groups))
+		for i, gid := range p.Groups {
+			args[i] = gid
+		}
+		items, err := readIdentities(ctx, db, "WHERE id IN ("+strings.TrimSuffix(strings.Repeat("?,", len(args)), ",")+")", args...)
 		if err != nil {
 			return EffectiveIdentity{}, err
+		}
+		for _, g := range items {
+			groups[g.ID] = g
+		}
+	}
+	for _, gid := range p.Groups {
+		g, ok := groups[gid]
+		if !ok {
+			return EffectiveIdentity{}, ErrNotFound
 		}
 		if g.Kind == "user" || g.Provider != p.Provider || !g.Enabled || !g.DirectoryActive {
 			continue
@@ -239,8 +296,11 @@ func (s *Store) effectiveIdentity(ctx context.Context, id string) (EffectiveIden
 	permissions.Roles = slices.Compact(permissions.Roles)
 	slices.Sort(permissions.Scopes)
 	permissions.Scopes = slices.Compact(permissions.Scopes)
-	data, _ := json.Marshal(permissions)
-	return EffectiveIdentity{ID: id, Provider: p.Provider, DirectoryManaged: p.DirectoryManaged, Version: SecretHash(string(data)), Permissions: permissions}, nil
+	data, _ := json.Marshal(struct {
+		Permissions config.IdentityPermissions
+		Credentials int64
+	}{permissions, p.CredentialVersion})
+	return EffectiveIdentity{ID: id, Name: p.Name, Provider: p.Provider, CredentialVersion: p.CredentialVersion, DirectoryManaged: p.DirectoryManaged, Version: SecretHash(string(data)), Permissions: permissions}, nil
 }
 
 // Admission and changes share a lock: a cached MCP view cannot start another

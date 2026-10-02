@@ -1,14 +1,44 @@
 # MCPHub 用户手册
 
+> 本指南用于 v2.3.0 全新部署。内建账号与 Agent 设备授权需要 v2.3.0，v2.2.2 不包含这些功能。
+
 [English](user-guide.md) · [文档导航](README.zh-CN.md) · [项目首页](../README.zh-CN.md)
 
-面向在 Codex、Claude Code 或其他 MCP 客户端中使用公司工具的用户。本手册对应 v2.2.2。只需在自己的电脑安装 `mcpbridge`；服务器、身份服务和 Vault 由管理员配置。
+面向在 Codex、Claude Code 或其他 MCP 客户端中使用公司工具的用户。本手册对应 v2.3.0。只需在自己的电脑安装 `mcpbridge`；服务器、身份服务和 Vault 由管理员配置。
 
 首次接入按 **安装 CLI → 运行接入向导 → 确认授权 → 将配置加入客户端** 完成。服务要求个人上游账号时，先在门户连接账号，再完成连接检查。
 
 - [接入前准备](#接入前准备) · [安装 CLI](#安装-cli) · [接入 MCP 客户端](#接入-mcp-客户端)
 - [连接个人账号](#连接个人账号) · [写操作审批](#写操作审批) · [管理客户端授权](#管理客户端授权)
 - [诊断与常见问题](#诊断与常见问题) · [手动登录与兼容连接](#手动登录与兼容连接) · [本地数据与退出](#本地数据与退出)
+
+内建账号部署时，使用管理员提供的账号密码登录；启用 MFA 后还需动态验证码。密码修改与 MFA 绑定在个人授权中心的「我的账号」中完成。企业登录仅在管理员启用后显示；忘记密码请联系管理员重置。
+
+企业登录由管理员在身份服务页面配置 OIDC 或 LDAP。LDAP 用户在授权页选择 LDAP，OIDC 用户选择企业身份登录；无需修改 MCPBridge 的接入方式。企业账号首次登录后仍需管理员启用并分配组权限。
+
+## Agent 链接授权
+
+内建签发者部署可将用户登录与客户端同意合并在一个网页中。本机、SSH 或容器上的 Agent 都可以使用，不需要浏览器回调到 Agent 机器。使用同一系统用户和同一 `MCPHUB_HOME` 私有目录执行：
+
+```bash
+mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "项目助手" --json
+mcpbridge pair finish --request pr_example --wait --json
+mcpbridge connect --profile work --client ci_example
+```
+
+替换实际返回的请求与客户端 ID。向用户展示 `verification_uri_complete` 和 `user_code`；用户核对配对码后，以本地账号、LDAP 或 OIDC 登录，选择服务、工具、资源限制和期限，再确认。工具默认不勾选，写能力默认关闭。无 `--wait` 时只检查一次；`pending_user` 仍需用户确认，`ready` 表示私有凭证保存与 MCP 连接检查完成。默认申请最长 1 小时，受网关上限约束；申请 5 分钟到期，轮询初始间隔 5 秒。`--ttl` 接受秒数（至少 60），`--endpoint`、重复 `--tool` / `--scope` 可收窄请求。
+
+Agent 没有命令执行能力时，将 stdio 连接参数设为：
+
+```json
+["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "项目助手", "--interactive-auth"]
+```
+
+会话立即初始化，仅开放 `mcpbridge_auth_start` 与 `mcpbridge_auth_status`。前者复用同一个未过期申请；后者可能领取、保存凭证并检查连接，按结果的 `interval` 调用。ready 后刷新工具列表；不支持 `notifications/tools/list_changed` 时改用返回的 `connect --profile … --client …` 重新连接。失败的业务调用不会排队或自动重试，撤销或到期后需明确重新授权。
+
+每次配对只授权一个服务及工具能力；提示词、资源 URI 或订阅使用原有向导。权限受当前组和已确认范围共同约束，新工具不会自动扩权。所有私有凭证留在 MCPBridge，禁止复制 Token 给 Agent。失败不会覆盖原有可用 profile；换用户或服务器需另建 profile。纯外部签发者继续使用 PKCE 登录与 setup。
+
+领取时申请、已确认授权和 Broker 会话都必须仍然有效；过期后请明确重新配对。取消尚未完成的申请会清理其未交付凭证；已完成配对不能再用旧申请取消登录会话，撤销客户端请使用客户端授权管理。MCPHub 会在每次业务请求时检查当前权限，撤销立即生效，无需等待 Agent 刷新状态。
 
 ## 接入前准备
 
@@ -25,26 +55,26 @@
 
 ## 安装 CLI
 
-从 [v2.2.2 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2) 选择与电脑匹配的 CLI 包：
+从 [v2.3.0 发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0) 下载与电脑匹配的 MCPBridge 包和 `SHA256SUMS`，包名如下：
 
 | 平台 | CLI 下载 |
 | --- | --- |
-| macOS Intel | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_linux_amd64.tar.gz) |
-| Linux arm64 | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_linux_arm64.tar.gz) |
-| Windows x64 | [mcpbridge.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_windows_amd64.zip) |
-| Windows ARM64 | [mcpbridge.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_windows_arm64.zip) |
+| macOS Intel | `mcpbridge_v2.3.0_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `mcpbridge_v2.3.0_darwin_arm64.tar.gz` |
+| Linux amd64 | `mcpbridge_v2.3.0_linux_amd64.tar.gz` |
+| Linux arm64 | `mcpbridge_v2.3.0_linux_arm64.tar.gz` |
+| Windows x64 | `mcpbridge_v2.3.0_windows_amd64.zip` |
+| Windows ARM64 | `mcpbridge_v2.3.0_windows_arm64.zip` |
 
-下载后与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/SHA256SUMS) 核对 SHA-256，解压并将可执行文件放入 PATH。Windows 需要 10 或更新版本；Intel/AMD 电脑选 x64，Windows on Arm 选 ARM64。
+下载后与 `SHA256SUMS` 核对 SHA-256，解压并将可执行文件放入 PATH。Windows 需要 10 或更新版本；Intel/AMD 电脑选 x64，Windows on Arm 选 ARM64。
 
 macOS/Linux 安装示例（以下为 Linux arm64，替换文件名；macOS 用 `shasum -a 256` 校验）：
 
 ```bash
-sha256sum mcpbridge_v2.2.2_linux_arm64.tar.gz
+sha256sum mcpbridge_v2.3.0_linux_arm64.tar.gz
 # 与 SHA256SUMS 中同名条目逐字核对，一致后再解压。
 mkdir -p mcpbridge-release "$HOME/.local/bin"
-tar -xzf mcpbridge_v2.2.2_linux_arm64.tar.gz -C mcpbridge-release
+tar -xzf mcpbridge_v2.3.0_linux_arm64.tar.gz -C mcpbridge-release
 install -m 755 mcpbridge-release/mcpbridge "$HOME/.local/bin/mcpbridge"
 export PATH="$HOME/.local/bin:$PATH"
 mcpbridge --version
@@ -56,16 +86,16 @@ mcpbridge setup --help
 Windows PowerShell 示例（文件名按实际架构替换）：
 
 ```powershell
-Get-FileHash .\mcpbridge_v2.2.2_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcpbridge_v2.2.2_windows_amd64.zip -DestinationPath .\mcpbridge
+Get-FileHash .\mcpbridge_v2.3.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcpbridge_v2.3.0_windows_amd64.zip -DestinationPath .\mcpbridge
 ```
 
 未添加 PATH 时，将后续命令中的 `mcpbridge` 替换为 `.\mcpbridge\mcpbridge.exe`。
 
-已安装 Go 1.26 的用户也可执行：
+已安装 Go 1.26.8 的用户也可执行：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.2.2
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.3.0
 ```
 
 Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`，也需要加入 PATH。源码构建的文件需用 `./mcpbridge` 运行，或按上面的 `install` 步骤安装。
@@ -181,7 +211,7 @@ mcpbridge doctor --profile work --client ci_example --json --timeout 30s
 
 | 现象 | 下一步 |
 | --- | --- |
-| 首次登录提示待授权 | 联系管理员启用用户并配置服务、Scope 和工具权限 |
+| 首次登录提示待授权 | 联系管理员启用用户并加入具备服务、Scope 和工具权限的组 |
 | 向导没有可选工具或返回 403 | 确认登录身份与服务选择；请管理员检查发布状态和权限，不要自行扩大 Scope |
 | 授权到期、撤销或范围变化 | `mcpbridge client authorize --profile work --client ci_example`，浏览器确认后重启 MCP 连接 |
 | 个人账号未连接、过期或需重连 | 到门户连接/重连账号；更换或断开账号后重新授权客户端 |

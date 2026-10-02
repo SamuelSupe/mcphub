@@ -12,30 +12,30 @@ import (
 
 // SSOConfig makes MCPHub the issuer; upstream credentials never reach MCP clients.
 type SSOConfig struct {
-	Upstream          IdentityProvider `yaml:"upstream"`
-	Clients           []SSOClient      `yaml:"clients"`
-	BootstrapSubjects []string         `yaml:"bootstrap_subjects"`
-	DirectoryTokenEnv string           `yaml:"directory_token_env"`
+	Upstream          IdentityProvider `yaml:"upstream" json:"upstream"`
+	Clients           []SSOClient      `yaml:"clients" json:"clients"`
+	BootstrapSubjects []string         `yaml:"bootstrap_subjects" json:"bootstrap_subjects"`
+	DirectoryTokenEnv string           `yaml:"directory_token_env" json:"directory_token_env"`
 }
 
 type IdentityProvider struct {
-	Protocol         string   `yaml:"protocol"`
-	Issuer           string   `yaml:"issuer"`
-	AuthorizationURL string   `yaml:"authorization_url"`
-	TokenURL         string   `yaml:"token_url"`
-	UserInfoURL      string   `yaml:"userinfo_url"`
-	ClientID         string   `yaml:"client_id"`
-	ClientSecretEnv  string   `yaml:"client_secret_env"`
-	TokenAuthMethod  string   `yaml:"token_auth_method"`
-	Scopes           []string `yaml:"scopes"`
-	SubjectClaim     string   `yaml:"subject_claim"`
-	NameClaim        string   `yaml:"name_claim"`
-	TenantClaim      string   `yaml:"tenant_claim"`
-	TenantValue      string   `yaml:"tenant_value"`
-	GroupsClaim      string   `yaml:"groups_claim"`
-	DepartmentsClaim string   `yaml:"departments_claim"`
-	SuccessClaim     string   `yaml:"success_claim"`
-	SuccessValue     string   `yaml:"success_value"`
+	Protocol         string   `yaml:"protocol" json:"protocol"`
+	Issuer           string   `yaml:"issuer" json:"issuer"`
+	AuthorizationURL string   `yaml:"authorization_url" json:"authorization_url"`
+	TokenURL         string   `yaml:"token_url" json:"token_url"`
+	UserInfoURL      string   `yaml:"userinfo_url" json:"userinfo_url"`
+	ClientID         string   `yaml:"client_id" json:"client_id"`
+	ClientSecretEnv  string   `yaml:"client_secret_env" json:"client_secret_env"`
+	TokenAuthMethod  string   `yaml:"token_auth_method" json:"token_auth_method"`
+	Scopes           []string `yaml:"scopes" json:"scopes"`
+	SubjectClaim     string   `yaml:"subject_claim" json:"subject_claim"`
+	NameClaim        string   `yaml:"name_claim" json:"name_claim"`
+	TenantClaim      string   `yaml:"tenant_claim" json:"tenant_claim"`
+	TenantValue      string   `yaml:"tenant_value" json:"tenant_value"`
+	GroupsClaim      string   `yaml:"groups_claim" json:"groups_claim"`
+	DepartmentsClaim string   `yaml:"departments_claim" json:"departments_claim"`
+	SuccessClaim     string   `yaml:"success_claim" json:"success_claim"`
+	SuccessValue     string   `yaml:"success_value" json:"success_value"`
 }
 
 // App-scoped subjects and tenant-local IDs must not inherit another connection's
@@ -47,9 +47,9 @@ func (p IdentityProvider) Namespace() string {
 }
 
 type SSOClient struct {
-	ID           string   `yaml:"id"`
-	RedirectURIs []string `yaml:"redirect_uris"`
-	Resources    []string `yaml:"resources"`
+	ID           string   `yaml:"id" json:"id"`
+	RedirectURIs []string `yaml:"redirect_uris" json:"redirect_uris"`
+	Resources    []string `yaml:"resources" json:"resources"`
 }
 
 // Each access entry is an independent grant. Resource predicates must match
@@ -167,13 +167,58 @@ func (cfg *Config) validateSSO() error {
 		return fmt.Errorf("MCP path overlaps the SSO endpoints")
 	}
 	p := &s.Upstream
+	if !cfg.Auth.Builtin() || p.Protocol != "" {
+		if err := p.Validate(); err != nil {
+			return err
+		}
+		if p.Issuer == cfg.Auth.Issuer {
+			return fmt.Errorf("invalid upstream issuer")
+		}
+	}
+	if p.Protocol == "" && s.DirectoryTokenEnv != "" {
+		return fmt.Errorf("directory sync requires an external identity provider")
+	}
+	seen := map[string]bool{}
+	for _, c := range s.Clients {
+		if c.ID == "" || seen[c.ID] || len(c.ID) > 256 || len(c.RedirectURIs) == 0 || len(c.Resources) == 0 {
+			return fmt.Errorf("SSO clients need unique ids, redirect_uris and resources")
+		}
+		seen[c.ID] = true
+		for _, raw := range c.RedirectURIs {
+			u, err := url.Parse(raw)
+			if err != nil || u.User != nil || u.Fragment != "" || u.RawQuery != "" || u.Host == "" || u.Path == "" || (u.Scheme != "https" && !(u.Scheme == "http" && u.Hostname() == "127.0.0.1")) {
+				return fmt.Errorf("invalid SSO client redirect URI")
+			}
+		}
+		for _, r := range c.Resources {
+			if r != cfg.Server.PublicURL && ((!cfg.Admin.Remote() && !cfg.Auth.Builtin()) || r != cfg.Admin.PublicURL) {
+				return fmt.Errorf("SSO resource must be the MCP or admin public URL")
+			}
+		}
+	}
+	if len(seen) == 0 {
+		return fmt.Errorf("at least one SSO client is required")
+	}
+	if cfg.Admin.Remote() && (!seen[cfg.Admin.ClientID] || cfg.Admin.ClientSecretEnv != "") {
+		return fmt.Errorf("remote admin must use a registered SSO public client")
+	}
+	if cfg.ClientAuthorization.Enabled && (!seen[cfg.ClientAuthorization.ClientID] || cfg.ClientAuthorization.ClientSecretEnv != "") {
+		return fmt.Errorf("client authorization portal must use a registered SSO public client")
+	}
+	return nil
+}
+
+func (p *IdentityProvider) Validate() error {
+	if len(p.Issuer) > 4096 || len(p.ClientID) > 256 || len(p.Scopes) > 256 {
+		return fmt.Errorf("SSO issuer, client ID or scopes exceed their limits")
+	}
 	if p.Protocol != "oidc" && p.Protocol != "oauth2" {
 		return fmt.Errorf("SSO upstream protocol must be oidc or oauth2")
 	}
 	if _, err := validateAbsoluteURL("SSO upstream issuer", p.Issuer, false); err != nil {
 		return err
 	}
-	if p.Issuer == cfg.Auth.Issuer || strings.ContainsAny(p.Issuer, "?#") {
+	if strings.ContainsAny(p.Issuer, "?#") {
 		return fmt.Errorf("invalid upstream issuer")
 	}
 	if p.ClientID == "" || p.ClientSecretEnv == "" {
@@ -210,33 +255,6 @@ func (cfg *Config) validateSSO() error {
 		if strings.Contains(path, "..") || strings.HasPrefix(path, ".") || strings.HasSuffix(path, ".") {
 			return fmt.Errorf("invalid identity claim path")
 		}
-	}
-	seen := map[string]bool{}
-	for _, c := range s.Clients {
-		if c.ID == "" || seen[c.ID] || len(c.ID) > 256 || len(c.RedirectURIs) == 0 || len(c.Resources) == 0 {
-			return fmt.Errorf("SSO clients need unique ids, redirect_uris and resources")
-		}
-		seen[c.ID] = true
-		for _, raw := range c.RedirectURIs {
-			u, err := url.Parse(raw)
-			if err != nil || u.User != nil || u.Fragment != "" || u.RawQuery != "" || u.Host == "" || u.Path == "" || (u.Scheme != "https" && !(u.Scheme == "http" && u.Hostname() == "127.0.0.1")) {
-				return fmt.Errorf("invalid SSO client redirect URI")
-			}
-		}
-		for _, r := range c.Resources {
-			if r != cfg.Server.PublicURL && (!cfg.Admin.Remote() || r != cfg.Admin.PublicURL) {
-				return fmt.Errorf("SSO resource must be the MCP or admin public URL")
-			}
-		}
-	}
-	if len(seen) == 0 {
-		return fmt.Errorf("at least one SSO client is required")
-	}
-	if cfg.Admin.Remote() && (!seen[cfg.Admin.ClientID] || cfg.Admin.ClientSecretEnv != "") {
-		return fmt.Errorf("remote admin must use a registered SSO public client")
-	}
-	if cfg.ClientAuthorization.Enabled && (!seen[cfg.ClientAuthorization.ClientID] || cfg.ClientAuthorization.ClientSecretEnv != "") {
-		return fmt.Errorf("client authorization portal must use a registered SSO public client")
 	}
 	return nil
 }

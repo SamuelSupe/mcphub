@@ -21,7 +21,9 @@ func (s *Store) ConfigureIdentityProtection(auth config.AuthConfig, admin config
 	s.identityMu.Lock()
 	defer s.identityMu.Unlock()
 	s.identityAdmin = nil
-	if auth.SSO != nil && admin.Remote() {
+	if auth.Builtin() {
+		s.identityAdmin = &identityAdminPolicy{config.LocalIdentityProvider, false, admin}
+	} else if auth.SSO != nil && admin.Remote() {
 		s.identityAdmin = &identityAdminPolicy{auth.SSO.Upstream.Namespace(), auth.SSO.DirectoryTokenEnv != "", admin}
 	}
 }
@@ -71,7 +73,7 @@ func (p *identityAdminPolicy) administratorCount(identities map[string]Identity)
 		if user.Kind != "user" || !user.Enabled || !user.DirectoryActive || (p.directory && !user.DirectoryManaged) {
 			continue
 		}
-		permissions := config.IdentityPermissions{Roles: slices.Clone(user.Permissions.Roles), Scopes: slices.Clone(user.Permissions.Scopes)}
+		permissions := config.IdentityPermissions{}
 		for _, id := range user.Groups {
 			group, ok := identities[id]
 			if ok && group.Kind != "user" && group.Enabled && group.DirectoryActive {

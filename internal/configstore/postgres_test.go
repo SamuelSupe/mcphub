@@ -225,12 +225,24 @@ func TestPostgresConfigurationLifecycle(t *testing.T) {
 		testClientGrantAdministratorQuery(t, migrated)
 		testCredentialBindingLifecycle(t, migrated)
 		testLastAdministratorProtection(t, migrated)
+		testLocalAccountLifecycle(t, migrated)
+		testEnterpriseConnectionsLifecycle(t, migrated)
+		peer, err := OpenPostgres(ctx, dsn, key, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer peer.Close()
+		testDeviceAuthorizationSingleDelivery(t, migrated, peer)
 		testRequestHistory(t, migrated)
 		reopened, err := OpenPostgres(ctx, dsn, key, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer reopened.Close()
+		connections, err := reopened.EnterpriseConnections(ctx)
+		if err != nil || connections.Revision != 3 || !connections.LDAP.Enabled || connections.OIDC.ClientSecret != "encrypted-oidc-secret" {
+			t.Fatal("PostgreSQL identity connection lost on reopen", err)
+		}
 		page, err := reopened.RequestHistory(ctx, diagnostics.Query{Subject: "history-user", Since: time.Now().Add(-48 * time.Hour), Until: time.Now(), Limit: 25})
 		if err != nil || page.Statistics.Total != 2 {
 			t.Fatal("PostgreSQL history lost on reopen", err)

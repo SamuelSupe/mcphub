@@ -1,14 +1,44 @@
 # MCPHub user manual
 
+> This guide covers v2.3.0 fresh deployments. Built-in accounts and Agent device authorization require v2.3.0; v2.2.2 does not include these features.
+
 [中文](user-guide.zh-CN.md) · [Documentation](README.md) · [Project home](../README.md)
 
-For people using company tools through Codex, Claude Code or another MCP client. This manual covers v2.2.2. Install `mcpbridge` on your own computer; administrators configure the gateway, identity provider and Vault.
+For people using company tools through Codex, Claude Code or another MCP client. This manual covers v2.3.0. Install `mcpbridge` on your own computer; administrators configure the gateway, identity provider and Vault.
 
 For first-time access: **install the CLI → run setup → confirm authorization → add the generated configuration to your client**. If a service requires a personal upstream account, connect it in the portal before completing the connection check.
 
 - [Before you start](#before-you-start) · [Install the CLI](#install-the-cli) · [Connect an MCP client](#connect-an-mcp-client)
 - [Connect a personal account](#connect-a-personal-account) · [Write approvals](#write-approvals) · [Manage client authorizations](#manage-client-authorizations)
 - [Diagnostics and troubleshooting](#diagnostics-and-troubleshooting) · [Manual login and compatible connections](#manual-login-and-compatible-connections) · [Local data and logout](#local-data-and-logout)
+
+For built-in account deployments, sign in with the username and password provided by your administrator, plus an authenticator code when MFA is enabled. Use **My account** in the personal portal to change your password or enroll MFA. Enterprise sign-in is available only when configured. Ask your administrator to reset a forgotten password.
+
+Administrators configure enterprise OIDC or LDAP in Identity services. LDAP users select LDAP on the authorization page; OIDC users choose enterprise sign-in. MCPBridge setup remains the same. First-time enterprise accounts still need enablement and group grants in MCPHub.
+
+## Agent link authorization
+
+With the built-in issuer, user sign-in and client consent happen on one web page. Local, SSH and container Agents can use this flow without a browser callback to the Agent's machine. Run both commands under the same operating-system user and private `MCPHUB_HOME` directory:
+
+```bash
+mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "Project Agent" --json
+mcpbridge pair finish --request pr_example --wait --json
+mcpbridge connect --profile work --client ci_example
+```
+
+Replace the request and client IDs with the actual results. Show the user `verification_uri_complete` and `user_code`. After comparing the code, the user signs in with local accounts, LDAP or OIDC, selects a service, tools, resource restrictions and duration, then approves. No tools are selected by default; write access is off. Without `--wait`, finish checks once. `pending_user` requires approval; `ready` means private credentials were saved and MCP connectivity was checked. The default requested maximum is 1 hour, capped by the gateway. Requests expire after 5 minutes and polling starts at 5 seconds. `--ttl` takes seconds (at least 60); narrow requests with `--endpoint` and repeated `--tool` / `--scope`.
+
+For Agents without command execution, use these stdio arguments:
+
+```json
+["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "Project Agent", "--interactive-auth"]
+```
+
+The session initializes immediately with only `mcpbridge_auth_start` and `mcpbridge_auth_status`. Start reuses the same unexpired request; status may collect and save credentials and check connectivity. Respect the returned `interval`. Refresh tools after ready. If the Agent does not support `notifications/tools/list_changed`, reconnect using the returned `connect --profile … --client …` command. Failed business calls are never queued or retried automatically. Reauthorization after expiry or revocation is explicit.
+
+Each pairing grants one service and tool capability; use existing setup for prompts, resource URIs or subscriptions. Current groups and the confirmed grant both restrict access, and new tools never expand old grants. Private credentials remain inside MCPBridge. Never copy tokens to an Agent. Failure preserves an existing working profile; choose a new profile for another user or server. Pure external issuers retain PKCE login and setup.
+
+The request, confirmed grant and Broker session must all remain valid when credentials are collected. After expiry, start pairing explicitly again. Canceling an incomplete request cleans up its undelivered credentials; a completed request cannot cancel the delivered login session. Revoke a client through client authorization management. MCPHub checks current access on every business request, so revocation blocks calls immediately without waiting for an Agent status refresh.
 
 ## Before you start
 
@@ -25,26 +55,26 @@ Domains, tools and `ci_example` below are placeholders. Use your actual URL and 
 
 ## Install the CLI
 
-Choose the CLI package for your computer from the [v2.2.2 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2):
+Download the matching MCPBridge package and `SHA256SUMS` from [the v2.3.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0); package names are listed below:
 
 | Platform | CLI download |
 | --- | --- |
-| macOS Intel | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_linux_amd64.tar.gz) |
-| Linux arm64 | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_linux_arm64.tar.gz) |
-| Windows x64 | [mcpbridge.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_windows_amd64.zip) |
-| Windows ARM64 | [mcpbridge.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_windows_arm64.zip) |
+| macOS Intel | `mcpbridge_v2.3.0_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `mcpbridge_v2.3.0_darwin_arm64.tar.gz` |
+| Linux amd64 | `mcpbridge_v2.3.0_linux_amd64.tar.gz` |
+| Linux arm64 | `mcpbridge_v2.3.0_linux_arm64.tar.gz` |
+| Windows x64 | `mcpbridge_v2.3.0_windows_amd64.zip` |
+| Windows ARM64 | `mcpbridge_v2.3.0_windows_arm64.zip` |
 
-Compare the download's SHA-256 with [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/SHA256SUMS), extract it and put the executable on PATH. Windows requires version 10 or later; choose x64 for Intel/AMD computers and ARM64 for Windows on Arm.
+Compare the download's SHA-256 with `SHA256SUMS`, extract it and put the executable on PATH. Windows requires version 10 or later; choose x64 for Intel/AMD computers and ARM64 for Windows on Arm.
 
 macOS/Linux example (Linux arm64 below; change the filename and use `shasum -a 256` on macOS):
 
 ```bash
-sha256sum mcpbridge_v2.2.2_linux_arm64.tar.gz
+sha256sum mcpbridge_v2.3.0_linux_arm64.tar.gz
 # Compare exactly with the same filename in SHA256SUMS before extracting.
 mkdir -p mcpbridge-release "$HOME/.local/bin"
-tar -xzf mcpbridge_v2.2.2_linux_arm64.tar.gz -C mcpbridge-release
+tar -xzf mcpbridge_v2.3.0_linux_arm64.tar.gz -C mcpbridge-release
 install -m 755 mcpbridge-release/mcpbridge "$HOME/.local/bin/mcpbridge"
 export PATH="$HOME/.local/bin:$PATH"
 mcpbridge --version
@@ -56,16 +86,16 @@ This PATH setting applies to the current terminal. For later runs, use `"$HOME/.
 Windows PowerShell example (substitute the archive for your architecture):
 
 ```powershell
-Get-FileHash .\mcpbridge_v2.2.2_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcpbridge_v2.2.2_windows_amd64.zip -DestinationPath .\mcpbridge
+Get-FileHash .\mcpbridge_v2.3.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcpbridge_v2.3.0_windows_amd64.zip -DestinationPath .\mcpbridge
 ```
 
 If you have not added it to PATH, replace `mcpbridge` in subsequent commands with `.\mcpbridge\mcpbridge.exe`.
 
-With Go 1.26 installed, you can also run:
+With Go 1.26.8 installed, you can also run:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.2.2
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.3.0
 ```
 
 Go installs into `go env GOBIN`, or `$(go env GOPATH)/bin` when GOBIN is empty. Add that directory to PATH. A source-built binary runs as `./mcpbridge` until you install it into your tools directory.
@@ -181,7 +211,7 @@ mcpbridge doctor --profile work --client ci_example --json --timeout 30s
 
 | Symptom | Next step |
 | --- | --- |
-| First login is pending authorization | Ask an administrator to enable the user and assign service, scope and tool permissions |
+| First login is pending authorization | Ask an administrator to enable the user and add them to groups with the required service, scope and tool permissions |
 | No eligible tools or a 403 response | Check the identity and selected service; ask an administrator to inspect publication and permissions |
 | Expired, revoked or changed client grant | Run `mcpbridge client authorize --profile work --client ci_example`, confirm in the browser and restart the MCP connection |
 | Missing, expired or disconnected personal account | Connect/reconnect in the portal; authorize the client again after replacing or disconnecting an account |

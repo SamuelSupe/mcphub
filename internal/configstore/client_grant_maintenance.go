@@ -93,6 +93,9 @@ func (s *Store) MaintainClientGrants(ctx context.Context, retention time.Duratio
 		retention = 24 * time.Hour
 	}
 	cutoff := now.Add(-retention).UnixMilli()
+	if err := s.maintainDevices(ctx, tx, cutoff); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM client_grants WHERE expires_at<? AND status NOT IN ('pending','confirmed','active')", cutoff); err != nil {
 		return err
 	}

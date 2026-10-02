@@ -23,9 +23,11 @@ func main() {
 
 func run(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: mcphub <serve|validate> --config PATH; mcphub verify-audit --file PATH --key ID=BASE64_PUBLIC_KEY; mcphub --version")
+		return fmt.Errorf("usage: mcphub <serve|validate|init-admin> --config PATH; mcphub verify-audit --file PATH --key ID=BASE64_PUBLIC_KEY; mcphub --version")
 	}
 	switch args[1] {
+	case "init-admin":
+		return initAdminCommand(args[2:])
 	case "version", "--version":
 		if len(args) != 2 {
 			return fmt.Errorf("version does not accept arguments")

@@ -3,10 +3,14 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha1"
+	"encoding/base32"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,10 +18,13 @@ import (
 	"os"
 	"path/filepath"
 	platform "runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
 	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
@@ -66,6 +73,240 @@ func TestAdminSecurityHeadersAndHostPolicy(t *testing.T) {
 		t.Fatalf("valid API Cache-Control = %q, want no-store", got)
 	}
 	assertAdminSecurityHeaders(t, recorder.Header())
+}
+
+func TestBuiltinConsoleAuthenticationAndReset(t *testing.T) {
+	t.Setenv("MCPHUB_CONFIG_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("server:\n  public_url: https://hub.example.com/mcp\nauth:\n  mode: builtin\nadmin:\n  enabled: true\n  database_path: ./data/config.db\nclient_authorization:\n  enabled: true\nbackends: []\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.LoadStatic(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	application, err := New(t.Context(), cfg, path, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer application.Close()
+	request := func(method, path string, body []byte, cookie *http.Cookie, csrf string, revision ...int64) *httptest.ResponseRecorder {
+		t.Helper()
+		req := newAdminRequest(method, path, body)
+		if method != "GET" {
+			req.Header.Set("Origin", "http://127.0.0.1:8081")
+			req.Header.Set("Content-Type", "application/json")
+		}
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		if csrf != "" {
+			req.Header.Set("X-MCPHub-CSRF", csrf)
+		}
+		if len(revision) > 0 {
+			req.Header.Set("If-Match", revisionETag(revision[0]))
+		}
+		response := httptest.NewRecorder()
+		application.adminHandler().ServeHTTP(response, req)
+		return response
+	}
+	if response := request("GET", "/api/v1/identities", nil, nil, ""); response.Code != 401 {
+		t.Fatal("loopback access bypassed authentication", response.Code)
+	}
+	if _, err := application.store.CreateLocalAccount(t.Context(), "admin", "Administrator", "initial-long-password", true); err != nil {
+		t.Fatal(err)
+	}
+	login := request("POST", "/auth/local-login", []byte(`{"username":"admin","password":"initial-long-password"}`), nil, "")
+	if login.Code != 204 {
+		t.Fatal("local sign in", login.Code, login.Body.String())
+	}
+	cookie := login.Result().Cookies()[0]
+	response := request("GET", "/auth/session", nil, cookie, "")
+	var session struct {
+		Authenticated bool   `json:"authenticated"`
+		CSRF          string `json:"csrf"`
+		LocalAccount  bool   `json:"local_account"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &session); err != nil || !session.Authenticated || !session.LocalAccount {
+		t.Fatal("browser session", err, response.Body.String())
+	}
+	connectionsBody := []byte(`{"oidc":{"enabled":true,"provider":{"protocol":"oidc","issuer":"https://identity.example.com","client_id":"enterprise-app","name_claim":"name","groups_claim":"groups"},"client_secret":"test-provider-secret"},"ldap":{"enabled":true,"url":"ldaps://ldap.example.com","bind_dn":"cn=reader,dc=example,dc=com","bind_password":"test-directory-secret","user_base_dn":"ou=people,dc=example,dc=com","user_filter":"(uid={{username}})","user_id_attribute":"entryUUID","name_attribute":"cn"}}`)
+	if w := request("PUT", "/api/v1/identity-providers", connectionsBody, cookie, "", 0); w.Code != 403 {
+		t.Fatal("identity configuration bypassed CSRF", w.Code)
+	}
+	if w := request("PUT", "/api/v1/identity-providers", connectionsBody, cookie, session.CSRF); w.Code != 409 {
+		t.Fatal("identity configuration lacked revision protection", w.Code)
+	}
+	providerResponse := request("PUT", "/api/v1/identity-providers", connectionsBody, cookie, session.CSRF, 0)
+	if providerResponse.Code != 200 || strings.Contains(providerResponse.Body.String(), "test-provider-secret") || strings.Contains(providerResponse.Body.String(), "test-directory-secret") {
+		t.Fatal("provider configuration or secret redaction failed", providerResponse.Code)
+	}
+	if w := request("PUT", "/api/v1/identity-providers", connectionsBody, cookie, session.CSRF, 0); w.Code != 409 {
+		t.Fatal("stale provider configuration accepted", w.Code)
+	}
+	withoutSecrets := strings.ReplaceAll(strings.ReplaceAll(string(connectionsBody), `,"client_secret":"test-provider-secret"`, ""), `,"bind_password":"test-directory-secret"`, "")
+	providerResponse = request("PUT", "/api/v1/identity-providers", []byte(withoutSecrets), cookie, session.CSRF, 1)
+	if providerResponse.Code != 200 {
+		t.Fatal("provider secret preservation failed", providerResponse.Code, providerResponse.Body.String())
+	}
+	savedConnections, err := application.store.EnterpriseConnections(t.Context())
+	if err != nil || savedConnections.OIDC.ClientSecret != "test-provider-secret" || savedConnections.LDAP.BindPassword != "test-directory-secret" || savedConnections.Revision != 2 {
+		t.Fatal("provider secrets not retained", err)
+	}
+	providerResponse = request("GET", "/api/v1/identity-providers", nil, cookie, "")
+	if providerResponse.Code != 200 || strings.Contains(providerResponse.Body.String(), "test-provider-secret") || strings.Contains(providerResponse.Body.String(), "test-directory-secret") {
+		t.Fatal("provider GET exposed secrets")
+	}
+	if response := request("POST", "/api/v1/identities", []byte(`{"username":"employee","password":"employee-long-password"}`), cookie, ""); response.Code != 403 {
+		t.Fatal("CSRF protection bypassed", response.Code)
+	}
+	created := request("POST", "/api/v1/identities", []byte(`{"username":"employee","password":"employee-long-password"}`), cookie, session.CSRF)
+	if created.Code != 201 {
+		t.Fatal("account create", created.Code, created.Body.String())
+	}
+	var user configstore.Identity
+	if err := json.Unmarshal(created.Body.Bytes(), &user); err != nil {
+		t.Fatal(err)
+	}
+	groupResponse := request("POST", "/api/v1/identities/groups", []byte(`{"name":"Employees","provider":"mcphub:local"}`), cookie, session.CSRF)
+	var group configstore.Identity
+	if groupResponse.Code != 201 || json.Unmarshal(groupResponse.Body.Bytes(), &group) != nil {
+		t.Fatal("group create", groupResponse.Code, groupResponse.Body.String())
+	}
+	update := func(id string, revision int64, body []byte) *httptest.ResponseRecorder {
+		req := newAdminRequest("PUT", "/api/v1/identities/"+id, body)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "http://127.0.0.1:8081")
+		req.Header.Set("If-Match", revisionETag(revision))
+		req.Header.Set("X-MCPHub-CSRF", session.CSRF)
+		req.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		application.adminHandler().ServeHTTP(w, req)
+		return w
+	}
+	if w := update(user.ID, user.Revision, []byte(`{"enabled":true,"permissions":{"roles":["admin"]}}`)); w.Code != 400 {
+		t.Fatal("user grant accepted", w.Code, w.Body.String())
+	}
+	if w := update(group.ID, group.Revision, []byte(`{"enabled":true,"permissions":{"scopes":["projects:read"]}}`)); w.Code != 200 {
+		t.Fatal("group grant", w.Code, w.Body.String())
+	}
+	body, _ := json.Marshal(map[string]any{"enabled": true, "groups": []string{group.ID}})
+	if w := update(user.ID, user.Revision, body); w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &user) != nil {
+		t.Fatal("membership edit", w.Code, w.Body.String())
+	}
+	if effective, err := application.store.EffectiveIdentity(t.Context(), user.ID); err != nil || !slices.Contains(effective.Permissions.Scopes, "projects:read") {
+		t.Fatal("API membership not effective", err)
+	}
+	portalLogin := httptest.NewRequest("POST", "https://hub.example.com/client-auth/auth/local-login", strings.NewReader(`{"username":"employee","password":"employee-long-password"}`))
+	portalLogin.RemoteAddr = "127.0.0.1:35111"
+	portalLogin.Header.Set("Origin", "https://hub.example.com")
+	portalLogin.Header.Set("Content-Type", "application/json")
+	portal := httptest.NewRecorder()
+	application.ServeHTTP(portal, portalLogin)
+	if portal.Code != 204 {
+		t.Fatal("portal sign in", portal.Code, portal.Body.String())
+	}
+	portalCookie := portal.Result().Cookies()[0]
+	reset := request("POST", "/api/v1/identities/"+user.ID+"/password", []byte(`{"password":"reset-long-password"}`), cookie, session.CSRF)
+	if reset.Code != 204 {
+		t.Fatal("reset", reset.Code, reset.Body.String())
+	}
+	portalRequest := httptest.NewRequest("GET", "https://hub.example.com/client-auth/auth/session", nil)
+	portalRequest.AddCookie(portalCookie)
+	portal = httptest.NewRecorder()
+	application.ServeHTTP(portal, portalRequest)
+	if err := json.Unmarshal(portal.Body.Bytes(), &session); err != nil || session.Authenticated {
+		t.Fatal("reset retained portal browser session", err)
+	}
+	identities, err := application.store.Identities(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var admin configstore.Identity
+	for _, p := range identities {
+		if p.ExternalID == "admin" {
+			admin = p
+		}
+	}
+	adminGroup, err := application.store.Identity(t.Context(), admin.Groups[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminGroup.Permissions.Roles = append(adminGroup.Permissions.Roles, "approver")
+	_, err = application.store.UpdateIdentity(t.Context(), adminGroup.ID, adminGroup.Revision, true, adminGroup.Permissions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	login = request("POST", "/auth/local-login", []byte(`{"username":"admin","password":"initial-long-password"}`), nil, "")
+	if login.Code != 204 {
+		t.Fatal("reviewer login", login.Code, login.Body.String())
+	}
+	cookie = login.Result().Cookies()[0]
+	response = request("GET", "/auth/session", nil, cookie, "")
+	if err := json.Unmarshal(response.Body.Bytes(), &session); err != nil {
+		t.Fatal(err)
+	}
+	setup := request("POST", "/auth/account/mfa/setup", []byte(`{"password":"initial-long-password"}`), cookie, session.CSRF)
+	var enrollment struct {
+		Secret string `json:"secret"`
+	}
+	if setup.Code != 200 || json.Unmarshal(setup.Body.Bytes(), &enrollment) != nil {
+		t.Fatal("MFA enrollment", setup.Code, setup.Body.String())
+	}
+	secret, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(enrollment.Secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := func(offset int64) string {
+		var moving [8]byte
+		binary.BigEndian.PutUint64(moving[:], uint64(time.Now().Unix()/30+offset))
+		mac := hmac.New(sha1.New, secret)
+		mac.Write(moving[:])
+		digest := mac.Sum(nil)
+		i := digest[len(digest)-1] & 15
+		return fmt.Sprintf("%06d", (binary.BigEndian.Uint32(digest[i:i+4])&0x7fffffff)%1000000)
+	}
+	confirm := request("POST", "/auth/account/mfa/confirm", []byte(fmt.Sprintf(`{"password":"initial-long-password","code":"%s"}`, code(-1))), cookie, session.CSRF)
+	if confirm.Code != 204 {
+		t.Fatal("MFA confirmation", confirm.Code, confirm.Body.String())
+	}
+	login = request("POST", "/auth/local-login", []byte(fmt.Sprintf(`{"username":"admin","password":"initial-long-password","code":"%s"}`, code(0))), nil, "")
+	if login.Code != 204 {
+		t.Fatal("MFA login", login.Code, login.Body.String())
+	}
+	cookie = login.Result().Cookies()[0]
+	response = request("GET", "/auth/session", nil, cookie, "")
+	if err := json.Unmarshal(response.Body.Bytes(), &session); err != nil {
+		t.Fatal(err)
+	}
+	createApproval := func() string {
+		t.Helper()
+		approval, err := application.store.CreateApproval(t.Context(), configstore.ApprovalIntent{Issuer: cfg.Auth.Issuer, Subject: "requester", Tool: "service.write", Params: []byte(fmt.Sprintf(`{"arguments":{"operation":"%s"}}`, rand.Text())), Rules: []config.ToolApprovalPolicy{{RequireStepUp: true, RequireDifferentReviewer: true, Approvers: []config.ApprovalGrant{{Subjects: []string{admin.ID}}}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return approval.ID
+	}
+	id := createApproval()
+	decision := []byte(`{"decision":"approved","reason":"Reviewed exact operation"}`)
+	if result := request("POST", "/api/v1/approvals/"+id, decision, cookie, session.CSRF); result.Code != 403 {
+		t.Fatal("MFA sign-in bypassed per-approval verification", result.Code)
+	}
+	if result := request("POST", "/api/v1/approvals/"+id+"/verify", []byte(`{"password":"initial-long-password"}`), cookie, session.CSRF); result.Code != 401 {
+		t.Fatal("password alone created an approval proof", result.Code)
+	}
+	proof := request("POST", "/api/v1/approvals/"+id+"/verify", []byte(fmt.Sprintf(`{"password":"initial-long-password","code":"%s"}`, code(1))), cookie, session.CSRF)
+	if proof.Code != 200 {
+		t.Fatal("fresh local MFA proof", proof.Code, proof.Body.String())
+	}
+	other := createApproval()
+	if result := request("POST", "/api/v1/approvals/"+other, decision, cookie, session.CSRF); result.Code != 403 {
+		t.Fatal("proof used for another approval", result.Code)
+	}
+	approved := request("POST", "/api/v1/approvals/"+id, decision, cookie, session.CSRF)
+	if approved.Code != 200 {
+		t.Fatal("local MFA approval", approved.Code, approved.Body.String())
+	}
 }
 
 func TestCompletedRequestHistoryAndExport(t *testing.T) {

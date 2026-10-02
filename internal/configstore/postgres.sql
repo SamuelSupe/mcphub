@@ -134,6 +134,9 @@ CREATE TABLE IF NOT EXISTS identities (
  id TEXT PRIMARY KEY, provider TEXT NOT NULL, kind TEXT NOT NULL, external_id TEXT NOT NULL,
  data BYTEA NOT NULL, UNIQUE(provider,kind,external_id)
 );
+CREATE TABLE IF NOT EXISTS local_accounts (
+ identity_id TEXT PRIMARY KEY REFERENCES identities(id), data BYTEA NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sso_sessions (
  id TEXT PRIMARY KEY, data BYTEA NOT NULL, expires_at BIGINT NOT NULL
 );
@@ -157,3 +160,13 @@ CREATE INDEX IF NOT EXISTS request_records_request ON request_records(request_id
 CREATE INDEX IF NOT EXISTS request_records_subject ON request_records(subject, completed_at);
 CREATE INDEX IF NOT EXISTS request_records_client ON request_records(client_id, completed_at);
 CREATE INDEX IF NOT EXISTS request_records_endpoint ON request_records(endpoint, completed_at);
+
+CREATE TABLE IF NOT EXISTS device_authorizations (
+ id TEXT PRIMARY KEY, device_hash TEXT UNIQUE NOT NULL, user_hash TEXT UNIQUE NOT NULL,
+ client_id TEXT NOT NULL, address_hash TEXT NOT NULL, status TEXT NOT NULL,
+ created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL, interval_seconds BIGINT NOT NULL,
+ next_poll BIGINT NOT NULL, grant_id TEXT NOT NULL DEFAULT '', sso_session_id TEXT NOT NULL DEFAULT '', data BYTEA NOT NULL
+);
+CREATE INDEX IF NOT EXISTS device_authorizations_created ON device_authorizations(created_at);
+CREATE INDEX IF NOT EXISTS device_authorizations_grant ON device_authorizations(grant_id);
+CREATE TABLE IF NOT EXISTS device_code_attempts (address_hash TEXT PRIMARY KEY, window_at BIGINT NOT NULL, attempts BIGINT NOT NULL);

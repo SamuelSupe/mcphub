@@ -1,10 +1,14 @@
 import { t, translateDOM } from "./i18n.js";
+import { loginForm, openLocalAccount } from "./local-account.js";
+import { confirmDiscard, clearUnsaved } from "./unsaved.js";
 
 let session = null;
+let authConfig = null;
 let ready = () => {};
 
 export function isAuthenticated() { return session?.authenticated === true; }
-export function canManage() { return isAuthenticated() && (session.mode === "local" || session.can_configure === true); }
+export function canManage() { return isAuthenticated() && ((!session.builtin && session.mode === "local") || session.can_configure === true); }
+export function isLocalAccount() { return session?.local_account === true; }
 export function canInspectDelivery() { return isAuthenticated() && (session.can_configure || session.can_review_configuration); }
 export function canApprove() { return isAuthenticated() && session.can_view_approvals === true; }
 export function authHeaders() { return session?.csrf ? { "X-MCPHub-CSRF": session.csrf } : {}; }
@@ -21,6 +25,7 @@ export function requireLogin(status = 401) {
   document.title = `${t("管理员登录")} · MCPHub`;
   document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
   document.querySelectorAll("form").forEach((form) => form.reset());
+  clearUnsaved();
   document.querySelector("#inspector").hidden = true;
   document.querySelector("#scrim").hidden = true;
   document.querySelector(".app-shell").hidden = true;
@@ -29,6 +34,19 @@ export function requireLogin(status = 401) {
   document.querySelector("#auth-panel").hidden = false;
   document.querySelector("#auth-message").textContent = t(status === 403 ? "当前账号没有管理员权限，请联系身份服务管理员授权。" : "请使用具有管理员权限的账号登录。" );
   document.querySelector("#admin-login").hidden = false;
+  document.querySelector("#local-login").replaceChildren();
+  document.querySelector("#auth-retry").hidden = true;
+  if (authConfig?.builtin) {
+    document.querySelector("#local-login").append(loginForm("/auth/local-login", loadSession));
+    document.querySelectorAll('.auth-actions a').forEach((link) => {
+      link.hidden = !authConfig.enterprise;
+    });
+    document.querySelector(".auth-role-options").hidden = !authConfig.enterprise;
+    document.querySelector("#local-login").hidden = !authConfig.initialized;
+    if (!authConfig.initialized) {
+      document.querySelector("#auth-message").textContent = t("请在服务器本机运行 mcphub init-admin --config 配置文件，创建首位管理员。");
+    }
+  }
   translateDOM(document.querySelector("#auth-panel"));
 }
 
@@ -37,6 +55,7 @@ async function loadSession() {
     const response = await fetch("/auth/session", { cache: "no-store" });
     if (!response.ok) throw new Error(t("暂时无法检查登录状态，请稍后重试。"));
     session = await response.json();
+    authConfig = session;
     if (!isAuthenticated()) {
       const reason = new URLSearchParams(location.search).get("login_error");
       requireLogin(session.forbidden || reason === "forbidden" ? 403 : 401);
@@ -52,21 +71,30 @@ async function loadSession() {
     if (!canManage()) location.hash = "approvals";
     else if (!canApprove() && location.hash === "#approvals") location.hash = "overview";
     const remote = session.mode === "remote";
-    document.querySelector("#admin-identity").hidden = !remote;
-    document.querySelector("#admin-subject").textContent = session.subject;
+    document.querySelector("#admin-identity").hidden = !remote && !session.builtin;
+    document.querySelector("#my-account").hidden = !isLocalAccount();
+    document.querySelector("#admin-subject").textContent = session.display_name || session.subject;
     document.querySelector("#admin-subject").title = session.subject;
     renderManagementMode();
     await ready();
   } catch (error) {
     requireLogin();
+    document.querySelector("#auth-retry").hidden = false;
     document.querySelector("#auth-message").textContent = error.message;
   }
 }
 
 export function initializeAuth(onReady) {
   ready = onReady;
+  document.querySelector("#my-account").onclick = () => {
+    openLocalAccount("/auth", session.csrf).catch((error) => {
+      document.querySelector("#page-error").hidden = false;
+      document.querySelector("#page-error-message").textContent = error.message;
+    });
+  };
   document.querySelector("#auth-retry").addEventListener("click", loadSession);
   document.querySelector("#admin-logout").addEventListener("click", async () => {
+    if (!await confirmDiscard()) return;
     try {
       const response = await fetch("/auth/logout", { method: "POST", headers: authHeaders() });
       if (!response.ok && response.status !== 401) throw new Error(t("退出失败，请重试。"));

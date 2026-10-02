@@ -15,6 +15,16 @@ import (
 )
 
 const schema = `
+CREATE TABLE IF NOT EXISTS device_authorizations (
+ id TEXT PRIMARY KEY, device_hash TEXT UNIQUE NOT NULL, user_hash TEXT UNIQUE NOT NULL,
+ client_id TEXT NOT NULL, address_hash TEXT NOT NULL, status TEXT NOT NULL,
+ created_at BIGINT NOT NULL, expires_at BIGINT NOT NULL, interval_seconds BIGINT NOT NULL,
+ next_poll BIGINT NOT NULL, grant_id TEXT NOT NULL DEFAULT '', sso_session_id TEXT NOT NULL DEFAULT '', data BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS device_authorizations_created ON device_authorizations(created_at);
+CREATE INDEX IF NOT EXISTS device_authorizations_grant ON device_authorizations(grant_id);
+CREATE TABLE IF NOT EXISTS device_code_attempts (address_hash TEXT PRIMARY KEY, window_at BIGINT NOT NULL, attempts BIGINT NOT NULL);
+
 CREATE TABLE IF NOT EXISTS credential_cleanup (id TEXT PRIMARY KEY, due_at BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS credential_bindings (id TEXT PRIMARY KEY, owner TEXT NOT NULL, revision BIGINT NOT NULL, data BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS metadata (
@@ -147,6 +157,9 @@ CREATE TABLE IF NOT EXISTS client_authorization_events (
 CREATE TABLE IF NOT EXISTS identities (
  id TEXT PRIMARY KEY, provider TEXT NOT NULL, kind TEXT NOT NULL, external_id TEXT NOT NULL,
  data BLOB NOT NULL, UNIQUE(provider,kind,external_id)
+);
+CREATE TABLE IF NOT EXISTS local_accounts (
+ identity_id TEXT PRIMARY KEY REFERENCES identities(id), data BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sso_sessions (
  id TEXT PRIMARY KEY, data BLOB NOT NULL, expires_at BIGINT NOT NULL
@@ -310,7 +323,7 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 	}
 	if err == nil {
 		version, parseErr := strconv.Atoi(string(versionRaw))
-		if parseErr != nil || version < 1 || version > 9 {
+		if parseErr != nil || version < 1 || version > 10 {
 			return fmt.Errorf("unsupported configuration schema version %q", string(versionRaw))
 		}
 	}
@@ -320,7 +333,7 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureEventSourceColumns(ctx, tx); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key, value) VALUES('schema_version', '9')
+	if _, err := tx.ExecContext(ctx, `INSERT INTO metadata(key, value) VALUES('schema_version', '10')
 ON CONFLICT(key) DO UPDATE SET value=excluded.value`); err != nil {
 		return fmt.Errorf("record configuration schema version: %w", err)
 	}

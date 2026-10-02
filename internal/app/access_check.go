@@ -94,7 +94,7 @@ func (a *App) serveAccessCheck(w http.ResponseWriter, req *http.Request) {
 	check("tool_published", tool.Published)
 	if rt.cfg.Auth.SSO != nil {
 		identity, identityErr := a.store.EffectiveIdentity(req.Context(), input.Subject)
-		if identityErr == nil && (identity.Provider != rt.cfg.Auth.SSO.Upstream.Namespace() || (rt.cfg.Auth.SSO.DirectoryTokenEnv != "" && !identity.DirectoryManaged)) {
+		if identityErr == nil && !a.identityProviderAllowed(identity.Provider, identity.DirectoryManaged) {
 			identityErr = configstore.ErrIdentityDenied
 		}
 		check("user_active", identityErr == nil)
@@ -149,7 +149,7 @@ func (a *App) serveAccessCheck(w http.ResponseWriter, req *http.Request) {
 		check("personal_account_"+accountStatus, accountStatus == "connected")
 	}
 	if tool.Effect != "read" {
-		check("approval_service", rt.cfg.Admin.Remote())
+		check("approval_service", rt.cfg.Admin.Remote() || rt.cfg.Auth.Builtin())
 		if err == nil {
 			policies, policyErr := config.ResolveApprovalPolicies(tool.ApprovalPolicies, arguments)
 			check("approval_arguments", policyErr == nil)

@@ -1,3 +1,4 @@
+import { confirmDiscard } from "./unsaved.js";
 import { t } from "./i18n.js";
 import { editToolPolicy } from "./tool-policy-editor.js";
 import { openAccessCheck } from "./access-check.js";
@@ -31,9 +32,15 @@ export function initToolPolicies(options) {
   byId("policy-search").addEventListener("input", renderToolPolicies);
   byId("policy-filter").addEventListener("change", renderToolPolicies);
   for (const button of document.querySelectorAll("[data-policy-close]")) {
-    button.setAttribute("aria-label", t("关闭"));
-    button.addEventListener("click", () => button.closest("dialog").close());
+    button.addEventListener("click", async () => {
+      const dialog = button.closest("dialog");
+      if (await confirmDiscard(dialog)) dialog.close();
+    });
   }
+  byId("policy-editor").addEventListener("cancel", async (event) => {
+    event.preventDefault();
+    if (await confirmDiscard(byId("policy-editor"))) byId("policy-editor").close();
+  });
   window.addEventListener("hashchange", () => {
     if (location.hash === "#tool-policies") loadPolicies();
   });
@@ -46,7 +53,7 @@ export function updateToolEndpoints(backends, groups) {
   ];
   const select = byId("policy-endpoint"),
     previous = select.value;
-  select.replaceChildren(new Option(t("选择 endpoint"), ""));
+  select.replaceChildren(new Option(t("选择目标服务"), ""));
   for (const value of endpoints)
     select.add(
       new Option(
@@ -104,7 +111,7 @@ export function renderToolPolicies() {
     const endpoint = endpoints.find((value) => value.id === option.value);
     option.textContent = endpoint
       ? `${endpoint.id} · ${t(endpoint.kind === "backend" ? "MCP 后端" : "HTTP 工具组")}`
-      : t("选择 endpoint");
+      : t("选择目标服务");
   }
   const list = byId("policy-list");
   list.replaceChildren();

@@ -14,6 +14,7 @@ server:
   request_timeout: 60s
 
 auth:
+  mode: builtin
   issuer: https://hub.example.com/sso
   sso:
     upstream:
@@ -32,8 +33,8 @@ auth:
       tenant_value: REPLACE_ME_TENANT
       success_claim: code
       success_value: '0'
-    # Raw upstream open_id, used only when this user is first created.
-    bootstrap_subjects: [ou_REPLACE_ME_INITIAL_ADMIN]
+    # Local accounts and enterprise identities keep separate permission records.
+    # New enterprise identities start pending. Initialize a local admin with init-admin.
     # Enable after the bootstrap admin has logged in and the adapter is ready.
     # directory_token_env: MCPHUB_DIRECTORY_TOKEN
     clients:
@@ -97,7 +98,7 @@ backends:
           - argument: /project
             allowed_values: [project-a]
       # This write remains unpublished. Configure reviewers before publishing.
-      # Production writes requiring MFA also need an OIDC step-up identity source.
+      # Use local password + TOTP reviewers, or an enterprise OIDC source with verified MFA ACRs.
       - match: update_project
         effect: write
         required_scopes: [projects:write]

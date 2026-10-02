@@ -230,15 +230,22 @@ async function load(showLoading = true) {
   try {
     session = await api("auth/session");
     if (!session.authenticated) {
+      if (session.builtin) {
+        const local = await import("/client-auth/local-account.js");
+        byId("identity").append(local.loginForm("/client-auth/auth/local-login", () => load()));
+      }
       const link = element("a", t("login"), "button");
       link.href = "/client-auth/auth/login";
+      link.hidden = session.builtin && !session.enterprise;
       byId("identity").append(link);
       const reason = new URLSearchParams(location.search).get("login_error");
       byId("message").textContent = reason === "account_access_required" ? t("accountAccessRequired") : reason ? t("error") : "";
       return;
     }
+    const deviceCode = sessionStorage.getItem("mcphub-device-code");
+    if (deviceCode && /^[A-Z2-7]{4}-[A-Z2-7]{4}$/.test(deviceCode)) { location.replace("/client-auth/device?user_code="+encodeURIComponent(deviceCode)); return; }
     byId("identity").append(
-      element("span", t("owner") + ": " + session.subject),
+      element("span", t("owner") + ": " + (session.display_name || session.subject)),
       action(
         t("logout"),
         async () => {
@@ -248,6 +255,13 @@ async function load(showLoading = true) {
         "secondary",
       ),
     );
+    if (session.local_account) {
+      const local = await import("/client-auth/local-account.js");
+      byId("identity").append(action(
+        language === "zh" ? "我的账号" : "My account",
+        () => local.openLocalAccount("/client-auth/auth", session.csrf), "secondary",
+      ));
+    }
     await loadAccounts();
     const id = sessionStorage.getItem("mcphub-client-request");
     let shownRequest = "";

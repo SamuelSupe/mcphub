@@ -6,7 +6,11 @@ This is an administrator configuration and operations guide. For employee access
 
 MCPHub can bridge OIDC or OAuth2 identity providers that support authorization code, PKCE S256 and Bearer UserInfo. `mcpbridge` remains a public client; the upstream confidential client secret stays on the server. The Feishu example remains an integration starting point. Compatibility requires validation of the actual application endpoints, identity fields, tenant settings and directory adapter.
 
-The flow is browser → MCPHub `/sso` → enterprise identity provider → local user/group policy → MCPHub-issued access JWT → MCPHub tool policy and write approval → backend. Upstream tokens are neither MCP credentials nor backend credentials. Without `auth.sso`, existing external-JWT mode remains available.
+The flow is browser → MCPHub `/sso` → enterprise identity provider → local user/group policy → MCPHub-issued access JWT → MCPHub tool policy and write approval → backend. Upstream tokens are neither MCP credentials nor backend credentials. Advanced deployments may select `auth.mode: external` to verify external JWTs; built-in mode automatically configures the local authorization service.
+
+Start with [built-in accounts](builtin-accounts.md). Enterprise SSO is optional; this guide covers external identity integration. Local and enterprise identities do not share permissions.
+
+Default built-in deployments can configure LDAP and OIDC directly in the [Identity services UI](enterprise-login.md), with immediate application. The YAML below is an advanced setup or initial OIDC connection; after the first UI save, database settings take precedence.
 
 ## Configuration
 
@@ -16,6 +20,7 @@ Every field under `auth.sso` is literal and does not expand `${...}`; `client_se
 
 ```yaml
 auth:
+  mode: builtin
   issuer: https://hub.example.com/sso
   sso:
     upstream:
@@ -30,7 +35,6 @@ auth:
       tenant_value: company-a
       groups_claim: groups
       departments_claim: departments
-    bootstrap_subjects: [initial-admin-subject]
     clients:
       - id: mcpbridge
         redirect_uris: [http://127.0.0.1/oauth/callback]
@@ -78,7 +82,9 @@ Replace endpoints/scopes with those supplied by the provider; these are illustra
 
 ## Local permissions
 
-Use **Users & organization** in the admin UI, or `GET /api/v1/identities` and `PUT /api/v1/identities/{id}` with `If-Match: "revision"`. New users await authorization. New groups/departments have no grants. `bootstrap_subjects` grants the admin role only when a user is first created; remove the bootstrap list after setup. It does not grant business tools and cannot override a later local disable.
+Use **Users & groups** in the admin UI, or `GET /api/v1/identities` and `PUT /api/v1/identities/{id}` with `If-Match: "revision"`. New users await authorization. New groups/departments have no grants. Use the locally initialized built-in administrator to grant permissions to enterprise groups and enable their members. Users cannot receive direct roles, scopes or tool permissions. For independent external authentication deployments, optional `bootstrap_subjects` adds an enterprise user to a locally managed **Administrators** group only when that user is first created. It grants no business tools and cannot override a later disable.
+
+The permission JSON below is for a **group/department ID**. `POST /api/v1/identities/groups` with `{"name":"Project readers","provider":"<configured provider ID>"}` creates a locally managed group; obtain provider IDs from `GET /api/v1/identities`. Update a user with `{"enabled":true,"groups":["<group MCPHub ID>"]}` and its own revision. Omit `groups` to preserve membership; an explicit empty array removes locally managed memberships only when no upstream memberships exist. Submitted lists must retain every upstream-owned group. Nonempty user `permissions` returns `400 group_permissions_required`. Local policy groups are marked `managed_locally: true`; upstream claims/directory snapshots cannot join them or replace their memberships. See [groups and permissions](builtin-accounts.md#groups-and-permissions).
 
 ```json
 {"enabled":true,"permissions":{"roles":[],"scopes":["projects:read"],"access":[{"endpoint_id":"projects","tools":["read_project"],"allow_write_requests":false,"resource_rules":[{"argument":"/project","allowed_values":["demo"]}]}]}}
@@ -88,7 +94,7 @@ Use **Users & organization** in the admin UI, or `GET /api/v1/identities` and `P
 - Roles `admin`, `approver`, `security_reviewer` map to existing administrative scopes. Reviewer restrictions and no-self-approval still apply.
 - Configure scopes, endpoint IDs, exact original tool names and business-resource predicates. Empty tool lists grant nothing. New tools receive no implicit user grant.
 - Prompts, resource reads and subscriptions are separate permissions. Business predicates constrain tool arguments, not MCP resource URI ownership.
-- Direct and enabled organization grants form a union. A tool, write-request flag and all resource conditions must match within one access entry. A grant without resource conditions allows all user-level resources for its listed tools.
+- The user inherits the union of active group/department grants from its provider. A tool, write-request flag and all resource conditions must match within one access entry. A grant without resource conditions allows all user-level resources for its listed tools.
 - Tokens, client grants, shared endpoint/tool scopes, publication, enablement and shared resource rules still apply. Write-request permission does not bypass per-operation approval.
 
 Changes use revision checks and audit events. Login/directory sync cannot modify local roles or grants. Removed scopes take effect on every verification; added scopes require a new login to expand the credential ceiling. Cached views cannot admit calls with obsolete permissions; affected running requests receive cancellation, which cannot undo completed writes. Some MCP clients need to reconnect after a denied request or closed stream. In SSO mode, access-check requires the local MCPHub user ID shown on the management page.
@@ -97,7 +103,7 @@ Changes use revision checks and audit events. Login/directory sync cannot modify
 
 Two mutually exclusive membership sources are supported:
 
-1. **Login claims**: `groups_claim` / `departments_claim` reference arrays of strings. Each successful authentication replaces that user's memberships. Missing claims mean no memberships; old groups are not retained. Group and department IDs have separate namespaces.
+1. **Login claims**: `groups_claim` / `departments_claim` reference arrays of strings. Each successful authentication replaces that user's upstream memberships; locally managed policy group memberships are preserved. Missing claims mean no memberships; old groups are not retained. Group and department IDs have separate namespaces.
 2. **Directory snapshots**: configure `auth.sso.directory_token_env: MCPHUB_DIRECTORY_TOKEN` with a random secret of at least 32 characters. A directory adapter periodically fetches the enterprise directory and sends `PUT https://hub.example.com/sso/directory` with its dedicated Bearer credential. Directory membership takes precedence over login claims.
 
 This endpoint is an MCPHub JSON contract, **not SCIM or a built-in Feishu directory adapter**. Existing sync jobs, iPaaS or an adapter can automate pushes; this change does not install a Feishu app or retrieve a real directory.
@@ -108,7 +114,7 @@ This endpoint is an MCPHub JSON contract, **not SCIM or a built-in Feishu direct
 
 Subjects must match the login mapping exactly. Pre-provisioned users remain pending. Perform the bootstrap administrator's first login before the initial directory push, or authorize that account from local management. Except for first-time bootstrap, unknown directory users cannot log in.
 
-Snapshots are **complete replacements** for one provider, not deltas: omitted users/groups become inactive. Fetch all upstream pages successfully and validate completeness before pushing; do not push an empty snapshot on an upstream failure. Versions are persisted, strictly increasing positive integers; stale/repeated versions return 409. Each update is atomic. Limits: 8 MiB, 10,000 users, 2,000 groups/departments, 256 memberships/user. Memberships are flat; adapters must explicitly include ancestor department IDs when inheritance is desired. Only identity attributes, active state and memberships are accepted; privilege fields are rejected.
+Snapshots are **complete replacements** for one provider, not deltas: omitted users/upstream groups become inactive. Locally managed policy groups and their memberships are preserved, but cannot keep an omitted or inactive user authorized. Fetch all upstream pages successfully and validate completeness before pushing; do not push an empty snapshot on an upstream failure. Versions are persisted, strictly increasing positive integers; stale/repeated versions return 409. Each update is atomic. Limits: 8 MiB, 10,000 users, 2,000 groups/departments, 256 memberships/user. Memberships are flat; adapters must explicitly include ancestor department IDs when inheritance is desired. Only identity attributes, active state and memberships are accepted; privilege fields are rejected.
 
 Offboarding latency depends on sync cadence. Claim-only mode cannot proactively detect upstream suspension or global sign-out. Once synchronization revokes access, subsequent requests fail without waiting for JWT expiry.
 
@@ -118,10 +124,10 @@ Employee installation, login and Broker consent are covered by the [user manual]
 
 Access JWTs last ten minutes. `offline_access` enables rotating refresh tokens within an eight-hour local SSO session; another browser login is needed afterward. Upstream credentials are not retained and local refresh does not query upstream account state. Reuse of a consumed refresh token revokes its session family. The signing key is encrypted with the configuration key in the database; refresh credentials are stored only as hashes. Every access token also requires a live stored session and current local permissions.
 
-Fresh SQLite and **single-instance PostgreSQL** storage uses schema **9**. Back up the database and matching encryption key. Pending authorization transactions/codes are in memory and restart with the process; stored sessions and signing keys survive. Apply existing reverse-proxy limits to login and directory endpoints. Global logout, SCIM, SAML, multiple identity-source selection and multi-instance consistency are outside this implementation.
+Fresh SQLite and **single-instance PostgreSQL** storage uses schema **10**. Back up the database and matching encryption key. Pending authorization transactions/codes are in memory and restart with the process; stored sessions and signing keys survive. Apply existing reverse-proxy limits to login and directory endpoints. Global logout, SCIM, SAML, multiple identity-source selection and multi-instance consistency are outside this implementation.
 
 Pending or disabled users receive an OAuth `access_denied` callback with the fixed reason `account_access_required`. The CLI stops waiting immediately and the portal directs users to their MCPHub administrator. Sign in again after access is granted; failed login preserves existing local credentials.
 
-Remote SSO administration rejects disabling or demoting the last effective administrator with `409 last_administrator`, including direct roles/scopes and enabled group/department inheritance. The check shares the update transaction and protects concurrent edits. Authorize a second active administrator first. Authoritative directory deactivation still takes effect; this safeguard never retains access for a deprovisioned user.
+Remote SSO administration rejects disabling or demoting the last effective administrator with `409 last_administrator`, including removal of membership and disabling/demoting effective groups/departments. The check shares the update transaction and protects concurrent edits. Authorize a second active administrator first. Authoritative directory deactivation still takes effect; this safeguard never retains access for a deprovisioned user.
 
-If directory, identity-provider or existing configuration problems leave no administrator, a deployment operator can recover locally: pause external traffic, stop Hub, and back up its database, matching key and configuration. In a maintenance copy, set `admin.mode: local` with `admin.listen` on an unforwarded `127.0.0.1` port. Temporarily disable `admin.approvals.policy_changes.enabled` if configured, and remove administrator-only registrations or resource entries from `auth.sso.clients`, retaining MCP clients and the original identity-source mapping. Run `validate`, then start one maintenance instance against the same database and repair local permissions through the loopback console. If the directory deactivated the account, correct the identity source and submit a complete snapshot; do not bypass directory revocation. Stop maintenance, restore the original remote configuration, approval policy and client registrations, then restart and verify administrator sign-in before reopening traffic. Never publish the maintenance listener through a proxy, never run concurrent Hub instances, and retain change records. Repeating the same bootstrap subject does not restore revoked permissions.
+Retain at least one built-in local administrator independently of enterprise directory access. If its password or authenticator is lost, recover it locally using `mcphub init-admin --reset` (and `--reset-mfa` only when necessary), with the same configuration key and database; see [built-in account recovery](builtin-accounts.md). Sign in with that local account to repair enterprise permissions. Directory revocation must remain effective; correct the identity source and submit a complete directory snapshot when needed. Do not expose an anonymous maintenance console or bypass approval policies.

@@ -29,6 +29,8 @@
 .identity-form-actions p { color: var(--red); font-size: 13px; }
 .identity-access { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; min-width: 0; margin: 14px 0; padding: 18px; border: 1px solid var(--line); border-radius: 6px; background: #fbfcfe; }
 .identity-access .field, .identity-access .field-note { grid-column: 1 / -1; }
+.identity-access .tool-options, .identity-access > details { grid-column: 1 / -1; }
+.identity-form .tool-choice { display: flex; gap: 10px; }
 .identity-access .field-note { margin-top: 0; }
 .identity-access > .secondary { justify-self: start; }
 @media (max-width: 1100px) {
@@ -46,3 +48,8 @@
 [data-page="identities"] .policy-toolbar .field:first-child { flex: 1; max-width: 560px; }
 [data-page="identities"] .policy-toolbar .field:last-child { flex: 0 1 200px; }
 @media (max-width: 600px) { [data-page="identities"] .policy-toolbar .field:last-child { flex-basis: 100%; } }
+
+.identity-create-actions { display: flex; gap: 12px; margin: 16px 0; }
+.identity-memberships { display: grid; gap: 14px; padding: 18px; margin: 0; border: 1px solid var(--line); border-radius: 6px; }
+.identity-memberships legend { padding: 0 6px; font-size: 13px; font-weight: 600; }
+.identity-memberships .field-note { margin: 0; }

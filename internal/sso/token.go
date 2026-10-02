@@ -47,6 +47,10 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, 400, "invalid_request")
 		return
 	}
+	if r.PostForm.Get("grant_type") == configstore.DeviceGrantType && s.deviceToken != nil {
+		s.deviceToken(w, r)
+		return
+	}
 	form := r.PostForm
 	var session configstore.SSOSession
 	var refresh string
@@ -68,6 +72,9 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		identity, err = s.tokenIdentity(r.Context(), p.UserID)
+		if err == nil && p.CredentialVersion != identity.CredentialVersion {
+			err = configstore.ErrIdentityDenied
+		}
 		if err != nil {
 			tokenStoreError(w, err)
 			return
@@ -79,7 +86,7 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		if offline {
 			ttl = 8 * time.Hour
 		}
-		session, refresh, err = s.store.CreateSSOSession(r.Context(), configstore.SSOSession{UserID: p.UserID, ClientID: p.ClientID, Resource: p.Resource, Scopes: p.Scopes, ExpiresAt: time.Now().Add(ttl)}, offline)
+		session, refresh, err = s.store.CreateSSOSession(r.Context(), configstore.SSOSession{UserID: p.UserID, CredentialVersion: p.CredentialVersion, ClientID: p.ClientID, Resource: p.Resource, Scopes: p.Scopes, ExpiresAt: time.Now().Add(ttl)}, offline)
 	case "refresh_token":
 		// A rotated credential is usable only by its original client and resource.
 		session, err = s.store.SSORefreshSession(r.Context(), form.Get("refresh_token"))
@@ -112,18 +119,14 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		tokenStoreError(w, err)
 		return
 	}
-	scopes := s.grantedScopes(identity, session.Scopes)
-	now := time.Now()
-	expires := now.Add(10 * time.Minute)
-	if session.ExpiresAt.Before(expires) {
-		expires = session.ExpiresAt
-	}
-	access, err := s.sign(session.UserID, session.Resource, expires, "at+jwt", map[string]any{"sid": session.ID, "scope": strings.Join(scopes, " "), "token_use": "access", "client_id": session.ClientID})
+	issued, err := s.sessionToken(r.Context(), session, refresh)
 	if err != nil {
-		oauthError(w, 500, "server_error")
+		tokenStoreError(w, err)
 		return
 	}
-	result := map[string]any{"access_token": access, "token_type": "Bearer", "expires_in": int64(expires.Sub(now).Seconds()), "scope": strings.Join(scopes, " ")}
+	now, expires := time.Now(), issued.Expiry
+	scopes := strings.Fields(issued.Extra("scope").(string))
+	result := map[string]any{"access_token": issued.AccessToken, "token_type": "Bearer", "expires_in": int64(expires.Sub(now).Seconds()), "scope": strings.Join(scopes, " ")}
 	if refresh != "" {
 		result["refresh_token"] = refresh
 		result["refresh_token_expires_in"] = int64(session.ExpiresAt.Sub(now).Seconds())
@@ -149,7 +152,7 @@ func tokenStoreError(w http.ResponseWriter, err error) {
 
 func (s *Server) tokenIdentity(ctx context.Context, id string) (configstore.EffectiveIdentity, error) {
 	p, err := s.store.EffectiveIdentity(ctx, id)
-	if err == nil && (p.Provider != s.cfg.Auth.SSO.Upstream.Namespace() || (s.cfg.Auth.SSO.DirectoryTokenEnv != "" && !p.DirectoryManaged)) {
+	if err == nil && !s.ProviderAllowed(p.Provider, p.DirectoryManaged) {
 		err = configstore.ErrIdentityDenied
 	}
 	return p, err
@@ -197,7 +200,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string, _ *http.Request) (*mc
 		return invalid()
 	}
 	identity, err := v.server.tokenIdentity(ctx, claims.Subject)
-	if err != nil {
+	if err != nil || session.CredentialVersion != identity.CredentialVersion {
 		return invalid()
 	}
 	scopes := v.server.grantedScopes(identity, strings.Fields(extra.Scope))

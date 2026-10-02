@@ -1,6 +1,6 @@
 # 飞书 SSO、Vault 与企业 Agent 接入架构
 
-架构核查日期：2026-09-26；版本说明更新于 2026-10-02，对应 MCPHub v2.2.2。本文面向架构评审、部署人员和安全管理员。员工日常接入见[用户手册](user-guide.zh-CN.md)，部署与维护入口见[管理员手册](admin-guide.zh-CN.md)。
+架构核查日期：2026-09-26；版本说明更新于 2026-10-02，对应 MCPHub v2.3.0。本文面向架构评审、部署人员和安全管理员。员工日常接入见[用户手册](user-guide.zh-CN.md)，部署与维护入口见[管理员手册](admin-guide.zh-CN.md)。
 
 [下载 27 页 PDF](feishu-vault-agent-architecture.zh-CN.pdf) · [配置示例](../deploy/config.feishu-vault.example.yaml) · [文档导航](README.zh-CN.md)。PDF 保留 2026-09-26、v2.1.0 发布前的架构评审快照；当前版本状态以本在线文档为准。
 
@@ -14,13 +14,13 @@ Vault 在本方案中承担凭证保管和路径访问控制；MCPHub 承担用�
 
 | 能力 | 当前状态 | 上线要求 |
 | --- | --- | --- |
-| MCPHub OIDC/OAuth2 身份桥接、用户/组/部门授权 | 已有实现 | 配置真实身份源、租户约束与主体映射 |
+| MCPHub 内建账号、可选 OIDC/OAuth2 桥接与组／部门授权 | 已有实现 | 配置真实身份源、租户约束与主体映射 |
 | 飞书网页 OAuth 登录 | 通用接口可配置，真实租户未联调 | 验证授权端点与 Token 端点配对、PKCE、UserInfo 和业务错误码 |
 | 飞书通讯录自动同步 | Hub 完整快照接口已有；飞书拉取适配器待提供 | 同一应用的稳定用户 ID、完整分页、离职检测、同步监控 |
 | Vault KV v2 共享/个人账号、刷新与撤销联动 | v2.1.0 已有实现 | 真实 Vault 权限、TLS、备份恢复演练 |
 | 本地 Broker、ClientGrant、stdio 连接器 | 已有实现 | 每个 Agent、每个 endpoint 分别授权 |
 | 独立写审批、多人复核、OIDC 加强认证 | 已有实现 | 飞书普通 OAuth2 不能提供 OIDC 加强认证证明；见第 4 节 |
-| SQLite / PostgreSQL | 支持；v2.2.x 为 schema 9，v2.1.0 为 schema 8 | MCPHub 保持单活，PostgreSQL 不代表可运行多台 Hub |
+| SQLite / PostgreSQL | 支持；v2.3.0 新部署为 schema 10，v2.2.x 为 schema 9，v2.1.0 为 schema 8 | MCPHub 保持单活，PostgreSQL 不代表可运行多台 Hub |
 | Codex / Claude Code 接入 | 本文提供官方格式的配置 | 仍需在实际客户端版本完成验证 |
 | Vault AWS KMS 自动解封 | Vault 部署能力，可选 | 配置 Vault 的 IAM Role 和 KMS Key；不代表 Hub 已直连 KMS |
 | 飞书审批卡片、SCIM、Vault 动态凭证/OBO、Hub 多活 | 本方案未实现 | 单独设计和验收 |
@@ -79,7 +79,7 @@ flowchart LR
 | --- | --- | --- |
 | 飞书 | 人员登录、应用可用范围、企业身份和目录来源 | 飞书 App Secret 仅在服务端使用 |
 | MCPHub SSO | 校验飞书身份，映射 Hub 用户，签发受众为 Hub 的凭证 | 飞书登录 Token 不转发到 Agent 或业务 endpoint |
-| MCPHub 授权层 | 用户/组织权限、ClientGrant、工具发布、scope、业务资源、写审批 | 每次调用检查当前状态 |
+| MCPHub 授权层 | 用户继承的组权限、ClientGrant、工具发布、scope、业务资源、写审批 | 每次调用检查当前状态 |
 | 本地 Broker | 管理本机 profile、连接、登录刷新及客户端 Grant | 本机目录权限保护；不是同一 OS 用户进程之间的安全沙箱 |
 | Vault | 保存个人/共享上游凭证，限制 Hub 工作负载可读写路径 | Agent 和用户浏览器没有 Vault Token 或路径选择权 |
 | 业务 endpoint | 校验上游凭证并执行实际业务权限 | Hub 的放行不能扩大业务账号自身权限 |
@@ -93,7 +93,7 @@ flowchart LR
 | 层次 | 标识 | 作用 |
 | --- | --- | --- |
 | 企业身份 | 飞书连接命名空间 + `data.open_id`，并校验 `data.tenant_key` | 确认是哪一个企业的哪一位员工 |
-| Hub 身份 | MCPHub 用户 ID + Hub JWT | 读取当前用户与组织权限；JWT scope 是签发时的上限 |
+| Hub 身份 | MCPHub 用户 ID + Hub JWT | 读取当前有效组权限；JWT scope 是签发时的上限 |
 | 客户端授权 | `client_instance_id` + `grant_id` + endpoint UID | 限定这一条 Codex 入口可以访问什么 |
 | 上游账号 | credential ID + endpoint UID + 配置指纹 + revision | 找到 Alice 在该服务显式连接的账号与 Vault 凭证 |
 
@@ -142,7 +142,7 @@ Hub 登录只申请必要的用户身份权限。例子中的 `auth:user.id:read
 ### 4.2 首次登录与组织授权
 
 1. 运维指定一个精确的飞书主体作为首次引导管理员，并先完成首次登录。
-2. 管理员在「用户与组织」创建最小部门/组授权，普通新用户默认待授权。
+2. 管理员在「用户与组」创建最小部门/组授权，普通新用户默认待授权。
 3. 完成管理员引导后移除 `bootstrap_subjects`。
 4. 再启用目录快照同步，避免引导用户先由目录创建而失去首次引导条件。
 5. 目录适配器使用同一应用可识别的主体 ID；切换飞书 App ID 或主体映射后按新的身份连接重新授权，不自动继承旧权限。
@@ -390,7 +390,7 @@ admin:
   database_dsn_env: MCPHUB_DATABASE_URL
 ```
 
-数据库备份、Vault 数据和配置加密密钥必须协调恢复。新部署的托管数据库使用 schema 9。恢复历史数据库可能恢复旧授权，应核对撤销记录与账号绑定后再开放流量。
+数据库备份、Vault 数据和配置加密密钥必须协调恢复。新部署的托管数据库使用 schema 10。恢复历史数据库可能恢复旧授权，应核对撤销记录与账号绑定后再开放流量。
 
 ### 可选：AWS KMS 保护 Vault
 

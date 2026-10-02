@@ -1,6 +1,9 @@
 import { t } from "./i18n.js";
 import { element } from "./tool-policies.js";
 import { resourceRow } from "./tool-policy-editor.js";
+import { editAccountCredentials } from "./local-account.js";
+import { markClean, confirmDiscard, lockForm } from "./unsaved.js";
+import { renderToolSelection } from "./tool-selection.js";
 
 const byId = (id) => document.getElementById(id);
 const values = (raw) => [...new Set(raw.split(/[\s,]+/).filter(Boolean))];
@@ -8,9 +11,18 @@ let api,
   snapshot,
   generation = 0,
   page = 0;
+let renderedFilters = { query: "", kind: "", page: 0 };
+
+const providerName = (id) => snapshot?.providers?.find((source) => source.id === id)?.name || id;
 
 export function initIdentities(request) {
   api = request;
+  byId("create-local-user").onclick = () =>
+    editAccountCredentials(async (input) => {
+      await api("/identities", { method: "POST", body: JSON.stringify(input) });
+      await refreshIdentities();
+    });
+  byId("create-group").onclick = showCreateGroup;
   for (const id of ["identity-search", "identity-kind"])
     byId(id).addEventListener("input", () => {
       page = 0;
@@ -26,14 +38,61 @@ export function initIdentities(request) {
   };
 }
 
+function showCreateGroup() {
+  const dialog = element("dialog", "", "local-account-dialog");
+  const form = element("form", "", "identity-form");
+  form.append(element("h2", t("创建组")));
+  const name = field(form, "组名称", "input");
+  name.required = true;
+  name.maxLength = 128;
+  const provider = field(form, "身份来源", "select");
+  for (const source of snapshot.providers || [])
+    provider.append(new Option(source.name, source.id));
+  const feedback = element("p", "");
+  feedback.setAttribute("role", "status");
+  const actions = element("div", "", "identity-form-actions");
+  button(actions, "取消", async () => { if (await confirmDiscard(form)) dialog.close(); });
+  const save = element("button", t("创建组"), "primary");
+  save.type = "submit";
+  actions.append(save);
+  form.append(feedback, actions);
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const input = { name: name.value.trim(), provider: provider.value };
+    const unlock = lockForm(form);
+    try {
+      await api("/identities/groups", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      markClean(form);
+      unlock();
+      dialog.close();
+      await refreshIdentities();
+    } catch (error) {
+      feedback.textContent = error.message;
+    } finally {
+      unlock();
+    }
+  };
+  dialog.append(form);
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  document.body.append(dialog);
+  dialog.showModal();
+  markClean(form);
+  dialog.addEventListener("cancel", async (event) => { event.preventDefault(); if (await confirmDiscard(form)) dialog.close(); });
+  name.focus();
+}
+
 export async function refreshIdentities() {
+  if (!await confirmDiscard(byId("identity-list"))) return;
   const current = ++generation;
   byId("identity-feedback").textContent = t("正在读取配置…");
   try {
     const result = await api("/identities");
     if (generation !== current) return;
     snapshot = result;
-    renderIdentities();
+    await renderIdentities();
   } catch (error) {
     if (generation !== current) return;
     snapshot = null;
@@ -73,17 +132,26 @@ function button(parent, title, click) {
 function accessEntry(parent, access = {}) {
   const box = element("fieldset", "", "identity-access");
   box.append(element("legend", t("服务授权")));
-  const endpoint = field(box, "目标服务", "input", access.endpoint_id || "");
+  const endpoint = field(box, "目标服务", "select");
+  endpoint.append(new Option(t("选择目标服务"), ""));
+  for (const service of snapshot.endpoints || []) endpoint.append(new Option(service.id, service.id));
+  if (access.endpoint_id && ![...endpoint.options].some((option) => option.value === access.endpoint_id)) endpoint.append(new Option(access.endpoint_id, access.endpoint_id));
+  endpoint.value = access.endpoint_id || "";
   endpoint.required = true;
-  endpoint.setAttribute("list", "identity-endpoints");
+  const choices = element("div", "", "tool-options");
+  box.append(element("p", t("允许的工具"), "field-note"), choices);
+  const advanced = element("details", "", "advanced");
+  advanced.append(element("summary", t("高级：手动填写工具名称")));
+  box.append(advanced);
   const tools = field(
-    box,
+    advanced,
     "允许的工具（每行一个原始名称）",
     "textarea",
     (access.tools || []).join("\n"),
   );
   const hint = element("p", "", "field-note");
   const updateHint = () => {
+    renderToolSelection(choices, tools, snapshot.endpoints?.find((e) => e.id === endpoint.value)?.tools || [], "此服务没有已发布工具。请先接入服务并发布工具。");
     hint.textContent =
       t("已发布工具") +
       ": " +
@@ -92,7 +160,11 @@ function accessEntry(parent, access = {}) {
         ?.tools.map((tool) => tool.name)
         .join(", ") || "—");
   };
-  endpoint.oninput = updateHint;
+  endpoint.onchange = () => {
+    tools.value = "";
+    updateHint();
+  };
+  tools.oninput = updateHint;
   updateHint();
   box.append(hint);
   const write = checkbox(
@@ -130,26 +202,38 @@ function accessEntry(parent, access = {}) {
   parent.append(box);
 }
 
-export function renderIdentities() {
+export async function renderIdentities() {
+  byId("create-local-user").hidden = !snapshot?.builtin;
+  byId("create-group").hidden = !snapshot?.enabled;
   if (!snapshot) return;
   const list = byId("identity-list");
+  if (!await confirmDiscard(list)) {
+    byId("identity-search").value = renderedFilters.query;
+    byId("identity-kind").value = renderedFilters.kind;
+    page = renderedFilters.page;
+    return;
+  }
   list.replaceChildren();
   const query = byId("identity-search").value.toLowerCase();
   const kind = byId("identity-kind").value;
   const items = (snapshot.identities || []).filter(
     (p) =>
       (!kind || p.kind === kind) &&
-      `${p.name} ${p.external_id} ${p.id}`.toLowerCase().includes(query),
+      `${p.name} ${p.external_id} ${p.id} ${providerName(p.provider)}`.toLowerCase().includes(query),
   );
   page = Math.max(0, Math.min(page, Math.ceil(items.length / 30) - 1));
+  renderedFilters = { query: byId("identity-search").value, kind, page };
   byId("identity-prev").disabled = page === 0;
   byId("identity-next").disabled = (page + 1) * 30 >= items.length;
   byId("identity-feedback").textContent = !snapshot.enabled
     ? t("SSO 未启用，请配置 auth.sso 后重启。")
-    : `${snapshot.provider} · ${t(snapshot.directory_sync ? "目录快照同步" : "登录声明同步")} · ${t("第 {page} 页 · {count} 条记录", { page: page + 1, count: items.length })}`;
+    : `${snapshot.providers?.length > 1 ? t("身份来源：{count} 个", { count: snapshot.providers.length }) : `${snapshot.provider} · ${t(snapshot.builtin ? "内建账号" : snapshot.directory_sync ? "目录快照同步" : "登录声明同步")}`} · ${t("第 {page} 页 · {count} 条记录", { page: page + 1, count: items.length })}`;
   if (snapshot.enabled && !items.length) {
     const empty = element("div", "", "empty-state");
-    empty.append(element("h3", t("没有匹配的用户或组织")), element("p", t("调整筛选条件，或等待用户登录与目录同步。")));
+    empty.append(
+      element("h3", t("没有匹配的用户或组")),
+      element("p", t("调整筛选条件，或等待用户登录与目录同步。")),
+    );
     list.append(empty);
   }
   const datalist = byId("identity-endpoints");
@@ -166,17 +250,68 @@ export function renderIdentities() {
         ? "已启用"
         : "待授权或已停用";
     const title = element("span", "", "identity-name");
-    const avatar = element("span", (identity.name || identity.external_id).slice(0, 2).toUpperCase(), "identity-avatar");
+    const avatar = element(
+      "span",
+      (identity.name || identity.external_id).slice(0, 2).toUpperCase(),
+      "identity-avatar",
+    );
     avatar.setAttribute("aria-hidden", "true");
     const labels = element("span", "");
-    const kind = t({ user: "用户", group: "用户组", department: "部门" }[identity.kind]);
-    labels.append(element("strong", identity.name || identity.external_id), element("small", `${kind} · ${identity.external_id}`));
+    const kind = t(
+      { user: "用户", group: "用户组", department: "部门" }[identity.kind],
+    );
+    labels.append(
+      element("strong", identity.name || identity.external_id),
+      element(
+        "small",
+        `${kind} · ${providerName(identity.provider)}`,
+      ),
+    );
     title.append(avatar, labels);
     const status = element("span", t(state), "policy-tag");
-    status.dataset.tone = !identity.directory_active ? "danger" : identity.enabled ? "success" : "warning";
-    header.append(title, status, element("span", t("编辑本地权限"), "identity-edit"));
+    status.dataset.tone = !identity.directory_active
+      ? "danger"
+      : identity.enabled
+        ? "success"
+        : "warning";
+    header.append(
+      title,
+      status,
+      element(
+        "span",
+        t(identity.kind === "user" ? "编辑组成员关系" : "编辑组权限"),
+        "identity-edit",
+      ),
+    );
     const body = element("div", "", "identity-detail");
     body.append(element("p", `MCPHub ID · ${identity.id}`, "identity-id"));
+    body.append(element("p", `${t("外部身份 ID")} · ${identity.external_id}`, "identity-id"));
+    body.append(
+      element(
+        "p",
+        t(
+          identity.kind !== "user"
+            ? identity.managed_locally
+              ? "管理员维护的组"
+              : "身份源同步的组"
+            : identity.provider === "mcphub:local"
+              ? "MCPHub 账号"
+              : "企业身份",
+        ),
+        "field-note",
+      ),
+    );
+    if (identity.kind === "user" && identity.provider === "mcphub:local") {
+      button(body, "重置密码", () =>
+        editAccountCredentials(async (input) => {
+          await api(`/identities/${encodeURIComponent(identity.id)}/password`, {
+            method: "POST",
+            body: JSON.stringify({ password: input.password }),
+          });
+          await refreshIdentities();
+        }, identity.external_id),
+      );
+    }
     card.append(header, body);
     if (identity.kind === "user") {
       const memberships = (identity.groups || [])
@@ -198,35 +333,100 @@ export function renderIdentities() {
     }
     const form = element("form", "", "identity-form");
     const account = element("fieldset", "", "identity-account");
-    account.append(element("legend", t("账户与角色")));
-    const enabled = checkbox(account, "在 MCPHub 启用", identity.enabled);
-    const roleInputs = [
-      ["admin", "管理员"],
-      ["approver", "审批员"],
-      ["security_reviewer", "安全审批员"],
-    ].map(([role, title]) => [
-      role,
-      checkbox(account, title, identity.permissions.roles?.includes(role)),
-    ]);
-    form.append(account);
-    const scopes = field(
-      form,
-      "授权 Scope",
-      "textarea",
-      (identity.permissions.scopes || []).join("\n"),
-    );
-    form.append(
+    account.append(
       element(
-        "p",
-        t("服务所需 Scope") + ": " + (snapshot.scopes?.join(", ") || "—"),
-        "field-note",
+        "legend",
+        t(identity.kind === "user" ? "账户状态" : "组状态与角色"),
       ),
     );
-    const entries = element("div", "");
-    form.append(entries);
-    for (const access of identity.permissions.access || [])
-      accessEntry(entries, access);
-    button(form, "添加服务授权", () => accessEntry(entries));
+    const enabled = checkbox(account, "在 MCPHub 启用", identity.enabled);
+    form.append(account);
+    let collect;
+    if (identity.kind === "user") {
+      const groups = element("fieldset", "", "identity-memberships");
+      groups.append(element("legend", t("所属组")));
+      const available = snapshot.identities.filter(
+        (g) => g.kind !== "user" && g.provider === identity.provider,
+      );
+      const inputs = available.map((g) => {
+        const input = checkbox(
+          groups,
+          g.name || g.external_id,
+          identity.groups?.includes(g.id),
+        );
+        input.disabled = !g.managed_locally;
+        if (!g.managed_locally)
+          input.parentElement.append(
+            element("small", t("由企业身份源管理"), "field-note"),
+          );
+        if (!g.enabled || !g.directory_active)
+          input.parentElement.append(
+            element("small", t("已停用"), "field-note"),
+          );
+        return [g.id, input];
+      });
+      groups.append(
+        element(
+          "p",
+          t(
+            "用户权限由有效组的授权合并而来。请先创建组，在组上配置角色、Scope 和服务权限，再将用户加入组。",
+          ),
+          "field-note",
+        ),
+      );
+      form.append(groups);
+      collect = () => ({
+        groups: inputs.filter(([, input]) => input.checked).map(([id]) => id),
+      });
+    } else {
+      const roleInputs = [
+        ["admin", "管理员"],
+        ["approver", "审批员"],
+        ["security_reviewer", "安全审批员"],
+      ].map(([role, title]) => [
+        role,
+        checkbox(account, title, identity.permissions.roles?.includes(role)),
+      ]);
+      const scopes = field(
+        form,
+        "授权 Scope",
+        "textarea",
+        (identity.permissions.scopes || []).join("\n"),
+      );
+      form.append(
+        element(
+          "p",
+          t("服务所需 Scope") + ": " + (snapshot.scopes?.join(", ") || "—"),
+          "field-note",
+        ),
+      );
+      const entries = element("div", "");
+      form.append(entries);
+      for (const access of identity.permissions.access || [])
+        accessEntry(entries, access);
+      button(form, "添加服务授权", () => accessEntry(entries));
+      const members = snapshot.identities.filter(
+        (p) => p.kind === "user" && p.groups?.includes(identity.id),
+      );
+      body.append(
+        element(
+          "p",
+          t("组成员") +
+            ": " +
+            (members.map((p) => p.name || p.external_id).join(", ") || "—"),
+          "field-note",
+        ),
+      );
+      collect = () => ({
+        permissions: {
+          roles: roleInputs
+            .filter(([, input]) => input.checked)
+            .map(([role]) => role),
+          scopes: values(scopes.value),
+          access: [...entries.children].map((entry) => entry.collect()),
+        },
+      });
+    }
     const save = element("button", t("保存"), "primary");
     save.type = "submit";
     const feedback = element("p", "");
@@ -236,33 +436,34 @@ export function renderIdentities() {
     form.append(actions);
     form.onsubmit = async (event) => {
       event.preventDefault();
-      save.disabled = true;
+      if (!await confirmDiscard(list, form)) return;
+      const input = { enabled: enabled.checked, ...collect() };
+      const unlock = lockForm(form);
       feedback.textContent = "";
       try {
         await api(`/identities/${encodeURIComponent(identity.id)}`, {
           method: "PUT",
           headers: { "If-Match": `"${identity.revision}"` },
-          body: JSON.stringify({
-            enabled: enabled.checked,
-            permissions: {
-              roles: roleInputs
-                .filter(([, input]) => input.checked)
-                .map(([role]) => role),
-              scopes: values(scopes.value),
-              access: [...entries.children].map((entry) => entry.collect()),
-            },
-          }),
+          body: JSON.stringify(input),
         });
+        markClean(form);
+        unlock();
         await refreshIdentities();
-        byId("identity-feedback").textContent = `${t("权限已保存。")} ${byId("identity-feedback").textContent}`;
-        byId("identity-list").querySelector(`[data-identity-id="${CSS.escape(identity.id)}"] > summary`)?.focus();
+        byId("identity-feedback").textContent =
+          `${t("组与账号设置已保存。")} ${byId("identity-feedback").textContent}`;
+        byId("identity-list")
+          .querySelector(
+            `[data-identity-id="${CSS.escape(identity.id)}"] > summary`,
+          )
+          ?.focus();
       } catch (error) {
         feedback.textContent = error.message;
       } finally {
-        save.disabled = false;
+        unlock();
       }
     };
     body.append(form);
     list.append(card);
+    markClean(form);
   }
 }

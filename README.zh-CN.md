@@ -1,5 +1,7 @@
 # MCPHub
 
+> 本指南用于 v2.3.0 全新部署。内建账号与 Agent 设备授权需要 v2.3.0，v2.2.2 不包含这些功能。
+
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
@@ -13,33 +15,56 @@ MCPHub 将已有的远端 MCP Server 和普通 HTTP API 统一提供为 MCP 工�
 
 | 程序 | 安装位置 | 主要命令 |
 | --- | --- | --- |
-| **mcphub — 服务端** | 网关服务器 | `serve`、`validate` |
+| **mcphub — 服务端** | 网关服务器 | `serve`、`validate`、`init-admin` |
 | **mcpbridge — 客户端** | Agent / 用户电脑 | `setup`、`login`、`connect`、`doctor` |
 
-从 v2.2.2 起，客户端程序由 `mcphub-cli` 改名为 `mcpbridge`，下载包以 `mcpbridge_v2.2.2_*` 开头；部署服务端选择 `mcphub_v2.2.2_*`。运行程序的 `--version` 可确认名称、版本与服务端/客户端身份。
+从 v2.2.2 起，客户端程序由 `mcphub-cli` 改名为 `mcpbridge`，下载包以 `mcpbridge_v2.3.0_*` 开头；部署服务端选择 `mcphub_v2.3.0_*`。运行程序的 `--version` 可确认名称、版本与服务端/客户端身份。
+
+## Agent 链接授权
+
+内建签发者部署可将用户登录与客户端同意合并在一个网页中。本机、SSH 或容器上的 Agent 都可以使用，不需要浏览器回调到 Agent 机器。使用同一系统用户和同一 `MCPHUB_HOME` 私有目录执行：
+
+```bash
+mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "项目助手" --json
+mcpbridge pair finish --request pr_example --wait --json
+mcpbridge connect --profile work --client ci_example
+```
+
+替换实际返回的请求与客户端 ID。向用户展示 `verification_uri_complete` 和 `user_code`；用户核对配对码后，以本地账号、LDAP 或 OIDC 登录，选择服务、工具、资源限制和期限，再确认。工具默认不勾选，写能力默认关闭。无 `--wait` 时只检查一次；`pending_user` 仍需用户确认，`ready` 表示私有凭证保存与 MCP 连接检查完成。默认申请最长 1 小时，受网关上限约束；申请 5 分钟到期，轮询初始间隔 5 秒。`--ttl` 接受秒数（至少 60），`--endpoint`、重复 `--tool` / `--scope` 可收窄请求。
+
+Agent 没有命令执行能力时，将 stdio 连接参数设为：
+
+```json
+["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "项目助手", "--interactive-auth"]
+```
+
+会话立即初始化，仅开放 `mcpbridge_auth_start` 与 `mcpbridge_auth_status`。前者复用同一个未过期申请；后者可能领取、保存凭证并检查连接，按结果的 `interval` 调用。ready 后刷新工具列表；不支持 `notifications/tools/list_changed` 时改用返回的 `connect --profile … --client …` 重新连接。失败的业务调用不会排队或自动重试，撤销或到期后需明确重新授权。
+
+每次配对只授权一个服务及工具能力；提示词、资源 URI 或订阅使用原有向导。权限受当前组和已确认范围共同约束，新工具不会自动扩权。所有私有凭证留在 MCPBridge，禁止复制 Token 给 Agent。失败不会覆盖原有可用 profile；换用户或服务器需另建 profile。纯外部签发者继续使用 PKCE 登录与 setup。
 
 ## 从这里开始
 
 **[在线帮助中心](https://samuelsupe.github.io/mcphub/)**：面向最终用户的 19 篇中英文指南，提供分组导航、全文搜索和客户端配置示例。
 
-**[在线管理员手册](https://samuelsupe.github.io/mcphub/admin/)**：按部署、服务接入、身份权限、治理审计和运行维护浏览 20 个中英文章节，可在当前章节切换语言。
+**[在线管理员手册](https://samuelsupe.github.io/mcphub/admin/)**。按部署、服务接入、身份权限、治理审计和运行维护浏览 22 个中英文章节，可在当前章节切换语言。
 
 | 你的任务 | 阅读入口 | 包含内容 |
 | --- | --- | --- |
 | 在 Agent 中使用公司工具 | **[用户手册](docs/user-guide.zh-CN.md)** | 安装 CLI、接入客户端、连接个人账号、审批与排障 |
+| 配置 LDAP 与 OIDC | [身份服务指南](docs/enterprise-login.zh-CN.md) | UI 配置、连接测试、企业账号与组授权 |
 | 部署和管理 MCPHub | **[管理员手册](docs/admin-guide.zh-CN.md)** | 部署、服务接入、工具发布、用户权限、治理与运维 |
 | 查字段、API 或协议行为 | [配置与协议参考](docs/configuration.zh-CN.md) | YAML、工具策略、限流、HTTP 端点与热重载 |
 | 查找其他专题 | [文档导航](docs/README.zh-CN.md) | SSO、Vault、部署示例、架构设计与版本资料 |
 
 首次使用：从管理员获取 MCP 地址和 CLI client ID，按[用户手册的接入步骤](docs/user-guide.zh-CN.md#接入-mcp-客户端)运行向导，再把生成的配置加入 MCP 客户端。
 
-首次部署：按[管理员手册](docs/admin-guide.zh-CN.md#部署准备与安装)准备身份服务、HTTPS、数据库与加密密钥，从一个只读服务开始验证。
+首次部署：按[管理员手册](docs/admin-guide.zh-CN.md#部署准备与安装)准备 HTTPS、数据库与加密密钥，再在本机初始化管理员，从一个只读服务开始验证。
 
 ## 版本与新部署
 
-当前文档面向 **v2.2.2 全新部署**，默认启用管理台与 SQLite，启动时没有预设后端。客户端程序为 `mcpbridge`，服务端为 `mcphub`。[发行说明](RELEASE_NOTES_v2.2.2.md) · [下载 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
+当前文档面向 **v2.3.0 全新部署**，默认启用管理台与 SQLite，启动时没有预设后端。客户端程序为 `mcpbridge`，服务端为 `mcphub`。[发行说明](RELEASE_NOTES_v2.3.0.md) · [下载 v2.3.0](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0)。
 
-默认配置只要求 `MCPHUB_PUBLIC_URL`、`MCPHUB_AUTH_ISSUER` 和 `MCPHUB_CONFIG_KEY`。按“启动管理台 → 添加后端 → 测试连接 → 发布工具”完成接入；每个后端分别配置地址、认证凭证和权限。远程管理使用 `deploy/config.remote-*` 模板并注册管理员身份。
+默认配置只要求 `MCPHUB_PUBLIC_URL` 和 `MCPHUB_CONFIG_KEY`。按“启动 MCPHub → 本机初始化管理员 → 登录管理台 → 创建组并授权、添加用户与后端 → 测试连接 → 发布工具”完成新部署。账号密码与 MFA 见[内建账号指南](docs/builtin-accounts.zh-CN.md)；企业 LDAP 与 OIDC 可选，可在管理台同时配置。每个后端分别配置地址、认证凭证和权限，远程管理使用 `deploy/config.remote-*`。
 
 ## 能力与边界
 
@@ -96,7 +121,7 @@ flowchart LR
     C[MCP HTTP 客户端] -->|POST /mcp + Bearer JWT| H[MCPHub]
     S[本地 stdio MCP 客户端] --> CLI[mcpbridge connect]
     CLI -->|HTTPS + 用户 JWT| H
-    L[mcpbridge login] -->|浏览器登录 + PKCE| I[OIDC 身份服务]
+    L[mcpbridge login] -->|浏览器登录 + PKCE| I[MCPHub 内建授权 / 可选企业 SSO]
     H -->|OIDC discovery + JWKS| I
     H -->|MCP Streamable HTTP| B[MCP 后端服务]
     H -->|托管 HTTP tools| A[REST APIs]
@@ -109,7 +134,7 @@ flowchart LR
 
 ## 已知限制
 
-MCPHub 保持单活；PostgreSQL 或 Vault 的高可用不等于 Hub 多实例一致性。服务端不接入 stdio 后端，不提供原生 TLS、内置账号或旧式独立 GET SSE 端点。TLS 由反向代理终止。个人 Vault 账号当前覆盖远程 MCP endpoint。
+MCPHub 保持单活；PostgreSQL 或 Vault 的高可用不等于 Hub 多实例一致性。服务端不接入 stdio 后端，不提供原生 TLS 或旧式独立 GET SSE 端点。TLS 由反向代理终止。个人 Vault 账号当前覆盖远程 MCP endpoint。
 
 完整排障见[管理员手册](docs/admin-guide.zh-CN.md#已知限制与排障提示)，用户连接问题见[用户手册](docs/user-guide.zh-CN.md#诊断与常见问题)。
 

@@ -1,10 +1,12 @@
 # Remote administration and database deployment
 
+> This guide covers v2.3.0 fresh deployments. Built-in accounts and Agent device authorization require v2.3.0; v2.2.2 does not include these features.
+
 [中文](README.zh-CN.md) · [Administrator manual](../docs/admin-guide.md) · [Documentation](../docs/README.md)
 
-MCPHub v2.2.2 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes.
+MCPHub v2.3.0 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes.
 
-This guide covers fresh v2.2.2 deployments. The default enables a local console and SQLite; team administration uses the remote templates here with an HTTPS admin origin and registered administrator identity. Start the console, add each backend with its own credentials, test the connection, then publish tools. See optional [Vault](../docs/vault-accounts.md) and [SSO](../docs/sso-and-user-management.md) configuration.
+This guide covers fresh v2.3.0 deployments. The default enables a local console and SQLite; team administration uses the remote templates here with an HTTPS admin origin and registered administrator identity. Start the console, add each backend with its own credentials, test the connection, then publish tools. See optional [Vault](../docs/vault-accounts.md) and [SSO](../docs/sso-and-user-management.md) configuration.
 
 Completed MCP POST requests are retained for 30 days by default. Set `admin.request_retention` between `24h` and `8760h` to match operational needs. The administrator's request diagnostics page supports time filters and NDJSON export; see the [history contract and privacy boundaries](../docs/admin-guide.md#grant-and-request-diagnostics). Protect database backups and exports: arguments, results and tokens are excluded, but identity/routing indexes are readable database metadata.
 
@@ -15,34 +17,25 @@ Completed MCP POST requests are retained for 30 days by default. Set `admin.requ
 | HTTPS remote administration + PostgreSQL | [config.remote-postgres.yaml](config.remote-postgres.yaml), [Compose](compose.postgres.yaml) |
 | Feishu SSO + Vault + personal MCP accounts (integration example) | [config.feishu-vault.example.yaml](config.feishu-vault.example.yaml); requires real-tenant acceptance |
 
-The v2.2.2 server archive includes these same templates; the links provide identical files. A binary-only installation can save the selected YAML as `config.yaml` and use `--config config.yaml`, without a source checkout. The `deploy/...` paths below assume the complete repository root as the working directory.
+The v2.3.0 server archive includes these same templates; the links provide identical files. A binary-only installation can save the selected YAML as `config.yaml` and use `--config config.yaml`, without a source checkout. The `deploy/...` paths below assume the complete repository root as the working directory.
 
 ## Identity provider
 
-For an external issuer, use the existing `auth.issuer`; Hub-managed identity bridging and local permissions are described in the [SSO guide](../docs/sso-and-user-management.md). Register a browser OAuth client with authorization code + PKCE S256 and the exact callback `https://admin.example.com/auth/callback`. A public client is supported by default; optionally set `admin.client_secret_env` for `client_secret_basic` or `client_secret_post`.
-
-Register a separate public CLI client without a secret and the loopback callback `http://127.0.0.1:PORT/oauth/callback`. Use `--callback-port` when your provider requires a fixed registered port.
-
-Grant selected administrators `mcphub:admin`. `admin.required_scopes` can change this requirement; all configured scopes must appear in the verified JWT `scope`/`scp`. No `roles`/`groups` mapping is performed. Issue signed JWT **access tokens** with valid `iss`, `sub`, `exp` and an `aud` containing the complete `admin.public_url`, such as `https://admin.example.com`. The ordinary MCP `/mcp` audience does not authorize management. Authorization, exchange and refresh requests carry this admin `resource`.
-
-Enable refresh grants and advertise `offline_access` for renewal. Browser tokens stay in server memory; browsers receive only an opaque Secure/HttpOnly/SameSite cookie. Sessions expire after eight hours and are lost on restart. This single administrator permission grants management of every backend, tool group, tool and import. Tenant isolation, read-only admin roles, detailed management RBAC, host/process control and identity-provider account administration are outside this implementation.
+MCPHub accounts are the default; no external OIDC deployment is required. After startup, load the same deployment environment on the server and run `mcphub init-admin --config config.yaml`. There is no default password or anonymous web bootstrap. Configure LDAP and OIDC together under **Identity services** in the console; see the [identity services guide](../docs/enterprise-login.md). Local and enterprise identities use separate group permissions. Advanced YAML setup remains in the [SSO guide](../docs/sso-and-user-management.md). See [built-in accounts](../docs/builtin-accounts.md) for passwords, MFA and local recovery.
 
 ## Environment variables
 
-Choose one example; do not configure every integration at once. Remote SQLite/PostgreSQL examples enable the admin console only. Employee `mcpbridge setup` additionally needs [client authorization](../docs/admin-guide.md#enable-client-authorization) and registered portal/CLI clients. The table below applies to both `config.remote-*` templates and their Compose deployment; the Feishu example lists its own required variables in its [file header](config.feishu-vault.example.yaml).
+Prepare only the variables for your selected template. Built-in mode does not require `MCPHUB_AUTH_ISSUER` or an administrator identity-service secret.
 
-| Used by | Variable | Value |
+| Template | Variable | Purpose |
 | --- | --- | --- |
-| Both remote templates | `MCPHUB_PUBLIC_URL` | Full MCP HTTPS URL, e.g. `https://hub.example.com/mcp` |
-| Both remote templates | `MCPHUB_AUTH_ISSUER` | External OIDC issuer; Hub SSO instead uses the Hub `/sso` URL as described in its guide |
-| Both remote templates | `MCPHUB_ADMIN_PUBLIC_URL` | Admin HTTPS origin, e.g. `https://admin.example.com`, without a trailing `/` |
-| Both remote templates | `MCPHUB_ADMIN_CLIENT_ID` | Registered admin browser client ID, separate from CLI/user portal IDs |
-| Both remote templates | `MCPHUB_CONFIG_KEY` | Persistent Base64-encoded 32-byte key; retain across restarts |
-| Direct PostgreSQL deployment | `MCPHUB_DATABASE_URL` | Reachable DSN; use TLS for external databases and URL-encode passwords |
-| Compose's PostgreSQL service | `MCPHUB_POSTGRES_PASSWORD` | URL-safe password; Compose constructs the container's `MCPHUB_DATABASE_URL` |
-| Host Caddy | `MCPHUB_HUB_HOST`, `MCPHUB_ADMIN_HOST` | Hostnames only, injected into the **Caddy process**; no URL scheme or `/mcp` |
+| Default, local and remote | `MCPHUB_PUBLIC_URL` | Complete HTTPS MCP URL; issuer is derived from its origin plus `/sso` |
+| All managed templates | `MCPHUB_CONFIG_KEY` | Persistent Base64-encoded 32-byte key; retain the same value for restart and backup |
+| Remote templates | `MCPHUB_ADMIN_PUBLIC_URL` | HTTPS administrator origin, without a path |
+| PostgreSQL on host | `MCPHUB_DATABASE_URL` | Database DSN; configure production TLS and independent credentials |
+| Compose PostgreSQL | `MCPHUB_POSTGRES_PASSWORD` | URL-safe database password used to construct the container DSN |
 
-MCPHub YAML `${NAME}`, Compose `${NAME:?message}` and Caddy `{$NAME}` are different syntaxes. MCPHub does not load `.env`; inject variables through the service manager/current shell for the standalone binary. Compose can select a file explicitly with `--env-file /secure/mcphub.env`, then the example's `environment` passes selected values into the container. Docker's `--env-file` directly injects container variables. Follow the consuming tool's value/quoting syntax, restrict file permissions and exclude secrets from version control. See [expansion rules and `*_env` names](../docs/configuration.md#environment-variables-and-secrets).
+Enterprise identity, Vault and pure YAML variables apply only to those advanced options. Users and per-backend credentials are configured independently in the UI; no fixed global backend key is required.
 
 ## Start a deployment
 
@@ -51,8 +44,6 @@ Set these values to your actual HTTPS addresses and inject the persistent encryp
 ```bash
 export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
 export MCPHUB_ADMIN_PUBLIC_URL=https://admin.example.com
-export MCPHUB_ADMIN_CLIENT_ID=mcphub-admin-web
-export MCPHUB_AUTH_ISSUER=https://idp.example.com
 umask 077
 mkdir -p "$HOME/.config/mcphub"
 test -f "$HOME/.config/mcphub/config.key" || openssl rand -base64 32 > "$HOME/.config/mcphub/config.key"
@@ -89,7 +80,7 @@ git clone https://github.com/SamuelSupe/mcphub.git
 cd mcphub
 ```
 
-Set the five variables above and the database password in this directory, then run:
+Set the variables for the selected template and the database password in this directory, then run:
 
 ```bash
 # Use a URL-safe password here, e.g. output from openssl rand -hex 24.
@@ -104,7 +95,9 @@ If dependency downloads fail with `x509: certificate signed by unknown authority
 
 ### Prerequisites for employee setup
 
-The remote templates initially provide administration without enabling the employee setup wizard. Follow [client authorization](../docs/admin-guide.md#enable-client-authorization) to add its fragment to the complete configuration and restart. Register portal and employee CLI clients, then add a service, explicitly publish a read tool and grant its required scopes. The portal lives at `/client-auth/` on the MCP host; the HTTPS proxy must forward the whole MCP host, including portal and discovery paths. Give employees the `setup` command after completing these steps.
+The remote templates already enable the personal portal and automatically register portal and MCPBridge clients. Initialize the administrator locally, create users and groups, add a service, publish a read tool, assign scopes and service permissions to groups, then add users as members. Follow [client authorization](../docs/admin-guide.md#enable-client-authorization) when requiring strict client grants. The portal lives at `/client-auth/` on the MCP host; the HTTPS proxy must forward the whole MCP host, including portal and discovery paths. Give employees the `setup` command after completing these steps.
+
+In another terminal on the server, load the same environment and run `mcphub init-admin --config config.yaml` before sign-in. With Compose, run `docker compose -f deploy/compose.postgres.yaml exec mcphub mcphub init-admin --config /etc/mcphub/config.yaml`; the command reads the password interactively.
 
 ## HTTPS proxy
 
@@ -121,43 +114,43 @@ The host [Caddyfile](Caddyfile) uses `MCPHUB_HUB_HOST=hub.example.com` and `MCPH
 
 ## Browser and CLI
 
-Open `https://admin.example.com` and sign in through the identity provider. Manage backends, HTTP tool groups and OpenAPI imports, then inspect audit events attributed to the administrator's subject. Sign out ends the current MCPHub browser session, not the identity provider's SSO session.
+Open the administrator HTTPS URL and sign in with the locally initialized account. Create users and groups in **Users & groups**, assign roles and tool permissions to groups, then add users as members. Add each backend with its own address and credentials, test the connection, and publish tools.
 
-Use a separate CLI admin profile:
+The user connector is registered as `mcpbridge`; the remote administration CLI is registered as `mcpbridge-admin`:
 
 ```bash
-mcpbridge login --admin --server https://admin.example.com \
-  --client-id mcphub-admin-cli --profile ops --callback-port 8400
+mcpbridge login --admin --server https://admin.example.com --client-id mcpbridge-admin --profile ops
 mcpbridge admin --profile ops get /overview
-mcpbridge admin --profile ops get /backends
-mcpbridge admin --profile ops get /tool-groups
-mcpbridge admin --profile ops get '/events?limit=50'
 ```
 
-`admin` is a JSON management API client supporting `get/post/put/delete`. Paths are relative to `/api/v1`; all flags precede the method. Backend, tool and import operations use the [API paths in the configuration reference](../docs/configuration.md#tool-groups-and-managed-http-api-tools). Use `--file FILE` for JSON or `--file -` for stdin. JSON goes to stdout, ETags to stderr; tokens are never exported. The body limit is 6 MiB, matching OpenAPI uploads.
-
-Save a disabled backend as `backend.json`:
-
-```json
-{"id":"example","url":"https://mcp.example.com/mcp","enabled":false,"required":false,"required_scopes":["mcp:example.read"],"headers":[]}
-```
-
-```bash
-mcpbridge admin --profile ops --file backend.json post /backends
-mcpbridge admin --profile ops get /backends/example
-# Set enabled to true in backend.json; use the actual returned ETag.
-mcpbridge admin --profile ops --file backend.json --if-match '"1"' put /backends/example
-mcpbridge admin --profile ops post /backends/example/probe
-mcpbridge status --profile ops
-mcpbridge logout --profile ops
-```
-
-PUT takes the full input object. To preserve a Header secret, include its name and omit `value`; omit `client_secret` to retain an OAuth secret. Do not submit GET views containing runtime/revision/redaction fields directly as PUT bodies. Stale ETags return 409. Network errors do not replay writes; 401 allows at most one refresh/retry. Ordinary MCP clients use a separate user profile and the [user manual](../docs/user-guide.md) to generate their connection settings; administrator profiles cannot connect to MCP.
+Management Bearer tokens require the administrator audience and scope; ordinary MCP tokens do not authorize management. Browser mutations also require the exact Origin and session CSRF token. Password resets, disabling and MFA enrollment revoke related sessions. Enterprise passwords are managed by the enterprise provider. Retain a local administrator for recovery.
 
 ## Storage and authorization boundaries
 
-Both databases commit configuration and audit events transactionally and encrypt Header/OAuth secrets with AES-256-GCM. SQLite files retain 0600 permissions. Audit actors are remote JWT subjects, `local` for local administration and `system` for background refreshes. This is configuration history, not a tamper-proof compliance or complete HTTP access log.
+Both databases commit configuration and audit events transactionally and encrypt Header/OAuth secrets with AES-256-GCM. SQLite files retain 0600 permissions. Audit actors are authenticated user subjects, `local` for unauthenticated advanced local administration and `system` for background refreshes. This is configuration history, not a tamper-proof compliance or complete HTTP access log.
 
 Back up the database and retain `MCPHUB_CONFIG_KEY` separately. Choose the database driver for a fresh deployment. Tool groups and OpenAPI imports are managed through UI/API. Run one active Hub instance. Remote MCP endpoints support [personal upstream accounts](../docs/vault-accounts.md). With an external issuer, upstream JWT revocation depends on that provider; Hub-managed SSO also checks the current local session and user policy. Signing out of Hub does not revoke upstream business accounts or a global identity-provider session.
 
 MCP backends and HTTP tool groups expose **Rate limits** in the admin UI and a `rate_limit` object in the management API: `requests_per_second`, `burst`, `max_concurrent`. All default to zero (unlimited); users share the endpoint allowance. Policies persist in the selected database, while counters stay in the process. See [rate-limit semantics](../docs/configuration.md#endpoint-rate-limits).
+
+## Agent link authorization
+
+With the built-in issuer, user sign-in and client consent happen on one web page. Local, SSH and container Agents can use this flow without a browser callback to the Agent's machine. Run both commands under the same operating-system user and private `MCPHUB_HOME` directory:
+
+```bash
+mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "Project Agent" --json
+mcpbridge pair finish --request pr_example --wait --json
+mcpbridge connect --profile work --client ci_example
+```
+
+Replace the request and client IDs with the actual results. Show the user `verification_uri_complete` and `user_code`. After comparing the code, the user signs in with local accounts, LDAP or OIDC, selects a service, tools, resource restrictions and duration, then approves. No tools are selected by default; write access is off. Without `--wait`, finish checks once. `pending_user` requires approval; `ready` means private credentials were saved and MCP connectivity was checked. The default requested maximum is 1 hour, capped by the gateway. Requests expire after 5 minutes and polling starts at 5 seconds. `--ttl` takes seconds (at least 60); narrow requests with `--endpoint` and repeated `--tool` / `--scope`.
+
+For Agents without command execution, use these stdio arguments:
+
+```json
+["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "Project Agent", "--interactive-auth"]
+```
+
+The session initializes immediately with only `mcpbridge_auth_start` and `mcpbridge_auth_status`. Start reuses the same unexpired request; status may collect and save credentials and check connectivity. Respect the returned `interval`. Refresh tools after ready. If the Agent does not support `notifications/tools/list_changed`, reconnect using the returned `connect --profile … --client …` command. Failed business calls are never queued or retried automatically. Reauthorization after expiry or revocation is explicit.
+
+Each pairing grants one service and tool capability; use existing setup for prompts, resource URIs or subscriptions. Current groups and the confirmed grant both restrict access, and new tools never expand old grants. Private credentials remain inside MCPBridge. Never copy tokens to an Agent. Failure preserves an existing working profile; choose a new profile for another user or server. Pure external issuers retain PKCE login and setup.

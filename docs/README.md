@@ -2,7 +2,7 @@
 
 [中文](README.zh-CN.md) · [Project home](../README.md)
 
-These documents cover v2.2.2. Choose a manual for your role, then use the references when you need details.
+These documents cover v2.3.0. Choose a manual for your role, then use the references when you need details.
 
 ## User manual
 
@@ -18,13 +18,13 @@ These documents cover v2.2.2. Choose a manual for your role, then use the refere
 
 ## Administrator manual
 
-**[Online administrator documentation](https://samuelsupe.github.io/mcphub/en/admin/)**: 20 chapters in English and Chinese with the same navigation and full-text search as the user guide, published automatically from the corresponding source Markdown.
+**[Online administrator documentation](https://samuelsupe.github.io/mcphub/en/admin/)**: 22 chapters in English and Chinese with the same navigation and full-text search as the user guide, published automatically from the corresponding source Markdown.
 
 **[Open the administrator manual](admin-guide.md)**: for deployment, access control, governance and operations.
 
 1. [Prepare and deploy](admin-guide.md#preparation-and-installation)
 2. [Connect services and publish tools](admin-guide.md#connect-services-and-publish-tools)
-3. [Configure users and organizations](admin-guide.md#users-and-organizations), [client authorization](admin-guide.md#enable-client-authorization) and [upstream accounts](admin-guide.md#configure-upstream-accounts)
+3. [Configure users and organizations](admin-guide.md#users-and-groups), [client authorization](admin-guide.md#enable-client-authorization) and [upstream accounts](admin-guide.md#configure-upstream-accounts)
 4. [Configure write approval and governance](admin-guide.md#write-approval-and-configuration-governance)
 5. [Inspect grants and requests](admin-guide.md#grant-and-request-diagnostics), [back up and recover](admin-guide.md#backups-and-recovery)
 
@@ -34,6 +34,7 @@ These documents cover v2.2.2. Choose a manual for your role, then use the refere
 | --- | --- | --- |
 | YAML, tool policies, management APIs, protocol and reloads | [Reference](configuration.md) | [配置与协议参考](configuration.zh-CN.md) |
 | HTTPS, remote administration, SQLite / PostgreSQL | [Deployment](../deploy/README.md) | [部署指南](../deploy/README.zh-CN.md) |
+| Configure LDAP and OIDC in the UI | [Administrator guide](enterprise-login.md) | [管理员专题](enterprise-login.zh-CN.md) |
 | SSO, user policies, department/group sync and administrator recovery | [Administrator guide](sso-and-user-management.md) | [管理员专题](sso-and-user-management.zh-CN.md) |
 | Vault shared/personal account configuration, policies and operations | [Administrator guide](vault-accounts.md) | [管理员专题](vault-accounts.zh-CN.md) |
 | Security boundaries and vulnerability reporting | [Security policy](../SECURITY.md) | [运行安全](admin-guide.zh-CN.md#安全说明) |
@@ -46,5 +47,7 @@ Use these for design context and historical records. Start with the manuals for 
 - [27-page architecture PDF](feishu-vault-agent-architecture.zh-CN.pdf): the 2026-09-26 review snapshot; current status is maintained in the online architecture document.
 - [Client Broker and authorization design](broker-authorization-design.zh-CN.md) (Chinese): historical first-version snapshot with schema and capability changes through v2.2.
 - [Screenshot notes](screenshots/README.md): provenance of the v2.1.0 demonstration screenshots.
-- [v2.2.2 release and fresh-deployment notes](../RELEASE_NOTES_v2.2.2.md), [all releases](https://github.com/SamuelSupe/mcphub/releases).
+- [v2.3.0 release and fresh-deployment notes](../RELEASE_NOTES_v2.3.0.md), [all releases](https://github.com/SamuelSupe/mcphub/releases).
 - [Contributing](../CONTRIBUTING.md): development, validation and documentation conventions.
+
+- [Built-in accounts, passwords and MFA](builtin-accounts.md)

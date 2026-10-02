@@ -1,0 +1,18 @@
+<p>适用于 v2.3.0 与配套 MCPBridge。MCPHub 必须使用内建签发者并开启客户端授权。可用本地账号、LDAP 或 OIDC 登录；账号需要已启用并拥有组权限。</p>
+<h2 id="pair">通过链接完成接入</h2>
+<pre><code>mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "项目助手" --json</code></pre>
+<ol><li>将返回的 <code>verification_uri_complete</code> 和 <code>user_code</code> 展示给用户。链接只带公开配对码。</li><li>用户在自己的浏览器打开链接，登录并核对配对码。名称由请求方填写，不代表经过验证的应用。</li><li>选择服务和具体工具，按需收窄资源范围与期限。工具默认不勾选，默认不申请写权限。</li><li>点击确认授权，回到 Agent 领取并检查连接。</li></ol>
+<pre><code>mcpbridge pair finish --request pr_example --wait --json
+mcpbridge connect --profile work --client ci_example</code></pre>
+<p>用实际返回的请求 ID 和客户端 ID 替换示例。省略 <code>--wait</code> 时只检查一次。<code>pending_user</code> 表示仍需用户确认；<code>ready</code> 表示凭证已私下保存且 MCP 连接检查通过。拒绝、过期或领取失败后需要明确重新开始。不要向 Agent 复制密码或 Token。</p>
+<h2 id="interactive">没有命令执行能力的 Agent</h2>
+<p>在客户端的 stdio 配置中使用 MCPBridge 的实际绝对路径，参数如下：</p>
+<pre><code>["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "项目助手", "--interactive-auth"]</code></pre>
+<p>会话立即初始化。Agent 调用 <code>mcpbridge_auth_start</code> 得到链接与配对码，并按返回的 <code>interval</code> 调用 <code>mcpbridge_auth_status</code>。后者可能领取凭证、保存并检查连接。授权前只有这两个认证工具，业务调用不会排队执行。</p>
+<p>返回 ready 后刷新工具列表。MCPBridge 会发送 <code>notifications/tools/list_changed</code>；不支持动态刷新时，改用返回的 <code>connect --profile … --client …</code> 参数重新连接。撤销、过期或权限收回后需要用户明确重新授权，失败的业务操作不会自动重试。</p>
+<h2 id="remote">远程服务器与容器</h2>
+<p>在 Agent 所在机器上运行 MCPBridge 和两个配对命令。用户可在自己的电脑打开链接，无需浏览器回调到远程机器。使用同一系统用户和同一私有目录；<code>MCPHUB_HOME</code> 可以指定持久化目录，容器中应挂载私有卷。公开请求 ID 本身不能领取凭证。</p>
+<h2 id="limits">范围和排障</h2>
+<p>领取时申请、已确认授权和 Broker 会话都必须仍然有效；过期后明确重新配对。已完成配对不能再通过旧申请取消登录会话，撤销客户端请使用授权管理。每次业务请求都会检查当前权限，撤销立即阻止调用，无需等待 Agent 刷新状态。</p>
+<p>每次配对授权一个服务；多个服务分别配对。权限始终受当前组限制，新工具不会自动加入旧授权。申请有效期 5 分钟，初始轮询间隔 5 秒，默认最长请求 1 小时且不超过网关上限。可用 <code>--endpoint</code>、重复 <code>--tool</code> / <code>--scope</code>、<code>--ttl 秒数</code>（至少 60） 收窄请求；<code>--allow-write-requests</code> 仅申请可选写能力，仍需浏览器同意和现有审批。</p>
+<p>本流程只开放工具能力；提示词、资源 URI 或订阅入口使用现有 setup / client add。切换账号或服务器请使用独立 profile。失败配对保留原有可用配置。纯外部签发者使用原有 PKCE <a href="quickstart.html">接入向导</a>。</p>

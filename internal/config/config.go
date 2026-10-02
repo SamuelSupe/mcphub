@@ -77,6 +77,7 @@ type ServerConfig struct {
 }
 
 type AuthConfig struct {
+	Mode   string     `yaml:"mode"`
 	Issuer string     `yaml:"issuer"`
 	SSO    *SSOConfig `yaml:"sso"`
 }
@@ -391,6 +392,9 @@ func (cfg *Config) Validate() error {
 	if cfg.Server.MaxRequestBodyBytes <= 0 {
 		return fmt.Errorf("server.max_request_body_bytes must be positive")
 	}
+	if err := cfg.configureAuthentication(); err != nil {
+		return err
+	}
 	authIssuer, err := validateAbsoluteURL("auth.issuer", cfg.Auth.Issuer, false)
 	if err != nil {
 		return err
@@ -404,7 +408,7 @@ func (cfg *Config) Validate() error {
 	if err := cfg.validateClientAuthorization(); err != nil {
 		return err
 	}
-	if err := validateAdmin(cfg.Admin); err != nil {
+	if err := validateAdmin(cfg.Admin, cfg.Auth.Builtin()); err != nil {
 		return err
 	}
 	if err := cfg.validateSSO(); err != nil {
@@ -490,7 +494,7 @@ func (cfg *Config) Validate() error {
 	return nil
 }
 
-func validateAdmin(admin AdminConfig) error {
+func validateAdmin(admin AdminConfig, builtin bool) error {
 	if !admin.Enabled {
 		return nil
 	}
@@ -500,8 +504,8 @@ func validateAdmin(admin AdminConfig) error {
 	if err := admin.Approvals.Validate(); err != nil {
 		return err
 	}
-	if admin.Approvals.PolicyChanges.Enabled && !admin.Remote() {
-		return fmt.Errorf("policy change approval requires remote administration")
+	if admin.Approvals.PolicyChanges.Enabled && !admin.Remote() && !builtin {
+		return fmt.Errorf("policy change approval requires authenticated administration")
 	}
 	if admin.Approvals.PolicyChanges.RequireStepUp && len(admin.Approvals.StepUpACRValues) == 0 {
 		return fmt.Errorf("policy change step-up requires step_up_acr_values")
@@ -512,6 +516,14 @@ func validateAdmin(admin AdminConfig) error {
 	}
 	if !admin.Remote() && host != "127.0.0.1" && host != "::1" {
 		return fmt.Errorf("admin.listen must use 127.0.0.1 or [::1]")
+	}
+	if builtin || admin.Remote() {
+		if len(admin.RequiredScopes) == 0 {
+			return fmt.Errorf("admin.required_scopes must not be empty for authenticated administration")
+		}
+		if err := validateScopes("admin.required_scopes", admin.RequiredScopes); err != nil {
+			return err
+		}
 	}
 	portNumber, err := strconv.Atoi(port)
 	if err != nil || portNumber < 1 || portNumber > 65535 {
@@ -526,12 +538,6 @@ func validateAdmin(admin AdminConfig) error {
 		}
 		if admin.ClientID == "" {
 			return fmt.Errorf("admin.client_id is required in remote mode")
-		}
-		if len(admin.RequiredScopes) == 0 {
-			return fmt.Errorf("admin.required_scopes must not be empty in remote mode")
-		}
-		if err := validateScopes("admin.required_scopes", admin.RequiredScopes); err != nil {
-			return err
 		}
 		if admin.ClientSecretEnv != "" {
 			if !envNamePattern.MatchString(admin.ClientSecretEnv) || os.Getenv(admin.ClientSecretEnv) == "" {
@@ -826,7 +832,7 @@ func (cfg *Config) ImmutableEqual(other *Config) error {
 	if cfg.Server.PublicURL != other.Server.PublicURL {
 		return fmt.Errorf("server.public_url requires a restart")
 	}
-	if cfg.Auth.Issuer != other.Auth.Issuer {
+	if cfg.Auth.Mode != other.Auth.Mode || cfg.Auth.Issuer != other.Auth.Issuer {
 		return fmt.Errorf("auth.issuer requires a restart")
 	}
 	if !reflect.DeepEqual(cfg.Auth.SSO, other.Auth.SSO) {

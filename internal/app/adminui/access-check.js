@@ -9,7 +9,7 @@ const labels = {
 	personal_account_unavailable: "暂时无法验证个人凭证，请检查凭证服务",
 	personal_account_subject_required: "检查个人账号需要填写用户 Subject",
   user_active: "MCPHub 用户已授权且目录状态有效",
-  user_tool_resource_allowed: "符合用户与组织的工具和资源权限",
+  user_tool_resource_allowed: "符合用户与组的工具和资源权限",
   endpoint_enabled: "Endpoint 已启用",
   endpoint_ready: "Endpoint 当前可用",
   tool_available: "工具存在于当前目录",

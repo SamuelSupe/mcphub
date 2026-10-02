@@ -50,8 +50,8 @@ func (db *database) BeginTx(ctx context.Context, opts *sql.TxOptions) (*transact
 		return nil, err
 	}
 	if db.postgres {
-		// Serialize configuration commits, including cross-table namespace checks
-		// and revisions derived from deleted records' audit history.
+		// ponytail: metadata writes serialize to preserve cross-table namespaces
+		// and revisions. Use per-resource locks if measured write contention requires it.
 		if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(724391028)"); err != nil {
 			_ = tx.Rollback()
 			return nil, err

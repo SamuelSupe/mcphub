@@ -11,6 +11,9 @@ test "$("$binary" --version)" = "mcpbridge $version (client)"
 for command in setup login connect status logout doctor admin; do
   "$binary" "$command" --help > /dev/null 2>&1
 done
+for command in start finish; do
+  "$binary" pair "$command" --help > /dev/null 2>&1
+done
 "$binary" status --profile release-smoke > /dev/null
 "$binary" logout --profile release-smoke > /dev/null
 if "$binary" validate --config missing.yaml > "$work_dir/error.log" 2>&1; then

@@ -1,7 +1,9 @@
+import { confirmDiscard } from "./unsaved.js";
 import { getLocale, t, translateDOM } from "./i18n.js";
 
 const pages = {
-  identities: ["用户与组织", "配置用户、部门和用户组的登录状态、角色与工具权限。"],
+  "identity-providers": ["身份服务", "配置 LDAP 与 OIDC 登录，在组上统一管理企业用户权限。"],
+  identities: ["用户与组", "维护用户状态与组成员关系，在组上配置角色、Scope 和工具权限。"],
   "client-grants": ["客户端授权", "按用户、客户端和服务查看授权范围，检查权限或撤销授权。"],
   requests: ["请求诊断", "查看近期请求的耗时、拒绝原因和工具执行状态。"],
   "tool-policies": ["工具权限", "查看工具的发布状态、最终权限和审批要求，检查调用受阻的原因。"],
@@ -23,7 +25,7 @@ export function renderPage() {
   document.querySelector("#breadcrumb-page").textContent = t(title);
   document.querySelector("#breadcrumb-group").textContent = t(
     page === "overview" ? "总览" : ["backends", "tool-groups"].includes(page) ? "服务接入"
-      : ["tool-policies", "identities", "client-grants"].includes(page) ? "访问控制" : "治理与审计",
+      : ["tool-policies", "identities", "identity-providers", "client-grants"].includes(page) ? "访问控制" : "治理与审计",
   );
   document.title = `${t(title)} · MCPHub`;
   for (const section of document.querySelectorAll("[data-page]")) {
@@ -114,6 +116,7 @@ export function initShell({ refresh, addBackend, addGroup }) {
   }
   for (const id of ["refresh-button", "retry-button"]) {
     document.getElementById(id).addEventListener("click", async () => {
+      if (!await confirmDiscard()) return;
       const button = document.getElementById(id);
       button.disabled = true;
       try { await refresh(); } finally { button.disabled = false; }

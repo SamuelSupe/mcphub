@@ -13,7 +13,7 @@ Use this page to look up YAML fields, tool policies, management APIs and gateway
 
 ## Choose a configuration and apply changes
 
-This reference targets v2.2.2. Configuration is one YAML document with strict field checking. **Do not paste management API JSON directly into YAML**: YAML `headers` is a map; API `headers` is an object array. A managed backend's API `enabled` field is not a YAML backend field. HTTP tool groups and OpenAPI imports are managed only through the UI/API.
+This reference targets v2.3.0. Configuration is one YAML document with strict field checking. **Do not paste management API JSON directly into YAML**: YAML `headers` is a map; API `headers` is an object array. A managed backend's API `enabled` field is not a YAML backend field. HTTP tool groups and OpenAPI imports are managed only through the UI/API.
 
 | Scenario | Starting point | Prerequisites |
 | --- | --- | --- |
@@ -86,10 +86,15 @@ Default timeout for ordinary MCP requests and backend calls; must be positive. E
 
 ## `auth`
 
-| Field | Description |
-| --- | --- |
-| `issuer` | Required absolute HTTPS OIDC issuer. MCPHub performs discovery (normally `/.well-known/openid-configuration`) and reads JWKS from it. It cannot be changed by SIGHUP. |
-| `sso` | Optional identity bridge; `issuer` must be the Hub `/sso` URL and managed storage is required. Fields are literal and require a restart; see [SSO](sso-and-user-management.md). |
+Default built-in deployments configure LDAP and OIDC on the console’s [Identity services](enterprise-login.md) page. Secrets are encrypted in managed storage and saving applies immediately. After the first UI save, database connection settings take precedence over `auth.sso.upstream`; YAML identity settings remain static and require restart.
+
+| Field | Default / requirement | Meaning |
+| --- | --- | --- |
+| `mode` | `builtin` in default templates | Built-in accounts, with optional enterprise login. Advanced external verification uses `external`. |
+| `issuer` | Derived in built-in mode | HTTPS origin of `server.public_url` plus `/sso`; no issuer environment variable. External mode requires a HTTPS issuer. |
+| `sso` | Optional | Add an enterprise `upstream` or extra public clients. MCPBridge, portal and console registrations are provided by default. See [built-in accounts](builtin-accounts.md) and [SSO](sso-and-user-management.md). |
+
+Built-in mode requires managed storage. Hub checks user permissions and sessions; password resets, disabling and MFA enrollment revoke credentials. Ordinary password authentication has no MFA marker. The following discovery/JWKS requirements apply to `external` verification.
 
 JWT requirements are: the issuer and signature must validate against this issuer; `aud` must contain the complete `server.public_url` including its path—when `aud` is a string it must equal `public_url`, and when `aud` is an array it must include `public_url`; `sub` must be non-empty; and `exp` must be present. `nbf`, when present, is checked too. Expiry, activation, and OIDC time comparisons allow 30 seconds of clock skew. The verifier becomes ready only after OIDC discovery succeeds, `jwks_uri` is an absolute HTTPS URL, and a reachable JWKS response contains at least one parseable, valid, asymmetric public verification key; symmetric `oct` keys and invalid or empty keys do not satisfy this condition. Before that first successful refresh, the MCP endpoint returns 503; after it is ready, a temporary discovery or JWKS refresh failure retains the last-known-good verifier. OIDC discovery and JWKS responses are each capped at 1 MiB.
 
@@ -117,17 +122,17 @@ Put credential references in `backends[].credentials`. Personal mode also requir
 
 ## `admin`
 
-The administration platform is opt-in. It serves an embedded UI and JSON API from a separate listener. Local mode is loopback-only; remote mode requires OIDC administrator authentication. It manages backend and tool-group configuration; process settings remain in YAML with the restart/reload rules in the [ownership table](#choose-a-configuration-and-apply-changes).
+The default template enables administration. It serves an embedded UI and JSON API from a separate listener. Local mode is loopback-only and requires built-in account sign-in; remote mode uses built-in accounts or optional enterprise authentication over HTTPS. It manages backend and tool-group configuration; process settings remain in YAML with the restart/reload rules in the [ownership table](#choose-a-configuration-and-apply-changes).
 
 | Field | Default | Description |
 | --- | --- | --- |
 | `enabled` | `false` | Enables management with the selected database as configuration source of truth. |
-| `mode` | `local` | `local` has no login and is loopback-only; `remote` enables OIDC administrator authentication. |
+| `mode` | `local` | `local` is loopback-only and still requires built-in account sign-in; `remote` uses built-in or enterprise authentication over HTTPS. |
 | `listen` | `127.0.0.1:8081` | Numeric loopback in local mode; remote mode may bind a private address behind an HTTPS proxy. |
 | `public_url` | none | Required HTTPS admin origin in remote mode, with no path or trailing slash; also the admin JWT audience. |
-| `client_id` | none | Browser OAuth client ID in remote mode. |
+| `client_id` | none | Browser OAuth client ID; built-in mode defaults to `mcphub-admin`. |
 | `client_secret_env` | none | Optional confidential-client secret environment variable; defaults to a public client. |
-| `required_scopes` | `[mcphub:admin]` | All required admin scopes; cannot be empty in remote mode. |
+| `required_scopes` | `[mcphub:admin]` | All required admin scopes; cannot be empty for built-in or remote administration. |
 | `database_driver` | `sqlite` | `sqlite` or `postgres`. |
 | `database_dsn_env` | `MCPHUB_DATABASE_URL` | PostgreSQL DSN environment variable. Do not also set `database_path` for PostgreSQL. |
 | `database_path` | none | Required for SQLite. Relative paths resolve from the YAML directory. |
@@ -138,7 +143,7 @@ On the first start with an empty database, expanded YAML backends are imported i
 
 The UI is available at `http://127.0.0.1:8081/` by default. It can register, probe, edit, enable, disable, and delete backends without restarting the process. Required backend failures reject a change without replacing the current runtime; an unavailable optional backend is saved and continues reconnecting in the background.
 
-The JSON API is rooted at `/api/v1`. Individual backend responses include an `ETag`; update and delete requests must send that revision in `If-Match`, and stale writes fail with `409 revision_conflict`. Secret fields are returned only as configured markers. Omitting a secret value during an edit preserves it, while omitting the Header or OAuth configuration removes it. Audit actors are the remote JWT subject, `local` for local management or `system` for background refreshes; outcomes are redacted.
+The JSON API is rooted at `/api/v1`. Individual backend responses include an `ETag`; update and delete requests must send that revision in `If-Match`, and stale writes fail with `409 revision_conflict`. Secret fields are returned only as configured markers. Omitting a secret value during an edit preserves it, while omitting the Header or OAuth configuration removes it. Audit actors are the authenticated user subject, `local` for unauthenticated advanced local management or `system` for background refreshes; outcomes are redacted.
 
 ### Tool groups and managed HTTP API tools
 
@@ -255,19 +260,19 @@ Publishing, unpublishing and rules use the existing revisioned admin API and SQL
 
 Both MCP backends and HTTP groups support `tool_rules[].effect: read` / `write`. Explicit reads execute after publication, scope and resource checks. Writes and unclassified tools require per-operation approval. A matching `approval` policy also makes a tool a write; a broader read rule cannot override it. HTTP methods and upstream `readOnlyHint` never grant permission.
 
-Enable [remote administration](admin-guide.md#remote-administrators-and-postgresql). Grant separate scopes to configuration administrators and reviewers. MCP caller tokens retain the MCP audience; reviewer browser sessions use the management audience without needing configuration access:
+Enable authenticated administration with built-in accounts, or [remote administration](admin-guide.md#remote-administrators-and-postgresql) for team use. Grant separate scopes to configuration administrators and reviewers. MCP caller tokens retain the MCP audience; reviewer browser sessions use the management audience without needing configuration access:
 
 ```yaml
 admin:
-  # Keep the other remote, public_url, client_id and database settings.
+  # Retain the selected template's management mode, public URL and database settings.
   required_scopes: [mcphub:admin]
   approvals:
     required_scopes: [mcphub:approve]
     pending_ttl: 30m
     execution_ttl: 5m
     retention: 720h
-    # Replace with an ACR that your identity provider enforces as Passkey/MFA.
-    step_up_acr_values: ["urn:your-idp:mfa"]
+    # Built-in default; add enterprise ACRs enforced by your MFA/Passkey provider.
+    step_up_acr_values: ["urn:mcphub:auth:password-totp"]
 ```
 
 The review deadline starts at creation (default 30 minutes, range 1 minute–24 hours); the execution deadline starts at approval (default 5 minutes, range 1–30 minutes). Retention defaults to 30 days and permits 1–365 days. Static administration settings require restart. Configuration administrators cannot approve by default; reviewers cannot read or change backend configuration. Explicitly grant both scope sets to accounts needing both roles. The sign-in page offers a separate reviewer login.
@@ -306,7 +311,7 @@ Reviewer subjects are exact, verified subjects from the same issuer, never calle
 
 1. A write returns `structuredContent.code: approval_pending`, `approval_id` and `approval_url`. No write has run; a configured read-only preview runs first.
 2. Open the link and sign in as a reviewer. Inspect the action, environment, resource values, complete request and available before/after preview. Enter a reason and approve once or reject.
-3. For `require_step_up: true`, select **Verify identity** first. MCPHub requests OIDC `max_age=0`, `prompt=login`, a nonce and configured ACR values. It verifies signature, issuer, client audience, the same subject, nonce, `auth_time`, returned ACR, and `at_hash` when present, allowing at most 30 seconds of clock skew. Verification is tied to this request and browser session, lasts two minutes, and is single-use. The user must still click Approve. Missing OIDC or insufficient authentication strength fails closed. The provider defines and enforces the MFA/Passkey meaning of an ACR; there is no universal MFA string.
+3. For `require_step_up: true`, select **Verify identity** first. Local accounts re-verify password and TOTP; ordinary password sign-in is insufficient. For enterprise identities, MCPHub requests OIDC `max_age=0`, `prompt=login`, a nonce and configured ACR values. It verifies signature, issuer, client audience, the same subject, nonce, `auth_time`, returned ACR, and `at_hash` when present, allowing at most 30 seconds of clock skew. Verification is tied to this request and browser session, lasts two minutes, and is single-use. The user must still click Approve. Missing OIDC or insufficient authentication strength fails closed. The provider defines and enforces the MFA/Passkey meaning of an ACR; there is no universal MFA string.
 4. The original caller invokes `mcphub_resume_approval` with only `{"approval_id":"..."}`. Current scopes, resources, publication and rate limits are checked before forwarding the immutable saved request. Identical active requests are deduplicated; use the dedicated status tool to poll. Existing `mcpbridge connect` configuration needs no changes.
 5. Before execution, the requester can call `mcphub_cancel_approval` with `approval_id` and optional `reason`, or cancel from a reviewer browser session. An authorized reviewer can revoke an approved request. Cancellation/revocation race atomically with execution; an admitted write may finish and cannot be rolled back by revocation.
 
@@ -318,7 +323,7 @@ SQLite/PostgreSQL atomically consume each approval once; concurrent resumes cann
 
 Limits: 20 active requests per issuer/subject; 60 KiB execution request; 32 KiB preview; 64 KiB complete intent including policies; 16 MiB saved result. Requests, previews, results, reasons and investigation details are encrypted. A minute-based maintenance loop removes terminal records and detailed history past retention in bounded batches; general activity logs retain argument/reason-free state events. Already admitted writes may finish after policy changes. Approved writes use fresh HTTP/1 connections to prevent transparent retries, so upstreams must support HTTP/1.1. Reads retain connection pooling.
 
-Fresh managed deployments use **schema 9**. Back up the database and matching encryption key. Local unauthenticated management and YAML-only deployments cannot execute writes/unclassified tools. MCP and management API bearer tokens cannot approve. Isolate reviewer browsers, configuration/database access and upstream write credentials from agents. With configuration governance disabled, configuration administrators can change classifications directly; enable independent security review to guard those changes. Strong authentication does not replace reviewing the operation or downstream least privilege.
+Fresh managed deployments use **schema 10**. Back up the database and matching encryption key. A signed-in built-in local console can review approvals. Local unauthenticated advanced management and YAML-only deployments cannot execute writes/unclassified tools. MCP and management API bearer tokens cannot approve. Isolate reviewer browsers, configuration/database access and upstream write credentials from agents. With configuration governance disabled, configuration administrators can change classifications directly; enable independent security review to guard those changes. Strong authentication does not replace reviewing the operation or downstream least privilege.
 
 
 ### Configuration governance, quorum and operation identity
@@ -427,19 +432,19 @@ Register a **public native OAuth client** at that issuer with authorization-code
 
 ## Starting from the full YAML example
 
-The default [config.example.yaml](../config.example.yaml) is identical in the v2.2.2 server archive and online template. It enables the local console and SQLite with `backends: []`. Only `MCPHUB_PUBLIC_URL`, `MCPHUB_AUTH_ISSUER` and `MCPHUB_CONFIG_KEY` are required; configure addresses and credentials per service in the UI.
+The default [config.example.yaml](../config.example.yaml) is identical in the v2.3.0 server archive and online template. It enables the local console and SQLite with `backends: []`. Only `MCPHUB_PUBLIC_URL` and `MCPHUB_CONFIG_KEY` are required; configure addresses and credentials per service in the UI.
 
 Download the template into a new private deployment directory, replace the two HTTPS addresses, and start:
 
 ```bash
 curl -fL https://samuelsupe.github.io/mcphub/examples/config.example.yaml -o config.yaml
 export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
-export MCPHUB_AUTH_ISSUER=https://idp.example.com
 umask 077
 mkdir -p secrets
 test -f secrets/config.key || openssl rand -base64 32 > secrets/config.key
 export MCPHUB_CONFIG_KEY="$(cat secrets/config.key)"
 mcphub validate --config config.yaml
+mcphub init-admin --config config.yaml
 mcphub serve --config config.yaml
 ```
 
@@ -448,6 +453,8 @@ Open `http://127.0.0.1:8081/` and follow **start the console → add backends �
 `validate` is a read-only configuration check; it does not verify identity login, backend connections or tool calls. `serve` initializes fresh storage. Check `/healthz` and `/readyz`, then make a real call using [deployment verification](../deploy/README.md#verify-the-deployment).
 
 Remote administrators use the [remote templates](../deploy/README.md), adding an administrator origin, registered identity client and scopes. Deployments without a console use the separate [advanced YAML-only example](../deploy/config.yaml-only.example.yaml); fill each backend's actual address, credential, publication list and read policy in the file.
+
+Users do not hold direct permissions. Create groups in **Users & groups**, assign roles, scopes, tools and resources to groups, then add users as members. Initialization creates the Administrators group. The identity API separates user membership updates from group permission updates; see [groups](builtin-accounts.md#groups-and-permissions) and [API contracts](sso-and-user-management.md#local-permissions).
 
 ## Capabilities and boundaries
 
@@ -476,7 +483,7 @@ Assuming `server.public_url: https://hub.example.com/mcp`:
 | Address | Auth | Semantics |
 | --- | --- | --- |
 | `GET /healthz` | none | Returns `200 {"status":"ok"}` while a runtime exists; use it as a liveness probe. |
-| `GET /readyz` | none | Returns 200 when the OIDC verifier and all required backends are ready, otherwise 503. JSON includes `backends_ready`, `backends_total`, `required_ready`, `required_total`, and `auth_verifier_ready`. |
+| `GET /readyz` | none | Returns 200 when the authentication verifier and all required backends are ready, otherwise 503. JSON includes `backends_ready`, `backends_total`, `required_ready`, `required_total`, and `auth_verifier_ready`. |
 | `GET /.well-known/oauth-protected-resource/mcp` | none | Path-aware RFC 9728 Protected Resource Metadata address; expose this address to clients. |
 | `GET /.well-known/oauth-protected-resource` | none | Root-path compatibility alias for the same metadata. Route both addresses to MCPHub through a reverse proxy. |
 | `/mcp` | Bearer JWT | Stateless MCP Streamable HTTP entry; accepts POST only, and compatibility clients use the same `/mcp` POST semantics. Modern clients may use request-scoped SSE in the POST response; MCPHub does not provide a standalone GET SSE or DELETE session endpoint. Catalogs and calls are filtered by token scopes. |
@@ -522,6 +529,8 @@ When SIGHUP creates an unavailable optional backend, it inherits the previous in
 
 ## Client credentials and connection boundaries
 
-When strict client authorization is enabled, the server requires both the OIDC token and an opaque `MCPHub-Grant` credential. Effective scopes are their intersection. Issuer, user, resource, endpoint UID, expiry, tool publication, resource rules and live policy are checked on every request. Scope/target changes, disabled or recreated endpoints and changed HTTP tool execution semantics require fresh consent. New tools are never automatically added to an existing grant. No grant or user token is forwarded to upstream systems.
+When strict client authorization is enabled, the server requires both the user access token and an opaque `MCPHub-Grant` credential. Effective scopes are their intersection. Issuer, user, resource, endpoint UID, expiry, tool publication, resource rules and live policy are checked on every request. Scope/target changes, disabled or recreated endpoints and changed HTTP tool execution semantics require fresh consent. New tools are never automatically added to an existing grant. No grant or user token is forwarded to upstream systems.
 
 Private sockets/named pipes, OS peer checks and independent IPC credentials isolate paired entries from other OS users. They do **not** prove application identity or isolate hostile processes running under the same OS account. Release publishing requires the native Windows CLI test suite, including Broker IPC, on x64 and ARM64; macOS/Linux use Unix sockets with OS peer checks. See the [design and validation record](broker-authorization-design.zh-CN.md).
+
+New deployment templates set `client_authorization.require_client_grant: true`: a user token identifies the user; business tools also require a browser-confirmed ClientGrant. The builtin issuer advertises device authorization metadata; its `device_authorization_endpoint` is not an upstream identity endpoint. See the [user manual](user-guide.md#agent-link-authorization).

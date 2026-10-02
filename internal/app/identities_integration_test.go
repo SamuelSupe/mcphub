@@ -13,6 +13,7 @@ import (
 
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
 	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
+	"github.com/SamuelSupe/mcphub/v2/internal/sso"
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -22,21 +23,32 @@ func TestAdminCannotDisableLastAdministrator(t *testing.T) {
 	cfg := *a.currentConfig()
 	cfg.Admin.Mode, cfg.Admin.PublicURL = "remote", "https://hub.example.com"
 	cfg.Admin.RequiredScopes = []string{"mcphub:admin"}
-	cfg.Auth.SSO = &config.SSOConfig{Upstream: config.IdentityProvider{Protocol: "oidc", Issuer: "https://idp.example.com", ClientID: "enterprise"}}
+	cfg.Auth.Issuer = "https://hub.example.com/sso"
+	t.Setenv("TEST_IDENTITY_SECRET", "test-secret")
+	cfg.Auth.SSO = &config.SSOConfig{Upstream: config.IdentityProvider{Protocol: "oidc", Issuer: "https://idp.example.com", ClientID: "enterprise", ClientSecretEnv: "TEST_IDENTITY_SECRET"}}
 	if err := a.replaceRuntimeLocked(&cfg); err != nil {
 		t.Fatal(err)
+	}
+	var serverErr error
+	a.sso, serverErr = sso.New(t.Context(), &cfg, a.store)
+	if serverErr != nil {
+		t.Fatal(serverErr)
 	}
 	user, err := a.store.SyncIdentity(t.Context(), cfg.Auth.SSO.Upstream.Namespace(), "only-admin", "Only admin", nil, nil, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	permissions := config.IdentityPermissions{Roles: []string{"admin"}, Scopes: []string{"mcphub:admin"}}
-	user, err = a.store.UpdateIdentity(t.Context(), user.ID, user.Revision, true, permissions)
+	group, err := a.store.Identity(t.Context(), user.Groups[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = a.store.UpdateIdentity(t.Context(), group.ID, group.Revision, true, permissions)
 	if err != nil {
 		t.Fatal(err)
 	}
 	a.adminAuth = newAdminAuthorization(cfg.Admin, cfg.Auth.Issuer, identityVerifier{a.store, cfg.Auth.Issuer})
-	body, _ := json.Marshal(map[string]any{"enabled": false, "permissions": permissions})
+	body, _ := json.Marshal(map[string]any{"enabled": false})
 	req := httptest.NewRequest("PUT", cfg.Admin.PublicURL+"/api/v1/identities/"+user.ID, bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+user.ID)
 	req.Header.Set("Content-Type", "application/json")
@@ -98,6 +110,7 @@ func TestManagedIdentityRestrictsMCPCatalogCallsAndRunningRequests(t *testing.T)
 	defer upstream.Close()
 	application := newAdminTestApp(t)
 	cfg := *application.currentConfig()
+	t.Setenv("TEST_SECRET", "test-secret")
 	cfg.Auth = config.AuthConfig{Issuer: "https://hub.example.com/sso", SSO: &config.SSOConfig{Upstream: config.IdentityProvider{Protocol: "oidc", Issuer: "https://idp.example.com", ClientID: "enterprise", ClientSecretEnv: "TEST_SECRET"}, Clients: []config.SSOClient{{ID: "cli", RedirectURIs: []string{"http://127.0.0.1/oauth/callback"}, Resources: []string{cfg.Server.PublicURL}}}}}
 	cfg.Server.RequestTimeout = config.Duration{Duration: 5 * time.Second}
 	_, err := application.store.Create(t.Context(), configstore.Record{Enabled: true, Config: config.BackendConfig{ID: "db", URL: upstream.URL, AllowInsecureHTTP: true, Required: true, RequestTimeout: config.Duration{Duration: 5 * time.Second}, PublishedTools: []string{"read", "write", "hidden", "slow"}, ToolRules: []config.ToolRule{{Match: "*", Effect: "read"}, {Match: "write", Effect: "write"}}}})
@@ -108,12 +121,24 @@ func TestManagedIdentityRestrictsMCPCatalogCallsAndRunningRequests(t *testing.T)
 	if err = application.replaceRuntimeLocked(configWithRecords(&cfg, records)); err != nil {
 		t.Fatal(err)
 	}
+	application.sso, err = sso.New(t.Context(), &cfg, application.store)
+	if err != nil {
+		t.Fatal(err)
+	}
 	user, err := application.store.SyncIdentity(t.Context(), cfg.Auth.SSO.Upstream.Namespace(), "test-user", "Test user", nil, nil, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	permissions := config.IdentityPermissions{Access: []config.IdentityAccess{{EndpointID: "db", Tools: []string{"read", "write", "slow"}, ResourceRules: []config.ResourceRule{{Argument: "/project", AllowedValues: []string{"work"}}}}}}
-	user, err = application.store.UpdateIdentity(t.Context(), user.ID, user.Revision, true, permissions)
+	group, err := application.store.CreateGroup(t.Context(), user.Provider, "Tool users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	group, err = application.store.UpdateIdentity(t.Context(), group.ID, group.Revision, true, permissions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err = application.store.UpdateUser(t.Context(), user.ID, user.Revision, true, []string{group.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +183,7 @@ func TestManagedIdentityRestrictsMCPCatalogCallsAndRunningRequests(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := application.store.UpdateIdentity(t.Context(), other.ID, other.Revision, true, permissions); err != nil {
+		if _, err := application.store.UpdateUser(t.Context(), other.ID, other.Revision, true, []string{group.ID}); err != nil {
 			t.Fatal(err)
 		}
 		visitor := connectAppClient(t, t.Context(), server.URL+"/mcp", other.ID)
@@ -174,7 +199,7 @@ func TestManagedIdentityRestrictsMCPCatalogCallsAndRunningRequests(t *testing.T)
 	case <-time.After(3 * time.Second):
 		t.Fatal("slow request did not start")
 	}
-	body, _ := json.Marshal(map[string]any{"enabled": false, "permissions": permissions})
+	body, _ := json.Marshal(map[string]any{"enabled": false})
 	request := newAdminRequest(http.MethodPut, "/api/v1/identities/"+user.ID, body)
 	request.Header.Set("If-Match", revisionETag(user.Revision))
 	request.Header.Set("Content-Type", "application/json")

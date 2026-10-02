@@ -4,7 +4,7 @@
 
 本文是管理员配置与运维专题。员工接入请阅读[用户手册](user-guide.zh-CN.md)。
 
-新部署支持 HashiCorp Vault KV v2、SQLite 和单实例 PostgreSQL，托管数据库使用 schema 9。备份时同时保管数据库、匹配加密密钥和 Vault 数据。
+新部署支持 HashiCorp Vault KV v2、SQLite 和单实例 PostgreSQL，托管数据库使用 schema 10。备份时同时保管数据库、匹配加密密钥和 Vault 数据。
 
 ## 用户如何使用
 

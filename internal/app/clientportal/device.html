@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MCPHub · Device authorization</title>
+    <link rel="stylesheet" href="/client-auth/styles.css" />
+    <script type="module" src="/client-auth/device.js"></script>
+  </head>
+  <body class="device-page">
+    <header>
+      <a href="/client-auth/">MCPHub <span>Client access</span></a
+      ><button id="language" class="secondary">English</button>
+    </header>
+    <main>
+      <p id="eyebrow" class="eyebrow"></p>
+      <h1 id="title"></h1>
+      <p id="intro" class="intro"></p>
+      <section id="identity"></section>
+      <p id="message" role="status" aria-live="polite"></p>
+      <section id="device"></section>
+    </main>
+    <dialog id="account-dialog"></dialog>
+  </body>
+</html>

@@ -24,11 +24,124 @@ import (
 	"golang.org/x/oauth2"
 )
 
+func TestBuiltinOAuthAndCredentialRevocation(t *testing.T) {
+	ctx := t.Context()
+	store, err := configstore.Open(ctx, filepath.Join(t.TempDir(), "builtin.db"), make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	user, err := store.CreateLocalAccount(ctx, "administrator", "Admin", "long-initial-password", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Auth: config.AuthConfig{Mode: "builtin", SSO: &config.SSOConfig{}}, Admin: config.AdminConfig{RequiredScopes: []string{"manage"}}}
+	s, err := New(ctx, cfg, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewTLSServer(s)
+	defer server.Close()
+	cfg.Auth.Issuer, cfg.Server.PublicURL = server.URL+"/sso", server.URL+"/mcp"
+	cfg.Auth.SSO.Clients = []config.SSOClient{{ID: "bridge", RedirectURIs: []string{"http://127.0.0.1/oauth/callback"}, Resources: []string{cfg.Server.PublicURL}}}
+	client := server.Client()
+	client.Jar, _ = cookiejar.New(nil)
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	getCode := func(password string) (string, string) {
+		t.Helper()
+		verifier := oauth2.GenerateVerifier()
+		query := url.Values{"client_id": {"bridge"}, "redirect_uri": {"http://127.0.0.1:17331/oauth/callback"}, "resource": {cfg.Server.PublicURL}, "response_type": {"code"}, "code_challenge_method": {"S256"}, "code_challenge": {oauth2.S256ChallengeFromVerifier(verifier)}, "scope": {"manage openid offline_access"}, "state": {"caller-state"}}
+		response, err := client.Get(server.URL + "/sso/authorize?" + query.Encode())
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != 200 {
+			t.Fatal("authorization failed", response.StatusCode)
+		}
+		state := ""
+		for _, cookie := range response.Cookies() {
+			if strings.HasPrefix(cookie.Name, "__Host-mcphub-sso-") {
+				state = strings.TrimPrefix(cookie.Name, "__Host-mcphub-sso-")
+			}
+		}
+		form := url.Values{"state": {state}, "username": {"administrator"}, "password": {password}, "code": {""}}
+		request, _ := http.NewRequest("POST", server.URL+"/sso/login", strings.NewReader(form.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.Header.Set("Origin", server.URL)
+		response, err = client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != 303 {
+			t.Fatal("login failed", response.StatusCode)
+		}
+		target, _ := url.Parse(response.Header.Get("Location"))
+		if target.Query().Get("state") != "caller-state" || target.Query().Get("iss") != cfg.Auth.Issuer || target.Query().Get("code") == "" {
+			t.Fatal("OAuth callback binding failed")
+		}
+		return target.Query().Get("code"), verifier
+	}
+	exchange := func(code, verifier string) (int, map[string]any) {
+		t.Helper()
+		response, err := client.PostForm(server.URL+"/sso/token", url.Values{"grant_type": {"authorization_code"}, "code": {code}, "code_verifier": {verifier}, "client_id": {"bridge"}, "redirect_uri": {"http://127.0.0.1:17331/oauth/callback"}, "resource": {cfg.Server.PublicURL}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var result map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+			t.Fatal(err)
+		}
+		return response.StatusCode, result
+	}
+	code, verifier := getCode("long-initial-password")
+	status, result := exchange(code, verifier)
+	if status != 200 {
+		t.Fatal("exchange", status, result)
+	}
+	access := result["access_token"].(string)
+	if _, err := s.Verifier(cfg.Server.PublicURL).Verify(ctx, access, nil); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := jwt.ParseSigned(result["id_token"].(string), []jose.SignatureAlgorithm{jose.EdDSA})
+	var claims struct {
+		ACR string `json:"acr"`
+	}
+	if err := id.Claims(s.key.Public(), &claims); err != nil || claims.ACR == config.LocalMFAACR {
+		t.Fatal("password login gained MFA", err)
+	}
+	if status, _ := exchange(code, verifier); status != 400 {
+		t.Fatal("authorization code replay accepted")
+	}
+	oldCode, oldVerifier := getCode("long-initial-password")
+	if err := store.SetLocalPassword(ctx, user.ID, "new-long-password", user.CredentialVersion, false); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := exchange(oldCode, oldVerifier); status != 400 {
+		t.Fatal("pre-reset authorization code accepted")
+	}
+	if _, err := s.Verifier(cfg.Server.PublicURL).Verify(ctx, access, nil); err == nil {
+		t.Fatal("reset access token accepted")
+	}
+	response, err := client.PostForm(server.URL+"/sso/token", url.Values{"grant_type": {"refresh_token"}, "refresh_token": {result["refresh_token"].(string)}, "client_id": {"bridge"}, "resource": {cfg.Server.PublicURL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != 400 {
+		t.Fatal("reset refresh token accepted")
+	}
+}
+
 // Exercises the complete browser/code/token boundary with a confidential
 // upstream, including the OAuth2 envelope used by enterprise identity APIs.
 func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
-	for _, protocol := range []string{"oidc", "oauth2"} {
-		t.Run(protocol, func(t *testing.T) {
+	for _, mode := range []string{"oidc", "oauth2", "managed-oidc"} {
+		t.Run(mode, func(t *testing.T) {
+			protocol := strings.TrimPrefix(mode, "managed-")
+			managed := mode == "managed-oidc"
 			ctx := t.Context()
 			store, err := configstore.Open(ctx, filepath.Join(t.TempDir(), "sso.db"), make([]byte, 32))
 			if err != nil {
@@ -119,9 +232,19 @@ func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
 			}
 			resource := hub.URL + "/mcp"
 			cfg := &config.Config{Server: config.ServerConfig{PublicURL: resource}, Auth: config.AuthConfig{Issuer: hub.URL + "/sso", SSO: &config.SSOConfig{Upstream: provider, Clients: []config.SSOClient{{ID: "cli", RedirectURIs: []string{"http://127.0.0.1/oauth/callback"}, Resources: []string{resource}}}}}, Admin: config.AdminConfig{RequiredScopes: []string{"mcphub:admin"}}}
+			if managed {
+				cfg.Auth.Mode = "builtin"
+				cfg.Auth.SSO.Upstream = config.IdentityProvider{}
+			}
 			service, err = New(ctx, cfg, store)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if managed {
+				_, err = service.UpdateConnections(ctx, 0, config.EnterpriseConnections{OIDC: config.OIDCConnection{Enabled: true, Provider: provider, ClientSecret: "test-upstream-secret"}})
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			service.client = upstream.Client()
 			service.client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -141,6 +264,9 @@ func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
 				t.Helper()
 				verifier := oauth2.GenerateVerifier()
 				query := url.Values{"client_id": {"cli"}, "resource": {resource}, "redirect_uri": {"http://127.0.0.1:41001/oauth/callback"}, "response_type": {"code"}, "code_challenge_method": {"S256"}, "code_challenge": {oauth2.S256ChallengeFromVerifier(verifier)}, "state": {"cli-state"}, "nonce": {"cli-nonce"}, "scope": {"openid offline_access db:read forbidden"}}
+				if managed {
+					query.Set("source", "oidc")
+				}
 				response := get(hub.URL + "/sso/authorize?" + query.Encode())
 				defer response.Body.Close()
 				if response.StatusCode != 302 {
@@ -205,7 +331,14 @@ func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
 			if len(identities) != 3 || len(user.Groups) != 2 {
 				t.Fatal("groups/departments were not synchronized")
 			}
-			user, err = store.UpdateIdentity(ctx, user.ID, user.Revision, true, config.IdentityPermissions{Scopes: []string{"db:read"}, Access: []config.IdentityAccess{{EndpointID: "db", Tools: []string{"read"}}}})
+			group, err := store.Identity(ctx, user.Groups[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = store.UpdateIdentity(ctx, group.ID, group.Revision, true, config.IdentityPermissions{Scopes: []string{"db:read"}, Access: []config.IdentityAccess{{EndpointID: "db", Tools: []string{"read"}}}}); err != nil {
+				t.Fatal(err)
+			}
+			user, err = store.UpdateIdentity(ctx, user.ID, user.Revision, true, config.IdentityPermissions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -242,8 +375,8 @@ func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = otherService.Verifier(resource).Verify(ctx, raw, nil); err == nil {
-				t.Fatal("old connection identity crossed an app boundary")
+			if _, err = otherService.Verifier(resource).Verify(ctx, raw, nil); (err == nil) != managed {
+				t.Fatal("connection boundary or managed persistence failed", err)
 			}
 			if _, err = service.Verifier(hub.URL+"/admin").Verify(ctx, raw, nil); err == nil {
 				t.Fatal("MCP token accepted for admin audience")
@@ -279,6 +412,26 @@ func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
 			post(url.Values{"grant_type": {"refresh_token"}, "client_id": {"cli"}, "resource": {resource}, "refresh_token": {refresh}}, 400)
 			if _, err = service.Verifier(resource).Verify(ctx, rotated["access_token"].(string), nil); err == nil {
 				t.Fatal("replayed refresh family remains valid")
+			}
+			if managed {
+				code, verifier = flow(303)
+				result = exchange(code, verifier, 200)
+				pendingCode, pendingVerifier := flow(303)
+				c := service.Connections()
+				c.OIDC.Enabled = false
+				if _, err = service.UpdateConnections(ctx, c.Revision, c); err != nil {
+					t.Fatal(err)
+				}
+				exchange(pendingCode, pendingVerifier, 400)
+				post(url.Values{"grant_type": {"refresh_token"}, "client_id": {"cli"}, "resource": {resource}, "refresh_token": {result["refresh_token"].(string)}}, 400)
+				c = service.Connections()
+				c.OIDC.Enabled = true
+				if _, err = service.UpdateConnections(ctx, c.Revision, c); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = service.Verifier(resource).Verify(ctx, result["access_token"].(string), nil); err == nil {
+					t.Fatal("re-enabled source revived old credentials")
+				}
 			}
 			code, verifier = flow(303)
 			result = exchange(code, verifier, 200)

@@ -1,24 +1,24 @@
-# Container deployment: remote admin UI, PostgreSQL, external OIDC.
-# Required environment: MCPHUB_PUBLIC_URL, MCPHUB_AUTH_ISSUER,
-# MCPHUB_ADMIN_PUBLIC_URL, MCPHUB_ADMIN_CLIENT_ID, MCPHUB_CONFIG_KEY,
+# Container deployment: remote admin UI, PostgreSQL, built-in accounts.
+# Required environment: MCPHUB_PUBLIC_URL,
+# MCPHUB_ADMIN_PUBLIC_URL, MCPHUB_CONFIG_KEY,
 # MCPHUB_DATABASE_URL (Compose builds this from MCPHUB_POSTGRES_PASSWORD).
 # Both listeners bind all container interfaces; compose.postgres.yaml publishes
 # them only on host loopback. For a direct host deployment, change BOTH listen
 # values to 127.0.0.1:<port>, or a protected private address, before starting.
 # See deploy/README.md / deploy/README.zh-CN.md for HTTPS and identity setup.
-# User portal / mcpbridge setup additionally require client_authorization.
+# Initialize the administrator locally before signing in.
 
 server:
   listen: ":8080"
   public_url: ${MCPHUB_PUBLIC_URL}
 auth:
-  issuer: ${MCPHUB_AUTH_ISSUER}
+  mode: builtin
 admin:
   enabled: true
   mode: remote
   listen: ":8081"
   public_url: ${MCPHUB_ADMIN_PUBLIC_URL}
-  client_id: ${MCPHUB_ADMIN_CLIENT_ID}
+  client_id: mcphub-admin
   required_scopes: [mcphub:admin]
   database_driver: postgres
   # Environment variable NAMES. Do not put a DSN/key or ${...} here.
@@ -27,4 +27,9 @@ admin:
   encryption_key_env: MCPHUB_CONFIG_KEY
 
 # Register services in the admin UI/API. YAML backends seed an empty DB only once.
+client_authorization:
+  enabled: true
+  require_client_grant: true
+  client_id: mcphub-portal
+
 backends: []

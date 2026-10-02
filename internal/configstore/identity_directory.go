@@ -88,6 +88,9 @@ func (s *Store) SyncDirectory(ctx context.Context, provider string, snapshot Dir
 		if err != nil {
 			return err
 		}
+		if p.ManagedLocally {
+			return ErrGroupMembership
+		}
 		previous := p
 		p.Name, p.DirectoryActive = g.Name, true
 		p.DirectoryManaged = true
@@ -103,7 +106,11 @@ func (s *Store) SyncDirectory(ctx context.Context, provider string, snapshot Dir
 			return err
 		}
 		previous := p
-		p.Name, p.DirectoryActive, p.Groups = u.Name, u.Active, nil
+		p.Groups, err = locallyManagedGroups(ctx, tx, p.Groups)
+		if err != nil {
+			return err
+		}
+		p.Name, p.DirectoryActive = u.Name, u.Active
 		p.DirectoryManaged = true
 		for _, id := range u.Groups {
 			p.Groups = append(p.Groups, ids["group:"+id])
@@ -144,7 +151,7 @@ func (s *Store) SyncDirectory(ctx context.Context, provider string, snapshot Dir
 		if err != nil {
 			return err
 		}
-		if p.DirectoryActive {
+		if p.DirectoryActive && !p.ManagedLocally {
 			p.DirectoryActive = false
 			if _, err = saveIdentity(ctx, tx, p, "directory_deactivated"); err != nil {
 				return err

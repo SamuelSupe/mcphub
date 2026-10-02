@@ -12,6 +12,12 @@
     "description": "从获取接入信息到看到工具列表，按步骤完成首次连接。"
   },
   {
+    "slug": "device-auth",
+    "title": "Agent 链接授权",
+    "group": "开始使用",
+    "description": "本机或远程 Agent 发起配对，在同一个网页中登录并选择访问范围。"
+  },
+  {
     "slug": "install",
     "title": "安装连接器",
     "group": "开始使用",

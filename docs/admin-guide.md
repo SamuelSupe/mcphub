@@ -1,26 +1,28 @@
 # MCPHub administrator manual
 
+> This guide covers v2.3.0 fresh deployments. Built-in accounts and Agent device authorization require v2.3.0; v2.2.2 does not include these features.
+
 [中文](admin-guide.zh-CN.md) · [Documentation](README.md) · [Project home](../README.md)
 
 [Read the online administrator manual](https://samuelsupe.github.io/mcphub/en/admin/)
 
-For administrators responsible for deployment, service connections, access policies, approval and operations. This manual covers v2.2.2. Installation and access on employee computers are covered by the [user manual](user-guide.md).
+For administrators responsible for deployment, service connections, access policies, approval and operations. This manual covers v2.3.0. Installation and access on employee computers are covered by the [user manual](user-guide.md).
 
-Recommended sequence: **start the console → add backends → test connections → publish tools → assign user permissions → verify a real call**.
+Recommended sequence: **start the console → add backends → test connections → publish tools → assign group permissions → verify a real call**.
 
 - [Preparation and installation](#preparation-and-installation) · [Local management UI](#local-management-ui) · [Remote administration and databases](#remote-administrators-and-postgresql)
 - [Login clients and credentials](#distinguish-login-clients-and-upstream-credentials)
-- [Connect services and publish tools](#connect-services-and-publish-tools) · [Users and organizations](#users-and-organizations) · [Client authorization](#enable-client-authorization) · [Upstream accounts](#configure-upstream-accounts)
+- [Connect services and publish tools](#connect-services-and-publish-tools) · [Users and groups](#users-and-groups) · [Client authorization](#enable-client-authorization) · [Upstream accounts](#configure-upstream-accounts)
 - [Write approval and governance](#write-approval-and-configuration-governance) · [Console navigation](#console-navigation) · [Tool permission checks](#tool-permission-checks) · [Grant and request diagnostics](#grant-and-request-diagnostics)
 - [Backups and recovery](#backups-and-recovery) · [Operations](#operations) · [Security](#security-notes) · [Known limits and troubleshooting](#known-limits-and-troubleshooting)
 
 ## Preparation and installation
 
-Prepare an identity provider, an HTTPS MCP URL, writable persistent storage and a separately retained configuration encryption key. Remote administration additionally requires an HTTPS admin origin and registered administrator identity. Run **one active Hub instance**; PostgreSQL does not coordinate multiple Hub runtimes.
+Prepare an HTTPS MCP URL, writable persistent storage and a separately retained configuration encryption key. Remote administration additionally requires an HTTPS admin origin and a locally initialized administrator account. Run **one active Hub instance**; PostgreSQL does not coordinate multiple Hub runtimes.
 
 | Mode | Use case | Start here |
 | --- | --- | --- |
-| Local administration + SQLite | Development or maintenance on the gateway machine | [Minimal configuration below](#local-management-ui); unauthenticated and loopback-only |
+| Local administration + SQLite | Development or maintenance on the gateway machine | [Minimal configuration below](#local-management-ui); built-in account sign-in and loopback-only |
 | Remote administration + SQLite / PostgreSQL | Team access, approval and centralized management | [Deployment guide](../deploy/README.md); separate administrator login and HTTPS |
 | YAML configuration | No console; explicitly published read tools only | [Advanced YAML-only example](../deploy/config.yaml-only.example.yaml) |
 
@@ -28,33 +30,33 @@ Install `mcphub` on the gateway host and `mcpbridge` on user computers. Administ
 
 | Platform | Server download |
 | --- | --- |
-| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_linux_arm64.tar.gz) |
+| macOS Intel | `mcphub_v2.3.0_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `mcphub_v2.3.0_darwin_arm64.tar.gz` |
+| Linux amd64 | `mcphub_v2.3.0_linux_amd64.tar.gz` |
+| Linux arm64 | `mcphub_v2.3.0_linux_arm64.tar.gz` |
 
-Download from the [v2.2.2 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2) and verify against [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/SHA256SUMS). The following installs Linux arm64; change the filename for your platform and use `shasum -a 256` on macOS:
+Download the server archive and `SHA256SUMS` from [the v2.3.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0). The following installs Linux arm64; change the filename for your platform and use `shasum -a 256` on macOS:
 
 ```bash
-sha256sum mcphub_v2.2.2_linux_arm64.tar.gz
+sha256sum mcphub_v2.3.0_linux_arm64.tar.gz
 # Compare exactly with the same filename in SHA256SUMS before extracting.
 mkdir -p mcphub-release "$HOME/.local/bin"
-tar -xzf mcphub_v2.2.2_linux_arm64.tar.gz -C mcphub-release
+tar -xzf mcphub_v2.3.0_linux_arm64.tar.gz -C mcphub-release
 install -m 755 mcphub-release/mcphub "$HOME/.local/bin/mcphub"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-After installation, run `mcphub --version`; expect `mcphub 2.2.2 (server)`. `validate` and `serve` are server commands. The renamed client `mcpbridge` connects Agents and cannot start or validate the gateway. Updating source does not replace an existing binary in the directory; use the path of the executable you just installed.
+After installation, run `mcphub --version`; expect `mcphub 2.3.0 (server)`. `validate` and `serve` are server commands. The renamed client `mcpbridge` connects Agents and cannot start or validate the gateway. Updating source does not replace an existing binary in the directory; use the path of the executable you just installed.
 
-This PATH setting applies to the current terminal. For later runs, use `"$HOME/.local/bin/mcphub"` directly or add the tools directory to your service environment. With Go 1.26 installed:
+This PATH setting applies to the current terminal. For later runs, use `"$HOME/.local/bin/mcphub"` directly or add the tools directory to your service environment. With Go 1.26.8 installed:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.2
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.3.0
 ```
 
 Go installs into `go env GOBIN`, or `$(go env GOPATH)/bin` when GOBIN is empty. Add that directory to PATH too.
 
-**The v2.2.2 server archive includes the same templates as the online guide.** Its default `config.example.yaml` enables local administration and SQLite with `backends: []`; only the MCP URL, OIDC issuer and configuration encryption key are required. Start the console, add each service with its own credentials, test the connection, then publish reviewed tools and configure access. Use the remote templates for team administration, or the independent [advanced YAML-only example](../deploy/config.yaml-only.example.yaml) for deployments without a console.
+**The v2.3.0 server archive includes the same templates as the online guide.** Its default `config.example.yaml` enables local administration and SQLite with `backends: []`; only the MCP URL and configuration encryption key are required. Start the console, add each service with its own credentials, test the connection, then publish reviewed tools and configure access. Use the remote templates for team administration, or the independent [advanced YAML-only example](../deploy/config.yaml-only.example.yaml) for deployments without a console.
 
 `validate --config PATH` checks configuration without creating a SQLite database. `serve --config PATH` initializes fresh storage and starts the service, writing JSON logs to stderr.
 
@@ -62,14 +64,13 @@ Before deployment, check [example selection and configuration ownership](configu
 
 ## Local management UI
 
-The default is for a fresh deployment. Its unauthenticated management console listens only on `127.0.0.1:8081` on the gateway machine. For remote access, use the [remote deployment guide](../deploy/README.md) with HTTPS and registered administrator identities.
+The default template enables built-in accounts, a loopback console, SQLite, the personal portal and `backends: []`. The console listens on `127.0.0.1:8081` and requires account sign-in. Use the remote templates and HTTPS for remote access.
 
-After extracting the server archive, copy its `config.example.yaml` to `config.yaml`, or download the [identical online template](../config.example.yaml). Run in a new deployment directory and replace the two HTTPS addresses:
+Copy the packaged template into a fresh deployment directory and set the public address and persistent key:
 
 ```bash
 cp mcphub-release/config.example.yaml config.yaml
 export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
-export MCPHUB_AUTH_ISSUER=https://idp.example.com
 umask 077
 mkdir -p secrets
 test -f secrets/config.key || openssl rand -base64 32 > secrets/config.key
@@ -78,23 +79,33 @@ mcphub validate --config config.yaml
 mcphub serve --config config.yaml
 ```
 
-Only these three variables are required. `MCPHUB_CONFIG_KEY` is a Base64-encoded 32-byte key: generate it once and read the same private file on every restart. Your service manager must inject the same three values; MCPHub does not load `.env`. SQLite uses `data/mcphub.db` next to the YAML file and needs a writable directory.
+In another terminal on the server, enter the same directory, load both variables and initialize the administrator:
 
-Open [the local console](http://127.0.0.1:8081/); the service list starts empty. Select **MCP backends → Add MCP backend**, enter each address and its own credentials, **test the connection**, then save. In **Tool permissions**, explicitly classify a reviewed tool as `read`, publish it and set required scopes. Follow the [service connection workflow](#connect-services-and-publish-tools) to make a real read call. An accessible console does not prove identity-provider readiness; `/readyz` returns 200 only with a working OIDC issuer.
+```bash
+export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
+export MCPHUB_CONFIG_KEY="$(cat secrets/config.key)"
+mcphub init-admin --config config.yaml --username admin
+```
+
+Password input is hidden and requires at least 12 characters. There is no default password or anonymous web bootstrap. Sign in to the [local console](http://127.0.0.1:8081/), create users and groups, assign group permissions and add members in **Users & groups**, then **add backends → test connections → publish tools**.
+
+Only the public address and configuration key are required. Do not set `MCPHUB_AUTH_ISSUER` or fixed backend variables. The key is Base64-encoded 32 bytes; generate it once and retain the same private file. Inject both variables into your service manager: MCPHub does not load `.env`. SQLite uses `data/mcphub.db` next to the YAML file.
+
+The built-in issuer is derived from the public origin with `/sso`. A fresh gateway with no backends can return `/readyz` 200 without an external OIDC provider. Readiness does not prove public HTTPS or business backend acceptance. MCPBridge and remote users need working HTTPS, OAuth metadata and portal routes. See [built-in accounts](builtin-accounts.md) for passwords, disabling, MFA and local recovery.
 
 ## Remote administrators and PostgreSQL
 
-Remote management adds OIDC administrator login, browser sessions, `mcpbridge admin` and configuration audit attribution. Admin tokens must include `admin.public_url` in their audience and all `admin.required_scopes` (default `mcphub:admin`). Ordinary MCP login does not grant management access.
+Remote management adds HTTPS administrator sign-in using built-in accounts or optional enterprise SSO, browser sessions, `mcpbridge admin` and configuration audit attribution. Admin tokens must include `admin.public_url` in their audience and all `admin.required_scopes` (default `mcphub:admin`). Ordinary MCP login does not grant management access.
 
 ```bash
-mcpbridge login --admin --server https://admin.example.com --client-id mcphub-admin-cli --profile ops
+mcpbridge login --admin --server https://admin.example.com --client-id mcpbridge-admin --profile ops
 mcpbridge admin --profile ops get /overview
 mcpbridge admin --profile ops get /backends
 mcpbridge admin --profile ops get /tool-groups
 mcpbridge admin --profile ops get /events
 ```
 
-Choose SQLite (default) or PostgreSQL (`database_driver: postgres` and `database_dsn_env`). This supports one gateway instance, without multi-instance runtime synchronization. See the [deployment guide](../deploy/README.md) for OIDC setup, browser login, API writes, databases and HTTPS proxies.
+Choose SQLite (default) or PostgreSQL (`database_driver: postgres` and `database_dsn_env`). This supports one gateway instance, without multi-instance runtime synchronization. See the [deployment guide](../deploy/README.md) for account initialization, browser login, API writes, databases and HTTPS proxies.
 
 ## Connect services and publish tools
 
@@ -108,13 +119,11 @@ Upstream headers/OAuth authenticate Hub to the business service; client scopes a
 
 See [backend fields](configuration.md#backends), [HTTP tool groups](configuration.md#tool-groups-and-managed-http-api-tools), [publication and resources](configuration.md#explicit-publication-and-resource-limits), and [rate limits](configuration.md#endpoint-rate-limits).
 
-## Users and organizations
+## Users and groups
 
-Choose the identity mode before assigning access. With an external OIDC issuer, the provider issues scopes. With `auth.sso`, MCPHub manages local user and department/group policies. Enterprise application secrets stay on the server.
+Use [built-in accounts](builtin-accounts.md) by default. Create groups in **Users & groups**, assign administration, reviewer or security roles and specific services, tools, scopes and resource access to the groups, then add users as members. New local users can sign in, but cannot call tools before authorization.
 
-Enable users in **Users and organizations**, then assign endpoints, exact tools, scopes, resources and required roles. New SSO users start pending authorization. Department/group synchronization updates identity and membership, not local grants; timely offboarding requires reliable directory synchronization. Assign administrator and reviewer roles separately.
-
-See [SSO and user management](sso-and-user-management.md) for configuration, directory snapshots and last-administrator recovery. Give employees the MCP URL, CLI client ID, available services, any required callback port and the [client setup instructions](user-guide.md#connect-an-mcp-client).
+Enterprise LDAP/OIDC is optional. Configure both in the console’s [Identity services page](enterprise-login.md); enterprise identities and local accounts keep separate permissions and never merge by name. Enterprise users start pending. YAML `auth.sso.upstream` remains an advanced initial connection.
 
 ## Distinguish login clients and upstream credentials
 
@@ -132,7 +141,9 @@ Each `client_id` belongs to a different authentication flow; register and config
 
 ## Enable client authorization
 
-Enable `client_authorization.enabled`, configure its portal `client_id`, and enable the managed database. SQLite and a **single MCPHub instance with PostgreSQL** use the same authorization lifecycle. Fresh storage uses schema 9; retain the database and encryption key across restarts.
+The default templates already enable the personal portal and automatically register `mcphub-portal` and MCPBridge clients. No separate identity service or manual registration is required. The custom registration requirements below apply to advanced external authentication; in built-in mode, configure explicit registrations only when changing client IDs, callbacks or resource URLs.
+
+Enable `client_authorization.enabled`, configure its portal `client_id`, and enable the managed database. SQLite and a **single MCPHub instance with PostgreSQL** use the same authorization lifecycle. Fresh storage uses schema 10; retain the database and encryption key across restarts.
 
 Register the portal callback `https://hub.example.com/client-auth/auth/callback`. The portal is served on the MCP gateway origin, separately from the administration listener. The CLI and portal must receive JWT access tokens for the full MCP resource URL with the same `issuer + sub`. Pairwise subjects from different OIDC clients require an identity-provider configuration that gives these clients a consistent subject; email matching is not used. An optional portal client secret stays on the server through `client_secret_env`.
 
@@ -141,7 +152,7 @@ This is a **fragment to add at the root of an existing complete YAML file**, not
 ```yaml
 client_authorization:
   enabled: true
-  client_id: mcphub-user-portal
+  client_id: mcphub-portal
   require_client_grant: false
   max_grant_ttl: 8h
 ```
@@ -160,7 +171,7 @@ Administrators configure Vault AppRole, path policies, discovery credentials, up
 
 ## Write approval and configuration governance
 
-Explicitly read-only, published tools execute after permission checks. Writes and unclassified tools need approval per operation. Unauthenticated local administration and YAML-only deployments can execute only explicitly read-only published tools; write approval requires remote administration.
+Explicitly read-only, published tools execute after permission checks. Writes and unclassified tools need approval per operation. Unauthenticated local administration and YAML-only deployments can execute only explicitly read-only published tools; write approval requires authenticated administration, including a signed-in built-in local console.
 
 | Role | Responsibility |
 | --- | --- |
@@ -182,19 +193,28 @@ The console groups daily operations into four areas. Navigation shows only pages
 | Connections | MCP backends | Connect Streamable HTTP MCP servers; search, filter, probe, enable/disable and configure publication, upstream credentials and rate limits. |
 | Connections | HTTP tool groups | Turn REST APIs into tools, manually or through OpenAPI, with shared connections, credentials and access policies. |
 | Access control | Tool permissions | Inspect publication, read/write classification, effective scopes, business resource rules and approvals; edit policies or run a side-effect-free access check. |
-| Access control | Users & organization | Manage local SSO user, department and group status, roles, scopes, tools and resource permissions. Expand a record to edit it. |
+| Access control | Users & groups | Create users and groups, manage account state and membership, and assign roles, scopes, tools and resources to groups. Enterprise memberships from the identity source are read-only. |
+| Access control | Identity services | Configure and test LDAP and OIDC together, replace encrypted credentials and enable/disable enterprise login; retain the local administrator. |
 | Access control | Client authorization | Filter grants by user, client, endpoint and status; inspect full scope, navigate to related requests or revoke a grant. |
 | Governance & audit | Approval center | Review permitted write operations and configuration changes, including previews, approval progress, execution outcomes and audit history. |
 | Governance & audit | Request diagnostics | Inspect recent outcomes, denial reasons and latency; expand request details and navigate directly to the relevant tool policy. |
 | Governance & audit | Activity | Review the latest 50 management changes and their actors, without exposing credentials. |
 
-Recommended workflow: **connect services → publish and classify tools → configure user/organization access → client sign-in and consent → approvals and diagnostics**. Users connect through `mcpbridge setup` / `connect` and confirm their own grants in the personal authorization portal; administrators maintain policy in this console. Deployment settings such as the identity provider, administrator login, database and audit delivery remain in YAML/environment configuration. See [SSO and user management](sso-and-user-management.md).
+Recommended workflow: **connect services → publish and classify tools → configure group access and memberships → client sign-in and consent → approvals and diagnostics**. Users connect through `mcpbridge setup` / `connect` and confirm their own grants in the personal authorization portal; administrators maintain policy in this console. Default built-in deployments configure LDAP and OIDC in the [Identity services UI](enterprise-login.md). Listener, database and audit-delivery settings remain in YAML/environment configuration.
 
-Follow the same three steps in either editor: **connection → upstream credentials → client access**. Upstream headers/OAuth authorize MCPHub to call the service. Required scopes authorize clients to use the backend or group: an empty list permits all authenticated clients; a nonempty list requires **every** listed scope. Publish approved original tool names in **Published tools**; discovery never publishes new tools automatically. Tool rules add scopes and resource-argument restrictions for selected operations. Advanced connection settings stay collapsed until needed. When editing an existing secret, leave its value blank to retain it; removing its Header row removes that credential.
+Both editors follow **connection → upstream credentials → client access**. New MCP backends default to **No authentication**; explicitly choose Header, OAuth or Vault when the service requires credentials. Upstream credentials authorize MCPHub to call the service. Empty required scopes add no scope restriction: built-in and enterprise users still need group access, and tools must be published. A nonempty list requires **every** listed scope.
 
-Several endpoints may share the same required scopes. Without the SSO bridge, the external issuer grants those scopes. With `auth.sso`, Users & organization manages local user/department/group permissions, while verified login claims or directory snapshots supply memberships. HTTP tool groups share settings within a REST API; they do not group multiple MCP backends. Publication, scopes, business resources, client grants and write approvals jointly constrain calls.
+After testing the MCP connection, select approved tools in **Published tools**. Existing backend editors load the current catalog; unavailable discovery does not remove saved names. Advanced input accepts original tool names, and discovery never publishes new tools automatically. New and required backends need another test after their connection URL, authentication or timeout changes; publication changes alone do not invalidate the test. Lists show published and discovered counts separately. Edit individual rules in **Tool permissions**, or use advanced JSON; unclassified tools still require approval. An HTTP tool group's **Test saved connection** checks persisted configuration; save connection edits first.
+
+In **Users & groups**, choose the service and select its published tools, add required scopes and resource conditions, then assign group memberships. Changing a service clears the tools in that access entry so identical names do not carry over to another service. Advanced manual tool-name input remains available. Leave an existing secret blank to retain it; removing its Header row removes that credential.
+
+For OpenAPI, choose a URL or upload a specification, parse it, then select the interfaces to import. Changing the source clears its previous preview and selection; parse the new source before importing. Imported tools are limited to the selected interfaces.
+
+Several endpoints may share the same required scopes. Without the SSO bridge, the external issuer grants those scopes. With `auth.sso`, Users & groups grants permissions only to groups/departments; users inherit their groups. Locally managed memberships are edited in the console; verified login claims or directory snapshots own enterprise memberships. HTTP tool groups share settings within a REST API; they do not group multiple MCP backends. Publication, scopes, business resources, client grants and write approvals jointly constrain calls.
 
 Use the language control to switch between Chinese and English. Narrow screens use a navigation drawer with keyboard and Escape support. Refresh reloads current configuration and shows the last successful update time; failures keep a visible error and retry action. Overview values come from actual configuration and connection state. Request history follows database retention; it is not full monitoring or a tamper-evident audit archive.
+
+Closing an editor, refreshing configuration, navigating or filtering Users & groups prompts before discarding unsaved changes. Cancel keeps the draft available. Language changes preserve open editor drafts; Users & groups prompts before rebuilding its forms. Browser close or reload also uses its native warning. Forms lock while saving so a response cannot overwrite later input. Changes are not saved automatically, and credential drafts are never written to browser storage.
 
 ## Tool permission checks
 
@@ -216,7 +236,7 @@ Request diagnostics persist completed MCP POST requests in managed SQLite/Postgr
 
 Recording happens after request processing. Storage failure never replays or changes a business operation: the server logs the failure and the UI reports recording gaps during this run. A crash before persistence, in-flight requests and GET streams remain outside this history. Use independent approval-audit archives where required. Deployments without managed storage retain the existing short-lived in-memory diagnostics only.
 
-`GET /api/v1/requests` accepts `since` and `until` (RFC3339 completion times), returning the actual `window_start`/`window_end`. `format=ndjson` exports up to 10,000 records under the same administrator authorization and filters; a nonzero `X-MCPHub-Next-Cursor` response header can be passed as `cursor` to continue, or narrow the UI time range. Request history is retained in fresh **schema 9** storage; back up the database and matching key.
+`GET /api/v1/requests` accepts `since` and `until` (RFC3339 completion times), returning the actual `window_start`/`window_end`. `format=ndjson` exports up to 10,000 records under the same administrator authorization and filters; a nonzero `X-MCPHub-Next-Cursor` response header can be passed as `cursor` to continue, or narrow the UI time range. Request history is retained in fresh **schema 10** storage; back up the database and matching key.
 
 Admin-only APIs (on the **admin listener**, not the personal portal):
 
@@ -242,7 +262,7 @@ Practice recovery in an isolated environment with the same program version, data
 
 ### Docker deployment
 
-The Dockerfile builds a static binary with `golang:1.26-bookworm`, then copies it into `gcr.io/distroless/static-debian12:nonroot`. The final image has no shell and runs as the nonroot user.
+The Dockerfile builds a static binary with `golang:1.26.8-bookworm`, then copies it into `gcr.io/distroless/static-debian12:nonroot`. The final image has no shell and runs as the nonroot user.
 
 ```bash
 docker build -t mcphub:local .
@@ -256,7 +276,7 @@ docker run --rm \
 
 The container listen address must match the published port (the example uses `:8080`). `--env-file` injects environment variables only; the configuration is mounted read-only. Restrict permissions on the host `config.yaml` and `.env`. The image entrypoint is already `/usr/local/bin/mcphub`, so pass `serve` or `validate` as arguments.
 
-SQLite administration needs a writable database volume; both stores need `MCPHUB_CONFIG_KEY`. Local mode binds container loopback and is not reachable through ordinary port publishing. For remote container management use `mode: remote`, OIDC administrator authorization and an HTTPS proxy; see the [PostgreSQL Compose guide](../deploy/README.md).
+SQLite administration needs a writable database volume; both stores need `MCPHUB_CONFIG_KEY`. Local mode binds container loopback and is not reachable through ordinary port publishing. For remote container management use `mode: remote`, a built-in administrator account and an HTTPS proxy; see the [PostgreSQL Compose guide](../deploy/README.md).
 
 ## Security notes
 
@@ -270,13 +290,13 @@ SQLite administration needs a writable database volume; both stores need `MCPHUB
 - Every MCP-listener HTTP route keeps the `request_timeout` request-body read deadline until the body is consumed or closed, so unauthenticated and rejected requests with slow bodies are bounded. A `subscriptions/listen` POST is exempt from ordinary response-write and request-context timeouts only after its body has been read.
 - Backend SSE responses are streaming passthrough. Progress inspection buffers at most 1 MiB per event; an oversized event is forwarded unchanged without progress inspection.
 - Acknowledged 2026 resource subscription IDs map updates back to their original subscription URI(s), including when an update event URI differs; timeout, cancellation, and session/reconnect cleanup remove the mapping.
-- Local management has no login and permits only numeric loopback. Remote management requires a separate audience and admin scopes, HTTPS, exact Host/Origin checks, cookie CSRF protection and a restrictive CSP.
+- Built-in local management requires account sign-in and permits only numeric loopback. Remote management requires a separate audience and admin scopes, HTTPS, exact Host/Origin checks, cookie CSRF protection and a restrictive CSP.
 - Keep `MCPHUB_CONFIG_KEY` outside YAML and backups. The SQLite file uses `0600`, but its availability and recoverability depend on retaining the exact 32-byte key.
 
 ## Known limits and troubleshooting
 
 - Administration persists backend/tool-group configuration and write approvals with their audit history. There is still no metrics endpoint, persistent MCP catalog, cross-instance subscription state, or high-availability coordination; each process owns its backend connections, catalogs, and token views.
-- This release does not provide built-in accounts, stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The local `connect` command provides stdio access to the HTTP gateway. TLS and external rate limiting belong at the reverse proxy.
+- This release does not provide stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants, opaque-token introspection, Tasks, MCP Apps, or custom MCP extensions. The local `connect` command provides stdio access to the HTTP gateway. TLS and external rate limiting belong at the reverse proxy.
 - Personal credentials currently cover remote MCP endpoints; HTTP tool groups, dynamic cloud/database credentials and provider-specific SaaS OAuth adapters are outside this release.
 - The aggregator advertises and implements only tools, prompts, resources (including subscriptions), and completions. Other backend capabilities do not automatically become gateway capabilities. Invalid names, URI templates, and SDK-rejected metadata are omitted.
 - A disconnected backend keeps its last-known-good catalog, but calls require a live connection. A required backend makes `/readyz` return 503; an optional backend does not block overall readiness.
@@ -300,3 +320,25 @@ Common configuration mistakes:
 | Admin console exists but no user portal | Enable `client_authorization` separately and register ordinary-user clients. |
 | Published tools remain hidden or cannot execute | Check original names, `effect`, token/grant scopes and user policies; validation does not check actual tool existence. |
 | SQLite appears empty | Check the YAML location and resolved `database_path`; avoid opening a new path unintentionally. |
+
+## Agent link authorization
+
+With the built-in issuer, user sign-in and client consent happen on one web page. Local, SSH and container Agents can use this flow without a browser callback to the Agent's machine. Run both commands under the same operating-system user and private `MCPHUB_HOME` directory:
+
+```bash
+mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "Project Agent" --json
+mcpbridge pair finish --request pr_example --wait --json
+mcpbridge connect --profile work --client ci_example
+```
+
+Replace the request and client IDs with the actual results. Show the user `verification_uri_complete` and `user_code`. After comparing the code, the user signs in with local accounts, LDAP or OIDC, selects a service, tools, resource restrictions and duration, then approves. No tools are selected by default; write access is off. Without `--wait`, finish checks once. `pending_user` requires approval; `ready` means private credentials were saved and MCP connectivity was checked. The default requested maximum is 1 hour, capped by the gateway. Requests expire after 5 minutes and polling starts at 5 seconds. `--ttl` takes seconds (at least 60); narrow requests with `--endpoint` and repeated `--tool` / `--scope`.
+
+For Agents without command execution, use these stdio arguments:
+
+```json
+["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "Project Agent", "--interactive-auth"]
+```
+
+The session initializes immediately with only `mcpbridge_auth_start` and `mcpbridge_auth_status`. Start reuses the same unexpired request; status may collect and save credentials and check connectivity. Respect the returned `interval`. Refresh tools after ready. If the Agent does not support `notifications/tools/list_changed`, reconnect using the returned `connect --profile … --client …` command. Failed business calls are never queued or retried automatically. Reauthorization after expiry or revocation is explicit.
+
+Each pairing grants one service and tool capability; use existing setup for prompts, resource URIs or subscriptions. Current groups and the confirmed grant both restrict access, and new tools never expand old grants. Private credentials remain inside MCPBridge. Never copy tokens to an Agent. Failure preserves an existing working profile; choose a new profile for another user or server. Pure external issuers retain PKCE login and setup.

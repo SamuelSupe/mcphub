@@ -1,4 +1,5 @@
 import { t } from "./i18n.js";
+import { markClean, lockForm } from "./unsaved.js";
 
 const byId = (id) => document.getElementById(id);
 const scopes = (value) => [...new Set(value.split(/[\s,]+/).filter(Boolean))];
@@ -102,6 +103,7 @@ export function editToolPolicy(endpoint, record, tool, actions, saved) {
   byId("policy-save").disabled = false;
   form.onsubmit = async (event) => {
     event.preventDefault();
+    let unlock;
     byId("policy-edit-error").textContent = "";
     try {
       if (
@@ -179,7 +181,7 @@ export function editToolPolicy(endpoint, record, tool, actions, saved) {
         if (byId("policy-published").checked)
           input.published_tools.push(tool.name);
       }
-      byId("policy-save").disabled = true;
+      unlock = lockForm(form);
       await actions.api(
         `/${endpoint.kind === "backend" ? "backends" : "tool-groups"}/${encodeURIComponent(endpoint.id)}`,
         {
@@ -188,13 +190,15 @@ export function editToolPolicy(endpoint, record, tool, actions, saved) {
           body: JSON.stringify(input),
         },
       );
+      markClean(form);
       dialog.close();
       await saved();
     } catch (error) {
       byId("policy-edit-error").textContent = error.message;
     } finally {
-      byId("policy-save").disabled = false;
+      unlock?.();
     }
   };
   dialog.showModal();
+  markClean(form);
 }

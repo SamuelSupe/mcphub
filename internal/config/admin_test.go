@@ -102,9 +102,17 @@ func TestRemoteAdminRequiresExplicitIdentityAndDatabaseSettings(t *testing.T) {
 	t.Setenv("MCPHUB_REMOTE_TEST_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	t.Setenv("MCPHUB_REMOTE_TEST_DSN", "postgres://mcphub:placeholder@db.example.com/mcphub?sslmode=verify-full")
 	base := AdminConfig{Enabled: true, Mode: "remote", Listen: "0.0.0.0:8081", PublicURL: "https://admin.example.com", ClientID: "admin-web", RequiredScopes: []string{"mcphub:admin"}, DatabaseDriver: "postgres", DatabaseDSNEnv: "MCPHUB_REMOTE_TEST_DSN", EncryptionKeyEnv: "MCPHUB_REMOTE_TEST_KEY"}
-	if err := validateAdmin(base); err != nil {
+	if err := validateAdmin(base, false); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("built-in local administration needs an authorization scope", func(t *testing.T) {
+		candidate := base
+		candidate.Mode, candidate.Listen = "local", "127.0.0.1:8081"
+		candidate.RequiredScopes = nil
+		if err := validateAdmin(candidate, true); err == nil {
+			t.Fatal("configuration that locks all built-in administrators out was accepted")
+		}
+	})
 	for _, tc := range []struct {
 		name   string
 		change func(*AdminConfig)
@@ -122,7 +130,7 @@ func TestRemoteAdminRequiresExplicitIdentityAndDatabaseSettings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			candidate := base
 			tc.change(&candidate)
-			if err := validateAdmin(candidate); err == nil {
+			if err := validateAdmin(candidate, false); err == nil {
 				t.Fatal("unsafe or ambiguous configuration accepted")
 			}
 		})

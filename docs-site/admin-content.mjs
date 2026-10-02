@@ -30,13 +30,13 @@ export function loadAdminContent(repository, pages, language = 'zh-CN') {
   const suffix = language === 'en' ? '' : '.zh-CN';
   const userGuide = 'docs/user-guide' + suffix + '.md';
   const userSections = language === 'en' ? [
-    ['before-you-start', 'install'], ['install-the-cli', 'install'],
+    ['agent-link-authorization','device-auth'], ['before-you-start', 'install'], ['install-the-cli', 'install'],
     ['connect-an-mcp-client', 'quickstart'], ['connect-a-personal-account', 'accounts'],
     ['write-approvals', 'approvals'], ['manage-client-authorizations', 'authorizations'],
     ['diagnostics-and-troubleshooting', 'troubleshooting'],
     ['manual-login-and-compatible-connections', 'login'], ['local-data-and-logout', 'privacy'],
   ] : [
-    ['接入前准备', 'install'], ['接入-mcp-客户端', 'quickstart'],
+    ['agent-链接授权','device-auth'], ['接入前准备', 'install'], ['接入-mcp-客户端', 'quickstart'],
     ['连接个人账号', 'accounts'], ['写操作审批', 'approvals'],
     ['管理客户端授权', 'authorizations'], ['诊断与常见问题', 'troubleshooting'],
   ];
@@ -44,6 +44,8 @@ export function loadAdminContent(repository, pages, language = 'zh-CN') {
     ['docs/admin-guide' + suffix + '.md', 'admin/index.html'],
     ['docs/configuration' + suffix + '.md', 'admin/configuration.html'],
     ['deploy/README' + suffix + '.md', 'admin/deployment.html'],
+    ['docs/builtin-accounts' + suffix + '.md', 'admin/accounts.html'],
+    ['docs/enterprise-login' + suffix + '.md', 'admin/identity-providers.html'],
     ['docs/sso-and-user-management' + suffix + '.md', 'admin/sso.html'],
     ['docs/vault-accounts' + suffix + '.md', 'admin/vault.html'],
     [userGuide, 'index.html'],
@@ -78,7 +80,7 @@ export function loadAdminContent(repository, pages, language = 'zh-CN') {
     if (/^(?:https?:|mailto:)/.test(href)) return href;
     const [file, fragment = ''] = href.split('#');
     const repositoryPath = path.posix.normalize(path.posix.join(path.posix.dirname(sourceFile), file || path.posix.basename(sourceFile)));
-    if (!fragment && (repositoryPath === 'config.example.yaml' || /^deploy\/config\.[\w.-]+\.yaml$/.test(repositoryPath))) {
+    if (!fragment && (repositoryPath === 'config.example.yaml' || /^deploy\/[\w.-]+\.yaml$/.test(repositoryPath))) {
       const pageFile = (language === 'en' ? 'en/' : '') + pageSlug;
       return path.posix.relative(path.posix.dirname(pageFile), 'examples/' + repositoryPath);
     }

@@ -24,13 +24,17 @@ import (
 )
 
 type Server struct {
-	cfg     *config.Config
-	store   *configstore.Store
-	client  *http.Client
-	key     ed25519.PrivateKey
-	mu      sync.Mutex
-	pending map[string]login
-	codes   map[string]authorizationCode
+	cfg                       *config.Config
+	store                     *configstore.Store
+	client                    *http.Client
+	key                       ed25519.PrivateKey
+	mu                        sync.Mutex
+	pending                   map[string]login
+	codes                     map[string]authorizationCode
+	attempts                  map[string]*loginAttempts
+	passwordSlots             chan struct{}
+	connections               config.EnterpriseConnections
+	deviceCreate, deviceToken http.HandlerFunc
 }
 type login struct {
 	expires                  time.Time
@@ -38,9 +42,13 @@ type login struct {
 	oauth                    oauth2.Config
 	idVerifier               *oidc.IDTokenVerifier
 	issuerRequired           bool
+	enterpriseQuery          url.Values
 	downstream               authorizationCode
+	connectionsRevision      int64
+	upstream                 config.IdentityProvider
 }
 type authorizationCode struct {
+	CredentialVersion                                             int64
 	ClientID, Redirect, Resource, State, Challenge, Nonce, UserID string
 	Scopes                                                        []string
 	ACR                                                           string
@@ -52,9 +60,6 @@ func New(ctx context.Context, cfg *config.Config, store *configstore.Store) (*Se
 	if store == nil || cfg.Auth.SSO == nil {
 		return nil, errors.New("SSO requires configuration storage")
 	}
-	if os.Getenv(cfg.Auth.SSO.Upstream.ClientSecretEnv) == "" {
-		return nil, errors.New("SSO upstream client secret is missing")
-	}
 	if name := cfg.Auth.SSO.DirectoryTokenEnv; name != "" && len(os.Getenv(name)) < 32 {
 		return nil, errors.New("SSO directory token must contain at least 32 characters")
 	}
@@ -62,7 +67,11 @@ func New(ctx context.Context, cfg *config.Config, store *configstore.Store) (*Se
 	if err != nil {
 		return nil, err
 	}
-	return &Server{cfg: cfg, store: store, key: key, client: authn.LoginHTTPClient(), pending: map[string]login{}, codes: map[string]authorizationCode{}}, nil
+	s := &Server{cfg: cfg, store: store, key: key, client: authn.LoginHTTPClient(), pending: map[string]login{}, codes: map[string]authorizationCode{}, attempts: map[string]*loginAttempts{}, passwordSlots: make(chan struct{}, 4)}
+	if err := s.loadConnections(ctx); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func (s *Server) Handles(path string) bool {
@@ -103,6 +112,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, "method not allowed", 405)
 		}
+	case "/sso/login":
+		s.localLogin(w, r)
+	case "/sso/device_authorization":
+		if s.deviceCreate != nil && r.Method == http.MethodPost {
+			s.deviceCreate(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
 	case "/sso/token":
 		if r.Method == http.MethodPost {
 			s.token(w, r)
@@ -118,13 +135,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) metadata(w http.ResponseWriter) {
 	issuer := s.cfg.Auth.Issuer
-	respond(w, 200, map[string]any{
+	metadata := map[string]any{
 		"issuer": issuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/jwks",
 		"response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code", "refresh_token"},
 		"subject_types_supported": []string{"public"}, "id_token_signing_alg_values_supported": []string{"EdDSA"},
 		"token_endpoint_auth_methods_supported": []string{"none"}, "code_challenge_methods_supported": []string{"S256"},
 		"authorization_response_iss_parameter_supported": true, "scopes_supported": []string{"openid", "offline_access"},
-	})
+	}
+	if s.deviceCreate != nil {
+		metadata["device_authorization_endpoint"] = issuer + "/device_authorization"
+		metadata["grant_types_supported"] = []string{"authorization_code", "refresh_token", configstore.DeviceGrantType}
+	}
+	respond(w, 200, metadata)
 }
 
 func respond(w http.ResponseWriter, status int, data any) {
@@ -193,7 +215,12 @@ func (s *Server) directory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid directory snapshot", 400)
 		return
 	}
-	err := s.store.SyncDirectory(configstore.WithActor(r.Context(), "directory-sync"), s.cfg.Auth.SSO.Upstream.Namespace(), snapshot)
+	c := s.Connections()
+	if !c.OIDC.Enabled {
+		http.Error(w, "OIDC source is disabled", 403)
+		return
+	}
+	err := s.store.SyncDirectory(configstore.WithActor(r.Context(), "directory-sync"), c.OIDC.Provider.Namespace(), snapshot)
 	if errors.Is(err, configstore.ErrConflict) {
 		http.Error(w, "directory version must increase", 409)
 		return
@@ -203,4 +230,20 @@ func (s *Server) directory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, 200, map[string]any{"version": snapshot.Version, "users": len(snapshot.Users), "groups": len(snapshot.Groups)})
+}
+
+// Device authorization is installed only by the builtin, grant-enforcing gateway.
+func (s *Server) SetDeviceHandlers(create, token http.HandlerFunc) {
+	s.deviceCreate, s.deviceToken = create, token
+}
+func (s *Server) DeviceClientAllowed(id, resource string) bool {
+	if !s.cfg.Auth.Builtin() || resource != s.cfg.Server.PublicURL {
+		return false
+	}
+	for _, c := range s.cfg.Auth.SSO.Clients {
+		if c.ID == id && slices.Contains(c.Resources, resource) && c.ID != s.cfg.Admin.ClientID && c.ID != s.cfg.ClientAuthorization.ClientID {
+			return true
+		}
+	}
+	return false
 }

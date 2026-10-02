@@ -202,3 +202,20 @@ header > a { display: flex; align-items: center; gap: 12px; }
 .account-error { color:#9c372b; font-size:14px; }
 .account-error:empty { display:none; }
 @media (max-width:620px) { .account-list { grid-template-columns:1fr; } #account-dialog { padding:22px; } }
+
+.local-login-form { display:grid; gap:16px; }
+.local-login-form input, .local-account-dialog input { box-sizing:border-box; width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:6px; font:inherit; }
+.local-account-dialog { box-sizing:border-box; width:min(480px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); overflow:auto; padding:28px; border:1px solid #d5deec; border-radius:12px; }
+.local-account-dialog .field { display:grid; gap:8px; margin:16px 0; }
+.local-account-dialog button { margin:12px 8px 0 0; }
+.local-account-dialog::backdrop { background:#10213b66; }
+
+.device-page main { max-width:760px; }
+.device-page #device p, .device-page #identity { overflow-wrap:anywhere; }
+.device-page #device form { display:grid; gap:18px; }
+.device-page #device label { display:grid; gap:8px; font-size:14px; }
+.device-page #device select, .device-page #device textarea, .device-page #device input:not([type="checkbox"]) { width:100%; min-width:0; padding:10px 12px; border:1px solid #cbd5e1; border-radius:6px; font:inherit; background:white; color:inherit; }
+.device-page #device label:has(input[type="checkbox"]) { display:flex; align-items:flex-start; gap:10px; }
+.device-page #device input[type="checkbox"] { margin-top:5px; width:18px; height:18px; flex-shrink:0; accent-color:#3265dc; }
+.device-page #device fieldset { padding:18px; border:1px solid #e2e7ef; border-radius:6px; display:grid; gap:12px; }
+.device-page #device legend { padding:0 8px; font-size:14px; font-weight:600; }

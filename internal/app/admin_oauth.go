@@ -71,6 +71,14 @@ func (a *adminAuthorization) startLogin(w http.ResponseWriter, req *http.Request
 	state, browser, verifier := rand.Text(), rand.Text(), oauth2.GenerateVerifier()
 	pending := adminLogin{browser: browser, verifier: verifier, oauth: cfg, requiredScopes: requiredScopes, issuerRequired: meta.AuthorizationResponseIssParameterSupported, expires: time.Now().Add(5 * time.Minute)}
 	options := []oauth2.AuthCodeOption{oauth2.S256ChallengeOption(verifier), oauth2.SetAuthURLParam("resource", a.resourceURL())}
+	if a.local != nil && a.local.Builtin() {
+		if lang := req.URL.Query().Get("lang"); lang == "en" || lang == "zh-CN" {
+			options = append(options, oauth2.SetAuthURLParam("lang", lang))
+		}
+	}
+	if a.local != nil && a.local.Builtin() && a.local.EnterpriseEnabled() {
+		options = append(options, oauth2.SetAuthURLParam("source", "enterprise"))
+	}
 	if approvalID != "" {
 		if session == nil || len(a.cfg.Approvals.StepUpACRValues) == 0 || !slices.Contains(meta.ScopesSupported, "openid") {
 			return "", fmt.Errorf("configure OIDC and step_up_acr_values before requiring verification")
@@ -92,7 +100,7 @@ func (a *adminAuthorization) startLogin(w http.ResponseWriter, req *http.Request
 	}
 	a.logins[state] = pending
 	a.mu.Unlock()
-	setAdminCookie(w, a.loginCookie(), browser, 300)
+	a.setCookie(w, a.loginCookie(), browser, 300)
 	return cfg.AuthCodeURL(state, options...), nil
 }
 
@@ -117,7 +125,7 @@ func (a *adminAuthorization) callback(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Invalid or expired login state", 400)
 		return
 	}
-	setAdminCookie(w, a.loginCookie(), "", -1)
+	a.setCookie(w, a.loginCookie(), "", -1)
 	iss := q.Get("iss")
 	validIssuer := len(q["iss"]) <= 1 && (!pending.issuerRequired || iss != "") && (iss == "" || iss == a.issuer)
 	if !validIssuer || q.Get("error") != "" || len(q["code"]) != 1 || q.Get("code") == "" {
@@ -163,7 +171,7 @@ func (a *adminAuthorization) callback(w http.ResponseWriter, req *http.Request) 
 	}
 	a.sessions[id] = session
 	a.mu.Unlock()
-	setAdminCookie(w, a.sessionCookie(), id, 8*60*60)
+	a.setCookie(w, a.sessionCookie(), id, 8*60*60)
 	http.Redirect(w, req, a.homePath(), http.StatusSeeOther)
 }
 
@@ -214,6 +222,13 @@ func (a *adminAuthorization) sessionInfo(req *http.Request, session *adminSessio
 }
 
 func (a *adminAuthorization) refresh(ctx context.Context, session *adminSession) (*oauth2.Token, int) {
+	if a.local != nil && session.oauth == nil {
+		token, err := a.local.RefreshCredentials(ctx, session.token.RefreshToken, a.cfg.ClientID, a.resourceURL())
+		if err != nil {
+			return nil, http.StatusUnauthorized
+		}
+		return token, http.StatusOK
+	}
 	cfg := session.oauth
 	form := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {session.token.RefreshToken}, "resource": {a.resourceURL()}}
 	if cfg.Endpoint.AuthStyle == oauth2.AuthStyleInParams {

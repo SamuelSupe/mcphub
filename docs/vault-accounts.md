@@ -4,7 +4,7 @@
 
 This is an administrator configuration and operations guide. For employee access, use the [user manual](user-guide.md).
 
-Fresh deployments support HashiCorp Vault KV v2, SQLite and **one MCPHub instance with PostgreSQL**. Managed storage uses schema 9. Back up the database, matching encryption key and Vault data together.
+Fresh deployments support HashiCorp Vault KV v2, SQLite and **one MCPHub instance with PostgreSQL**. Managed storage uses schema 10. Back up the database, matching encryption key and Vault data together.
 
 ## User workflow
 

@@ -13,14 +13,14 @@
 
 ## 选择配置与生效方式
 
-本参考对应 v2.2.2。YAML 只允许一个文档，未知字段会被拒绝。**不要把管理 API 的 JSON 对象直接粘贴为 YAML**：例如 YAML 的 `headers` 是键值映射，API 的 `headers` 是对象数组；`enabled` 是托管 backend 的 API 字段，不是 YAML backend 字段。HTTP 工具组及 OpenAPI 导入只能通过控制台/API 管理。
+本参考对应 v2.3.0。YAML 只允许一个文档，未知字段会被拒绝。**不要把管理 API 的 JSON 对象直接粘贴为 YAML**：例如 YAML 的 `headers` 是键值映射，API 的 `headers` 是对象数组；`enabled` 是托管 backend 的 API 字段，不是 YAML backend 字段。HTTP 工具组及 OpenAPI 导入只能通过控制台/API 管理。
 
 | 场景 | 从哪里开始 | 需要准备 |
 | --- | --- | --- |
-| 默认本地管理台 + SQLite | [默认模板](../config.example.yaml)、[启动步骤](admin-guide.zh-CN.md#本地管理-ui) | 网关 URL、issuer、加密密钥三个变量；在 UI 添加后端 |
+| 默认本地管理台 + SQLite | [默认模板](../config.example.yaml)、[启动步骤](admin-guide.zh-CN.md#本地管理-ui) | 网关 URL、加密密钥两个变量；在 UI 添加后端 |
 | 高级纯 YAML 部署 | [独立示例](../deploy/config.yaml-only.example.yaml) | 在 YAML 逐个填写后端地址与凭证，显式发布已审核的只读工具 |
-| 本机管理、SQLite | [完整配置文件](../deploy/config.local.yaml)、[启动步骤](admin-guide.zh-CN.md#本地管理-ui) | 网关 URL、issuer、固定加密密钥 |
-| 团队远程管理 | [部署示例与变量清单](../deploy/README.zh-CN.md#环境变量清单) | 管理 URL、身份客户端、SQLite 或 PostgreSQL、HTTPS 代理 |
+| 本机管理、SQLite | [完整配置文件](../deploy/config.local.yaml)、[启动步骤](admin-guide.zh-CN.md#本地管理-ui) | 网关 URL、固定加密密钥 |
+| 团队远程管理 | [部署示例与变量清单](../deploy/README.zh-CN.md#环境变量清单) | 管理 URL、SQLite 或 PostgreSQL、HTTPS 代理；企业身份可选 |
 | SSO / Vault 个人账号 | [SSO](sso-and-user-management.zh-CN.md)、[Vault](vault-accounts.zh-CN.md) | 在托管配置上增加所需模块；飞书示例还需真实租户验收 |
 
 | 配置 | 修改位置 | 如何生效 |
@@ -86,10 +86,15 @@ duration 使用 Go `time.ParseDuration` 语法，例如 `500ms`、`60s`、`5m`�
 
 ## `auth`
 
-| 字段 | 说明 |
-| --- | --- |
-| `issuer` | 必填的绝对 HTTPS OIDC issuer。MCPHub 从该地址 discovery（通常是 `/.well-known/openid-configuration`）并读取 JWKS；SIGHUP 不可修改。 |
-| `sso` | 可选身份桥接配置；启用时 `issuer` 必须是本网关的 `/sso` 地址，并需要托管数据库。字段为字面值，修改后重启；见 [SSO 专题](sso-and-user-management.zh-CN.md)。 |
+默认内建模式可在管理台的 [身份服务](enterprise-login.zh-CN.md) 页面配置 LDAP 与 OIDC，密钥加密保存在管理数据库，保存立即生效。首次 UI 保存后，数据库连接设置优先于 `auth.sso.upstream`；以下 YAML 身份源设置仍属于需重启的静态配置。
+
+| 字段 | 默认/要求 | 说明 |
+| --- | --- | --- |
+| `mode` | `builtin`（默认模板） | 内建账号；企业身份源可选。高级外部验证使用 `external`。 |
+| `issuer` | 内建模式自动推导 | 从 `server.public_url` 的 HTTPS origin 推导为 `/sso`；不要求 issuer 环境变量。外部模式必须配置 HTTPS issuer。 |
+| `sso` | 可选 | 内建模式可添加 `upstream` 企业身份源或额外公开客户端；默认注册 MCPBridge、门户和管理台。见[内建账号](builtin-accounts.zh-CN.md)与 [SSO](sso-and-user-management.zh-CN.md)。 |
+
+内建模式要求管理存储。账号权限与会话由 Hub 检查，密码重置、停用和 MFA 绑定会撤销凭证。普通密码认证没有 MFA 标记。以下 discovery/JWKS 要求针对 `external` 验证模式。
 
 JWT 必须满足以下条件：签名和 `iss` 由该 issuer 验证；`aud` 必须包含完整的 `server.public_url`（包含路径）——`aud` 为字符串时必须等于 `public_url`，为数组时必须包含 `public_url`；必须有非空 `sub` 和 `exp`；`nbf`（如有）也会校验。过期、未生效和 OIDC 时间比较允许 30 秒时钟偏差。只有在 OIDC discovery 成功、`jwks_uri` 是绝对 HTTPS URL，且可达的 JWKS 响应至少包含一个可解析、有效且非对称的公开验证密钥后，verifier 才会 ready；对称 `oct` 密钥以及无效或空 key 均不满足此条件。首次成功刷新前 MCP 入口返回 503；ready 后 discovery 或 JWKS 刷新暂时失败会保留 last-known-good verifier。OIDC discovery 和 JWKS 响应分别限制为 1 MiB。
 
@@ -117,17 +122,17 @@ scope 取自 JWT 的 `scope` 和 `scp` 两个 claim：`scope` 只接受空格分
 
 ## `admin`
 
-管理平台默认关闭。启用后，它通过独立监听器提供嵌入式 UI 和 JSON API；默认本地模式仅回环访问，远程模式必须通过 OIDC 管理员认证。它管理 backend 和工具组配置；进程配置仍由 YAML 管理，哪些字段可热重载见[生效方式表](#选择配置与生效方式)。
+默认模板启用管理平台，通过独立监听器提供嵌入式 UI 和 JSON API；本地模式仅回环访问并要求内建账号登录，远程模式通过 HTTPS 使用内建账号或可选企业认证。它管理 backend 和工具组配置；进程配置仍由 YAML 管理，哪些字段可热重载见[生效方式表](#选择配置与生效方式)。
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `enabled` | `false` | 启用管理平台，并让所选数据库成为配置事实来源。 |
-| `mode` | `local` | `local` 仅本机、无登录；`remote` 开启 OIDC 管理员认证。 |
+| `mode` | `local` | `local` 仅本机；内建模式仍要求账号登录。`remote` 经 HTTPS 使用内建或企业管理员认证。 |
 | `listen` | `127.0.0.1:8081` | 本地模式必须是数字回环地址；远程模式可监听私有地址，外部需 HTTPS 代理。 |
 | `public_url` | 无 | 远程模式必填，HTTPS origin，不带路径或尾部 `/`；同时作为管理员 JWT audience。 |
-| `client_id` | 无 | 远程浏览器 OAuth 客户端 ID。 |
+| `client_id` | 内建模式 `mcphub-admin` | 管理台浏览器 OAuth 客户端 ID。 |
 | `client_secret_env` | 无 | 可选机密客户端的 secret 环境变量名；默认使用公开客户端。 |
-| `required_scopes` | `[mcphub:admin]` | 远程管理所需的全部 scope，不允许空列表。 |
+| `required_scopes` | `[mcphub:admin]` | 内建和远程管理所需的全部 scope，不允许空列表。 |
 | `database_driver` | `sqlite` | `sqlite` 或 `postgres`。 |
 | `database_dsn_env` | `MCPHUB_DATABASE_URL` | PostgreSQL 连接串所在的环境变量；使用 PostgreSQL 时不能同时设置 `database_path`。 |
 | `database_path` | 无 | SQLite 启用时必填；相对路径以 YAML 文件所在目录解析。 |
@@ -138,7 +143,7 @@ scope 取自 JWT 的 `scope` 和 `scp` 两个 claim：`scope` 只接受空格分
 
 默认 UI 地址为 `http://127.0.0.1:8081/`，可以在不中断进程的情况下注册、测试、编辑、启停和删除后端。Required 后端连接失败时变更会被拒绝，当前 runtime 不受影响；optional 后端不可用时可以保存，并在后台持续重连。
 
-JSON API 位于 `/api/v1`。单项 backend 响应携带 `ETag`；更新和删除必须通过 `If-Match` 提交该 revision，过期写入返回 `409 revision_conflict`。Secret 字段只返回是否已配置；编辑时省略 Secret 值表示保留，省略对应 Header 或 OAuth 配置表示删除。审计 actor 为远程管理员 JWT `sub`、本地 `local` 或后台刷新 `system`，只记录脱敏结果。
+JSON API 位于 `/api/v1`。单项 backend 响应携带 `ETag`；更新和删除必须通过 `If-Match` 提交该 revision，过期写入返回 `409 revision_conflict`。Secret 字段只返回是否已配置；编辑时省略 Secret 值表示保留，省略对应 Header 或 OAuth 配置表示删除。审计 actor 为已认证用户的内部 subject、无身份高级本地管理的 `local` 或后台刷新 `system`，只记录脱敏结果。
 
 ### 工具组与托管 HTTP API tool
 
@@ -255,19 +260,19 @@ tool_rules:
 
 MCP 后端与 HTTP 工具组均支持 `tool_rules[].effect: read` / `write`。明确标为 `read` 的工具通过发布、scope 和资源检查后可直接执行；写工具和未分类工具需要逐次审批。匹配到 `approval` 策略也按写工具处理，不能被更宽泛的 `read` 规则覆盖。HTTP 方法和后端自报的 `readOnlyHint` 不授予权限。
 
-启用[远程管理](admin-guide.zh-CN.md#远程管理员与-postgresql)，为配置管理员和审批人分别授予 scope；普通 MCP 调用凭证只使用 MCP 服务的 audience。审批人的浏览器使用管理服务 audience，但无需配置管理权限：
+启用内建账号管理，团队部署使用[远程管理](admin-guide.zh-CN.md#远程管理员与-postgresql)，为配置管理员和审批人分别授予 scope；普通 MCP 调用凭证只使用 MCP 服务的 audience。审批人的浏览器使用管理服务 audience，但无需配置管理权限：
 
 ```yaml
 admin:
-  # 其余 remote、public_url、client_id、数据库字段沿用远程管理配置。
+  # 保留当前模板的管理模式、公开地址和数据库字段。
   required_scopes: [mcphub:admin]
   approvals:
     required_scopes: [mcphub:approve]
     pending_ttl: 30m
     execution_ttl: 5m
     retention: 720h
-    # 替换为身份服务中实际代表 Passkey/MFA 等所需认证强度的 ACR。
-    step_up_acr_values: ["urn:your-idp:mfa"]
+    # 内建账号默认值；企业 SSO 按实际 MFA/Passkey 策略添加企业 ACR。
+    step_up_acr_values: ["urn:mcphub:auth:password-totp"]
 ```
 
 `pending_ttl` 从申请时开始，范围 1 分钟至 24 小时，默认 30 分钟；`execution_ttl` 从批准时重新计算，范围 1 至 30 分钟，默认 5 分钟；保留期范围 1 至 365 天，默认 30 天。管理静态配置修改需重启。配置管理员默认不能审批，审批人默认不能查看或修改后端配置；需要兼任时由身份服务显式授予两组权限。管理登录页提供独立的审批人登录入口。
@@ -308,7 +313,7 @@ tool_rules:
 
 1. Agent 调用写工具，收到 `structuredContent.code: approval_pending`、`approval_id` 和 `approval_url`。写操作尚未执行；若配置预览，会先调用指定的只读工具。
 2. 用户打开链接，以审批人身份登录，核对操作摘要、目标、业务资源、完整参数，以及可用的变更前后预览；填写理由后批准一次或拒绝。
-3. `require_step_up: true` 时，先点击“加强身份验证”。MCPHub 请求 OIDC `max_age=0`、`prompt=login`、nonce 和配置的 ACR，并验证签名、issuer、客户端 audience、同一 subject、nonce、`auth_time` 和返回的 ACR；有 `at_hash` 时也校验。允许最多 30 秒时钟偏差。通过后仍需点击批准，证明仅绑定该审批单和浏览器会话，2 分钟内单次有效。身份服务缺少 OIDC 或没有满足配置的认证强度时拒绝批准。ACR 的具体 MFA/Passkey 含义由身份服务配置，不是通用字符串。
+3. `require_step_up: true` 时，先点击“加强身份验证”。内建账号先重新验证密码和 TOTP，普通密码登录不能满足要求；企业身份则由 MCPHub 请求 OIDC `max_age=0`、`prompt=login`、nonce 和配置的 ACR，并验证签名、issuer、客户端 audience、同一 subject、nonce、`auth_time` 和返回的 ACR；有 `at_hash` 时也校验。允许最多 30 秒时钟偏差。通过后仍需点击批准，证明仅绑定该审批单和浏览器会话，2 分钟内单次有效。身份服务缺少 OIDC 或没有满足配置的认证强度时拒绝批准。ACR 的具体 MFA/Passkey 含义由身份服务配置，不是通用字符串。
 4. 原调用人调用 `mcphub_resume_approval`，只传 `{"approval_id":"..."}`，执行已保存请求并重新检查当前权限、发布状态、资源范围及限流。查询进度使用独立状态工具，相同活跃请求会被合并。现有 `mcpbridge connect` 配置无需修改。
 5. 执行前，申请人可调用 `mcphub_cancel_approval`，传 `approval_id` 和可选 `reason`；有审批人会话的申请人也可在页面取消。审批人可撤销尚未执行的批准。取消、撤销与执行原子竞争；已经接纳的写入可能完成，撤销不能回滚。
 
@@ -318,14 +323,14 @@ tool_rules:
 
 SQLite/PostgreSQL 原子消费批准，并发恢复不会执行两次；重复恢复返回保存结果。取消、断网或进程中断可能留下不确定结果，需要先核查后端。本机制不保证后端恰好执行一次或回滚。工具/配置代次变化会使对应批准失效，完整 runtime 重载和重启使未执行批准失效；重启将中断执行标为不确定。参数、业务 metadata 和后端续传输入不可修改，仅进度 token 绑定恢复请求；大整数精度保持不变。后端需要另一次调用继续交互时需重新审批。
 
-每个 issuer/subject 最多 20 个活跃申请，执行请求最多 60 KiB，预览最多 32 KiB，含策略的完整审批记录最多 64 KiB，结果最多 16 MiB。请求、预览、结果、理由及核查详情加密保存；每分钟分批清理超过保留期的终态记录及详细审计，通用活动日志保留不含参数/理由的状态记录。配置变更前已接纳的操作仍可能完成。批准写入使用新的 HTTP/1 连接防止透明重试，上游须支持 HTTP/1.1；只读调用仍复用连接。
+每个 issuer/subject 最多 21 个活跃申请，执行请求最多 60 KiB，预览最多 32 KiB，含策略的完整审批记录最多 64 KiB，结果最多 16 MiB。请求、预览、结果、理由及核查详情加密保存；每分钟分批清理超过保留期的终态记录及详细审计，通用活动日志保留不含参数/理由的状态记录。配置变更前已接纳的操作仍可能完成。批准写入使用新的 HTTP/1 连接防止透明重试，上游须支持 HTTP/1.1；只读调用仍复用连接。
 
-新部署的托管数据库使用 **schema 9**，备份时保管数据库及匹配密钥。本地免登录模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
+新部署的托管数据库使用 **schema 10**，备份时保管数据库及匹配密钥。内建账号已登录的本地管理台可以审批；无身份的高级本地模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
 
 
 ### 配置治理、双人审批与业务幂等
 
-在远程管理模式启用独立配置审批：
+在已认证的内建本地管理或远程管理模式启用独立配置审批：
 
 ```yaml
 admin:
@@ -346,7 +351,7 @@ admin:
 
 配置管理员新增或修改后端、工具组、HTTP 工具、OpenAPI 导入时，API 和 `mcpbridge admin` 返回 **202**，包含 `pending_approval`、`approval_id`、`approval_url`；网页编辑器跳转到提案，配置尚未生效。另一位具有安全 scope 的用户通过“以安全管理员身份登录”（`/auth/login?role=security`）进入，核对脱敏前后差异后“批准并应用”。凭证变更会单独标记，但不显示凭证值。安全角色不能直接编辑配置，写操作审批角色不能批准配置。批准仍要求浏览器会话和 CSRF 验证，API Token 不可审批。删除及单纯的启用→停用立即生效；重新启用、停用同时修改其他字段均需审批。YAML、数据库和部署运维权限仍属于信任边界，静态治理配置不能通过管理 API 修改。
 
-提案绑定目标版本；工具和导入还绑定所属工具组版本。期间发生修改时，旧提案应用失败，不会覆盖新配置。OpenAPI 提案保存具体文档和生成的工具定义，批准时不会重新下载；自动刷新发现变更也会生成提案，继续使用已批准的定义。重启使尚未执行的提案失效，中断的应用标记为结果不确定，需人工核查。失败或过期后需要重新提交。每个 issuer/subject 最多 20 个活跃请求，完整配置提案上限 32 MiB。
+提案绑定目标版本；工具和导入还绑定所属工具组版本。期间发生修改时，旧提案应用失败，不会覆盖新配置。OpenAPI 提案保存具体文档和生成的工具定义，批准时不会重新下载；自动刷新发现变更也会生成提案，继续使用已批准的定义。重启使尚未执行的提案失效，中断的应用标记为结果不确定，需人工核查。失败或过期后需要重新提交。每个 issuer/subject 最多 21 个活跃请求，完整配置提案上限 32 MiB。
 
 生产写工具可以配置：
 
@@ -429,19 +434,19 @@ Backend ID 的唯一性按大小写不敏感检查。tool/prompt 名称保留配
 
 ## 从完整 YAML 示例启动
 
-默认 [config.example.yaml](../config.example.yaml) 与 v2.2.2 服务端发行包、在线模板一致：本地管理台、SQLite、`backends: []`。它只要求 `MCPHUB_PUBLIC_URL`、`MCPHUB_AUTH_ISSUER` 和 `MCPHUB_CONFIG_KEY`，后端地址与认证凭证在 UI 中按服务配置。
+默认 [config.example.yaml](../config.example.yaml) 与 v2.3.0 服务端发行包、在线模板一致：本地管理台、SQLite、`backends: []`。它只要求 `MCPHUB_PUBLIC_URL` 和 `MCPHUB_CONFIG_KEY`，后端地址与认证凭证在 UI 中按服务配置。
 
 在新的私有部署目录中下载模板并启动，替换两个 HTTPS 地址：
 
 ```bash
 curl -fL https://samuelsupe.github.io/mcphub/examples/config.example.yaml -o config.yaml
 export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
-export MCPHUB_AUTH_ISSUER=https://idp.example.com
 umask 077
 mkdir -p secrets
 test -f secrets/config.key || openssl rand -base64 32 > secrets/config.key
 export MCPHUB_CONFIG_KEY="$(cat secrets/config.key)"
 mcphub validate --config config.yaml
+mcphub init-admin --config config.yaml
 mcphub serve --config config.yaml
 ```
 
@@ -450,6 +455,8 @@ mcphub serve --config config.yaml
 `validate` 是只读配置检查，不验证身份登录、后端连接或实际工具调用。`serve` 初始化新数据库。检查 `/healthz`、`/readyz`，然后按[部署验收](../deploy/README.zh-CN.md#启动后验收)实际调用工具。
 
 远程管理员使用[远程模板](../deploy/README.zh-CN.md)，补充管理员 origin、身份客户端和 scope；纯 YAML 部署使用独立的[高级示例](../deploy/config.yaml-only.example.yaml)，在文件中按后端填写实际地址、凭证、发布名单及只读策略。
+
+用户不保存直接权限。在「用户与组」创建组，为组分配角色、Scope、工具和资源权限，再把用户加入组。初始化会创建 Administrators 管理员组。身份 API 的用户成员关系更新与组权限更新分别使用不同正文，见[组管理](builtin-accounts.zh-CN.md#组与权限)和[接口契约](sso-and-user-management.zh-CN.md#管理用户与组)。
 
 ## 能力与边界
 
@@ -478,7 +485,7 @@ mcphub serve --config config.yaml
 | 地址 | 认证 | 语义 |
 | --- | --- | --- |
 | `GET /healthz` | 无 | 进程仍有运行时就返回 `200 {"status":"ok"}`；用于存活探针。 |
-| `GET /readyz` | 无 | 所有 required 后端和 OIDC verifier 都 ready 时返回 200，否则 503。JSON 包含 `backends_ready`、`backends_total`、`required_ready`、`required_total`、`auth_verifier_ready`。 |
+| `GET /readyz` | 无 | 所有 required 后端和认证 verifier 都 ready 时返回 200，否则 503。JSON 包含 `backends_ready`、`backends_total`、`required_ready`、`required_total`、`auth_verifier_ready`。 |
 | `GET /.well-known/oauth-protected-resource/mcp` | 无 | RFC 9728 Protected Resource Metadata 的路径感知地址；推荐将此地址暴露给客户端。 |
 | `GET /.well-known/oauth-protected-resource` | 无 | 同一 metadata 的根路径兼容别名。反向代理应把两个地址都路由到 MCPHub。 |
 | `/mcp` | Bearer JWT | Stateless MCP Streamable HTTP 入口；只接受 POST，兼容客户端也使用同一 `/mcp` POST 语义。现代客户端可以在 POST 响应中使用 request-scoped SSE；MCPHub 不提供 standalone GET SSE 或 DELETE session 会话端点。目录和调用按 token scope 过滤。 |
@@ -527,3 +534,5 @@ SIGHUP 创建 unavailable optional backend 时，只有目录来源身份未变�
 严格客户端授权启用时，服务端同时检查 OIDC Token 与不透明 `MCPHub-Grant` 凭证，有效 scope 是二者交集。每次请求校验 issuer、用户、resource、endpoint UID、期限、工具发布状态、资源条件和当前策略。修改 scope/目标、停用或同名重建 endpoint、改变 HTTP 工具执行语义后需重新确认。新工具不会自动进入旧授权；用户 Token 与 Grant 均不转发上游。
 
 私有 socket/named pipe、OS 对端检查和独立 IPC 凭证限制其他系统用户接入，但不能证明应用身份，也不能隔离同一系统账户下的恶意进程。发布流程要求 Windows x64、ARM64 的原生 CLI 测试（含 Broker IPC）通过；macOS/Linux 使用 Unix socket 与 OS 对端校验。完整边界及验证记录见[方案文档](broker-authorization-design.zh-CN.md)。
+
+新部署模板默认设置 `client_authorization.require_client_grant: true`：用户 Token 只完成身份验证，业务工具还需经网页确认的 ClientGrant。内建签发者发布设备授权元数据；服务端 `device_authorization_endpoint` 不是上游身份源的端点。详见[用户手册](user-guide.zh-CN.md#agent-链接授权)。

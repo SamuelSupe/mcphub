@@ -27,7 +27,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: mcpbridge <setup|login|connect|status|logout|client|broker|doctor|admin|version> [flags]; local client connector, server commands use mcphub")
+		return fmt.Errorf("usage: mcpbridge <setup|login|connect|status|logout|pair|client|broker|doctor|admin|version> [flags]; local client connector, server commands use mcphub")
 	}
 	command := args[1]
 	if command == "version" || command == "--version" {
@@ -42,6 +42,9 @@ func run(args []string) error {
 	}
 	if command == "doctor" {
 		return runDoctor(args[2:])
+	}
+	if command == "pair" {
+		return runPair(args[2:])
 	}
 	if command == "client" {
 		return runClient(args[2:])
@@ -63,8 +66,14 @@ func run(args []string) error {
 	profile := flags.String("profile", "default", "local credential profile")
 	var server, clientID *string
 	var clientEntry *string
+	var interactive *bool
+	var interactiveName, interactiveEndpoint *string
 	if command == "connect" {
 		clientEntry = flags.String("client", "", "paired client instance; connects through the local broker")
+		interactive = flags.Bool("interactive-auth", false, "initialize immediately with Agent authentication tools")
+		server = flags.String("server", "", "HTTPS MCP endpoint for interactive authentication")
+		interactiveName = flags.String("name", "", "Agent connection display name for interactive authentication")
+		interactiveEndpoint = flags.String("endpoint", "", "optional service for interactive authentication")
 	}
 	var callbackPort *int
 	var admin *bool
@@ -110,6 +119,15 @@ func run(args []string) error {
 		}
 		return client.Login(ctx, store, client.LoginOptions{Admin: *admin, ServerURL: *server, ClientID: *clientID, Profile: *profile, Scopes: scopes, CallbackPort: *callbackPort, Output: os.Stderr})
 	case "connect":
+		if *interactive {
+			if *clientEntry != "" {
+				return fmt.Errorf("--interactive-auth cannot be combined with --client")
+			}
+			return client.ConnectInteractive(ctx, store, client.PairOptions{Server: *server, Profile: *profile, ClientOptions: client.ClientOptions{Name: *interactiveName, Endpoint: *interactiveEndpoint}}, client.ConnectOptions{})
+		}
+		if *server != "" || *interactiveName != "" || *interactiveEndpoint != "" {
+			return fmt.Errorf("--server, --name and --endpoint require --interactive-auth")
+		}
 		if *clientEntry != "" {
 			return client.ConnectBroker(ctx, store, *profile, *clientEntry, client.ConnectOptions{})
 		}

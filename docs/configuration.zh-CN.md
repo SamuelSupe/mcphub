@@ -13,7 +13,7 @@
 
 ## 选择配置与生效方式
 
-本参考对应 v2.2.0。YAML 只允许一个文档，未知字段会被拒绝。**不要把管理 API 的 JSON 对象直接粘贴为 YAML**：例如 YAML 的 `headers` 是键值映射，API 的 `headers` 是对象数组；`enabled` 是托管 backend 的 API 字段，不是 YAML backend 字段。HTTP 工具组及 OpenAPI 导入只能通过控制台/API 管理。
+本参考对应 v2.2.1。YAML 只允许一个文档，未知字段会被拒绝。**不要把管理 API 的 JSON 对象直接粘贴为 YAML**：例如 YAML 的 `headers` 是键值映射，API 的 `headers` 是对象数组；`enabled` 是托管 backend 的 API 字段，不是 YAML backend 字段。HTTP 工具组及 OpenAPI 导入只能通过控制台/API 管理。
 
 | 场景 | 从哪里开始 | 需要准备 |
 | --- | --- | --- |
@@ -191,7 +191,7 @@ YAML-only 模式至少配置一个后端；管理模式允许从空数据库启�
 
 后端 OAuth discovery 和 token 请求不会带上该后端的静态 headers；数据面请求才会附加 headers 并自动复用/刷新 client-credentials token。Discovery 只从 RFC 8414/OIDC metadata 读取并精确校验 `issuer` 和 `token_endpoint`，不要求交互式 authorization 或 PKCE metadata。OAuth metadata 响应上限为 1 MiB。后端和 OIDC HTTP 客户端都不跟随重定向。
 
-服务账号 OAuth 示例：将以下条目放入 `backends`，并为这条目设置全部 4 个变量；`required: false` 只影响连接失败的处理。工具仍需审核后显式发布。
+可选的服务账号 OAuth 片段，不属于基础模板：只有接入此类服务时才将以下条目放入 `backends`，并为这条目设置全部 4 个变量；`required: false` 只影响连接失败的处理。工具仍需审核后显式发布。
 
 ```yaml
 - id: crm
@@ -320,7 +320,7 @@ SQLite/PostgreSQL 原子消费批准，并发恢复不会执行两次；重复�
 
 每个 issuer/subject 最多 20 个活跃申请，执行请求最多 60 KiB，预览最多 32 KiB，含策略的完整审批记录最多 64 KiB，结果最多 16 MiB。请求、预览、结果、理由及核查详情加密保存；每分钟分批清理超过保留期的终态记录及详细审计，通用活动日志保留不含参数/理由的状态记录。配置变更前已接纳的操作仍可能完成。批准写入使用新的 HTTP/1 连接防止透明重试，上游须支持 HTTP/1.1；只读调用仍复用连接。
 
-v2.2.0 使用 **schema 9**（审批治理最初引入 schema 5），升级前备份数据库与加密密钥，旧二进制不能以写模式打开升级后的数据库。本地免登录模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
+v2.2.1 使用 **schema 9**（审批治理最初引入 schema 5），升级前备份数据库与加密密钥，v2.1.0 或更早二进制不能以写模式打开升级后的数据库。本地免登录模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
 
 
 ### 配置治理、双人审批与业务幂等
@@ -429,13 +429,13 @@ Backend ID 的唯一性按大小写不敏感检查。tool/prompt 名称保留配
 
 ## 从完整 YAML 示例启动
 
-在线文档使用的是[当前基础配置](../config.example.yaml)。v2.2.0 下载包中的同名旧文件还包含控制台来源和可选 CRM 环境变量；即使 CRM 的 `required: false`，也不能省略这些变量。新部署可从文档站直接下载当前文件，再设置下面 4 个变量；该文件与 v2.2.0 二进制兼容：
+v2.2.1 服务端压缩包和在线指南提供相同的[基础配置](../config.example.yaml)：一个 MCP 后端、4 个必填变量，不需要控制台来源或 CRM 变量。解压服务端包后，将包内 `config.example.yaml` 复制为 `config.yaml`；也可下载同一文件：
 
 ```bash
 curl -fL https://samuelsupe.github.io/mcphub/examples/config.example.yaml -o config.yaml
 ```
 
-只在新部署目录下载为 `config.yaml`；已有部署先保留原配置并逐项合并。不要混用发布包中的旧配置和当前变量清单。
+只在新部署目录下载为 `config.yaml`；已有部署先保留原配置并逐项合并。配置和变量清单应使用同一版本。
 
 基础文件现在只配置一个 MCP 后端，需要下方 4 个变量。它默认不发布工具，也不开启用户门户/写审批；请按文件注释同时配置精确发布名单与已确认的 `effect: read`。需要控制台或普通 HTTP API 工具时，使用[管理员部署流程](admin-guide.zh-CN.md)。以下从源码构建，已安装二进制时可直接使用 `mcphub`：
 

@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -30,9 +30,9 @@ First deployment: follow the [administrator manual](docs/admin-guide.md#preparat
 
 ## Version and upgrades
 
-These documents cover **v2.2.0**, adding persistent request history and improving administrator recovery, SSO login and personal-account diagnostics. [Release notes](RELEASE_NOTES_v2.2.0.md) · [Downloads](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0)
+These documents cover **v2.2.1**, aligning bundled configuration, installation examples and bilingual help with the release. [Release notes](RELEASE_NOTES_v2.2.1.md) · [Downloads](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1)
 
-v2.2.0 migrates managed databases to **schema 9**. Back up the database and matching encryption key before starting; rollback requires the pre-upgrade backup. Upgrades from v1.x also require reviewing tool publication and read/write policies, and the Go module path adds `/v2`. See the [upgrade and rollback procedure](RELEASE_NOTES_v2.2.0.md#upgrade-and-rollback--升级与回滚).
+v2.2.1 retains **schema 9** from v2.2.0; earlier versions migrate on startup. Back up the database and matching encryption key before starting; rollback to v2.1.0 or earlier requires the pre-upgrade backup. Upgrades from v1.x also require reviewing tool publication and read/write policies, and the Go module path adds `/v2`. See the [upgrade and rollback procedure](RELEASE_NOTES_v2.2.1.md#upgrade-and-rollback--升级与回滚).
 
 ## Capabilities and boundaries
 

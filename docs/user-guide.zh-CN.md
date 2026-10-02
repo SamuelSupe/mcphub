@@ -2,7 +2,7 @@
 
 [English](user-guide.md) · [文档导航](README.zh-CN.md) · [项目首页](../README.zh-CN.md)
 
-面向在 Codex、Claude Code 或其他 MCP 客户端中使用公司工具的用户。本手册对应 v2.2.0。只需在自己的电脑安装 `mcphub-cli`；服务器、身份服务和 Vault 由管理员配置。
+面向在 Codex、Claude Code 或其他 MCP 客户端中使用公司工具的用户。本手册对应 v2.2.1。只需在自己的电脑安装 `mcphub-cli`；服务器、身份服务和 Vault 由管理员配置。
 
 首次接入按 **安装 CLI → 运行接入向导 → 确认授权 → 将配置加入客户端** 完成。服务要求个人上游账号时，先在门户连接账号，再完成连接检查。
 
@@ -25,26 +25,26 @@
 
 ## 安装 CLI
 
-从 [v2.2.0 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0) 选择与电脑匹配的 CLI 包：
+从 [v2.2.1 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1) 选择与电脑匹配的 CLI 包：
 
 | 平台 | CLI 下载 |
 | --- | --- |
-| macOS Intel | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_linux_arm64.tar.gz) |
-| Windows x64 | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_windows_amd64.zip) |
-| Windows ARM64 | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_windows_arm64.zip) |
+| macOS Intel | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_linux_arm64.tar.gz) |
+| Windows x64 | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_windows_amd64.zip) |
+| Windows ARM64 | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_windows_arm64.zip) |
 
-下载后与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS) 核对 SHA-256，解压并将可执行文件放入 PATH。Windows 需要 10 或更新版本；Intel/AMD 电脑选 x64，Windows on Arm 选 ARM64。
+下载后与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/SHA256SUMS) 核对 SHA-256，解压并将可执行文件放入 PATH。Windows 需要 10 或更新版本；Intel/AMD 电脑选 x64，Windows on Arm 选 ARM64。
 
 macOS/Linux 安装示例（以下为 Linux arm64，替换文件名；macOS 用 `shasum -a 256` 校验）：
 
 ```bash
-sha256sum mcphub-cli_v2.2.0_linux_arm64.tar.gz
+sha256sum mcphub-cli_v2.2.1_linux_arm64.tar.gz
 # 与 SHA256SUMS 中同名条目逐字核对，一致后再解压。
 mkdir -p mcphub-cli-release "$HOME/.local/bin"
-tar -xzf mcphub-cli_v2.2.0_linux_arm64.tar.gz -C mcphub-cli-release
+tar -xzf mcphub-cli_v2.2.1_linux_arm64.tar.gz -C mcphub-cli-release
 install -m 755 mcphub-cli-release/mcphub-cli "$HOME/.local/bin/mcphub-cli"
 export PATH="$HOME/.local/bin:$PATH"
 mcphub-cli setup --help
@@ -55,8 +55,8 @@ mcphub-cli setup --help
 Windows PowerShell 示例（文件名按实际架构替换）：
 
 ```powershell
-Get-FileHash .\mcphub-cli_v2.2.0_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcphub-cli_v2.2.0_windows_amd64.zip -DestinationPath .\mcphub-cli
+Get-FileHash .\mcphub-cli_v2.2.1_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcphub-cli_v2.2.1_windows_amd64.zip -DestinationPath .\mcphub-cli
 ```
 
 未添加 PATH 时，将后续命令中的 `mcphub-cli` 替换为 `.\mcphub-cli\mcphub-cli.exe`。
@@ -64,7 +64,7 @@ Expand-Archive .\mcphub-cli_v2.2.0_windows_amd64.zip -DestinationPath .\mcphub-c
 已安装 Go 1.26 的用户也可执行：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.2.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.2.1
 ```
 
 Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`，也需要加入 PATH。源码构建的文件需用 `./mcphub-cli` 运行，或按上面的 `install` 步骤安装。

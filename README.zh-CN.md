@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -30,9 +30,9 @@ MCPHub 将已有的远端 MCP Server 和普通 HTTP API 统一提供为 MCP 工�
 
 ## 版本与升级
 
-当前文档对应 **v2.2.0**：增加持久化请求历史，完善管理员恢复、SSO 登录与个人账号诊断。[发行说明](RELEASE_NOTES_v2.2.0.md) · [下载 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0)
+当前文档对应 **v2.2.1**：统一发布包配置、安装示例和中英文帮助文档。[发行说明](RELEASE_NOTES_v2.2.1.md) · [下载 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1)
 
-升级到 v2.2.0 会将托管数据库迁移到 **schema 9**。启动前备份数据库与匹配的加密密钥；回滚需要恢复升级前备份。从 v1.x 升级还需审核工具发布名单和读写策略，Go module 路径新增 `/v2`。详见[升级与回滚流程](RELEASE_NOTES_v2.2.0.md#upgrade-and-rollback--升级与回滚)。
+v2.2.1 沿用 v2.2.0 的 **schema 9**；更早版本在启动时迁移。启动前备份数据库与匹配的加密密钥；回滚至 v2.1.0 或更早版本需要恢复升级前备份。从 v1.x 升级还需审核工具发布名单和读写策略，Go module 路径新增 `/v2`。详见[升级与回滚流程](RELEASE_NOTES_v2.2.1.md#upgrade-and-rollback--升级与回滚)。
 
 ## 能力与边界
 

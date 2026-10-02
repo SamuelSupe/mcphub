@@ -1,6 +1,6 @@
 # 飞书 SSO、Vault 与企业 Agent 接入架构
 
-架构核查日期：2026-09-26；版本说明更新于 2026-09-27，对应 MCPHub v2.2.0。本文面向架构评审、部署人员和安全管理员。员工日常接入见[用户手册](user-guide.zh-CN.md)，部署与维护入口见[管理员手册](admin-guide.zh-CN.md)。
+架构核查日期：2026-09-26；版本说明更新于 2026-10-02，对应 MCPHub v2.2.1。本文面向架构评审、部署人员和安全管理员。员工日常接入见[用户手册](user-guide.zh-CN.md)，部署与维护入口见[管理员手册](admin-guide.zh-CN.md)。
 
 [下载 27 页 PDF](feishu-vault-agent-architecture.zh-CN.pdf) · [配置示例](../deploy/config.feishu-vault.example.yaml) · [文档导航](README.zh-CN.md)。PDF 保留 2026-09-26、v2.1.0 发布前的架构评审快照；当前版本状态以本在线文档为准。
 
@@ -20,7 +20,7 @@ Vault 在本方案中承担凭证保管和路径访问控制；MCPHub 承担用�
 | Vault KV v2 共享/个人账号、刷新与撤销联动 | v2.1.0 已有实现 | 真实 Vault 权限、TLS、备份恢复演练 |
 | 本地 Broker、ClientGrant、stdio 连接器 | 已有实现 | 每个 Agent、每个 endpoint 分别授权 |
 | 独立写审批、多人复核、OIDC 加强认证 | 已有实现 | 飞书普通 OAuth2 不能提供 OIDC 加强认证证明；见第 4 节 |
-| SQLite / PostgreSQL | 支持；v2.2.0 为 schema 9，v2.1.0 为 schema 8 | MCPHub 保持单活，PostgreSQL 不代表可运行多台 Hub |
+| SQLite / PostgreSQL | 支持；v2.2.x 为 schema 9，v2.1.0 为 schema 8 | MCPHub 保持单活，PostgreSQL 不代表可运行多台 Hub |
 | Codex / Claude Code 接入 | 本文提供官方格式的配置 | 仍需在实际客户端版本完成验证 |
 | Vault AWS KMS 自动解封 | Vault 部署能力，可选 | 配置 Vault 的 IAM Role 和 KMS Key；不代表 Hub 已直连 KMS |
 | 飞书审批卡片、SCIM、Vault 动态凭证/OBO、Hub 多活 | 本方案未实现 | 单独设计和验收 |

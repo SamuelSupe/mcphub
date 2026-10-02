@@ -2,7 +2,7 @@
 
 [English](README.md) · [项目首页](../README.zh-CN.md)
 
-文档对应 v2.2.0。先按职责选择手册，具体字段和专题在需要时查阅。
+文档对应 v2.2.1。先按职责选择手册，具体字段和专题在需要时查阅。
 
 ## 用户手册
 
@@ -46,5 +46,5 @@
 - [27 页架构 PDF](feishu-vault-agent-architecture.zh-CN.pdf)：2026-09-26 的评审快照，当前状态以在线架构文档为准。
 - [客户端 Broker 与授权同步设计](broker-authorization-design.zh-CN.md)：首版历史快照，附 v2.0–v2.2 的 schema 与能力变化。
 - [界面截图说明](screenshots/README.md)：v2.1.0 演示环境截图及来源。
-- [v2.2.0 发行与升级说明](../RELEASE_NOTES_v2.2.0.md)、[全部发行版本](https://github.com/SamuelSupe/mcphub/releases)。
+- [v2.2.1 发行与升级说明](../RELEASE_NOTES_v2.2.1.md)、[全部发行版本](https://github.com/SamuelSupe/mcphub/releases)。
 - [贡献指南](../CONTRIBUTING.md)：开发、验证及文档维护约定。

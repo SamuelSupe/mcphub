@@ -6,6 +6,9 @@ import { locales } from './i18n.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const repository = path.dirname(root);
+const version = readFileSync(path.join(repository, 'internal/version/version.go'), 'utf8')
+  .match(/^const Value = "([^"]+)"$/m)?.[1];
+if (!version) throw new Error('Missing release version');
 const siteUrl = 'https://samuelsupe.github.io/mcphub/';
 const pages = [];
 const adminContent = new Map();
@@ -103,7 +106,7 @@ for (const page of pages) {
       <a href="${link('index.html')}"${page.guide === 'user' ? ' aria-current="true"' : ''}>${locale.user}</a>
       <a href="${link('admin/index.html')}"${page.guide === 'admin' ? ' aria-current="true"' : ''}>${locale.admin}</a>
     </nav>
-    <div class="edition">${page.guideTitle} <span>v2.2.0</span></div>
+    <div class="edition">${page.guideTitle} <span>v${version}</span></div>
     <nav aria-label="${locale.chapters}">${nav}</nav>
     <div class="sidebar-note">${locale.note}</div>
   </aside>

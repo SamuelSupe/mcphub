@@ -73,19 +73,15 @@ jobs:
 
       - name: Build container
         run: docker build --tag mcphub:ci .
-      - name: Validate installation examples
+      - name: Validate and start installation examples
         env:
           MCPHUB_PUBLIC_URL: https://hub.example.com/mcp
           MCPHUB_AUTH_ISSUER: https://idp.example.com
-          MCPHUB_PRIMARY_BACKEND_URL: https://backend.example.com/mcp
-          MCPHUB_PRIMARY_API_KEY: installation-test-only
           MCPHUB_ADMIN_PUBLIC_URL: https://admin.example.com
           MCPHUB_ADMIN_CLIENT_ID: mcphub-admin-web
           MCPHUB_CONFIG_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           MCPHUB_DATABASE_URL: ${{ env.MCPHUB_TEST_POSTGRES_DSN }}
           MCPHUB_POSTGRES_PASSWORD: installation-test-only
         run: |
-          for config in config.example.yaml deploy/config.*.yaml; do
-            ./mcphub validate --config "$config"
-          done
+          bash scripts/verify-installation.sh ./mcphub .
           docker compose -f deploy/compose.postgres.yaml config --quiet

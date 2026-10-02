@@ -13,7 +13,7 @@ Use this page to look up YAML fields, tool policies, management APIs and gateway
 
 ## Choose a configuration and apply changes
 
-This reference targets v2.2.0. Configuration is one YAML document with strict field checking. **Do not paste management API JSON directly into YAML**: YAML `headers` is a map; API `headers` is an object array. A managed backend's API `enabled` field is not a YAML backend field. HTTP tool groups and OpenAPI imports are managed only through the UI/API.
+This reference targets v2.2.1. Configuration is one YAML document with strict field checking. **Do not paste management API JSON directly into YAML**: YAML `headers` is a map; API `headers` is an object array. A managed backend's API `enabled` field is not a YAML backend field. HTTP tool groups and OpenAPI imports are managed only through the UI/API.
 
 | Scenario | Starting point | Prerequisites |
 | --- | --- | --- |
@@ -191,7 +191,7 @@ At least one backend is required in YAML-only mode. Admin mode may start empty s
 
 Backend OAuth discovery and token requests do not receive the backend's static headers; data-plane requests do and automatically reuse/refresh the client-credentials token. Discovery probes RFC 8414/OIDC metadata for an exact `issuer` and `token_endpoint` only; it does not require interactive authorization or PKCE metadata. OAuth metadata responses are capped at 1 MiB. Backend and OIDC HTTP clients do not follow redirects.
 
-Service-account OAuth example: add this entry under `backends` and set all 4 variables for it. `required: false` only changes connection-failure handling. Tools still require review and explicit publication.
+Optional service-account OAuth fragment, excluded from the base template: add this entry under `backends` only when connecting such a service and set all 4 variables for it. `required: false` only changes connection-failure handling. Tools still require review and explicit publication.
 
 ```yaml
 - id: crm
@@ -318,7 +318,7 @@ SQLite/PostgreSQL atomically consume each approval once; concurrent resumes cann
 
 Limits: 20 active requests per issuer/subject; 60 KiB execution request; 32 KiB preview; 64 KiB complete intent including policies; 16 MiB saved result. Requests, previews, results, reasons and investigation details are encrypted. A minute-based maintenance loop removes terminal records and detailed history past retention in bounded batches; general activity logs retain argument/reason-free state events. Already admitted writes may finish after policy changes. Approved writes use fresh HTTP/1 connections to prevent transparent retries, so upstreams must support HTTP/1.1. Reads retain connection pooling.
 
-v2.2.0 uses **schema 9** (approval governance first introduced schema 5). Back up the database and encryption key; older binaries cannot open the upgraded writable database. Local unauthenticated management and YAML-only deployments cannot execute writes/unclassified tools. MCP and management API bearer tokens cannot approve. Isolate reviewer browsers, configuration/database access and upstream write credentials from agents. With configuration governance disabled, configuration administrators can change classifications directly; enable independent security review to guard those changes. Strong authentication does not replace reviewing the operation or downstream least privilege.
+v2.2.1 uses **schema 9** (approval governance first introduced schema 5). Back up the database and encryption key; v2.1.0 and earlier binaries cannot open the upgraded writable database. Local unauthenticated management and YAML-only deployments cannot execute writes/unclassified tools. MCP and management API bearer tokens cannot approve. Isolate reviewer browsers, configuration/database access and upstream write credentials from agents. With configuration governance disabled, configuration administrators can change classifications directly; enable independent security review to guard those changes. Strong authentication does not replace reviewing the operation or downstream least privilege.
 
 
 ### Configuration governance, quorum and operation identity
@@ -427,13 +427,13 @@ Register a **public native OAuth client** at that issuer with authorization-code
 
 ## Starting from the full YAML example
 
-The online guide uses the [current base configuration](../config.example.yaml). The older file of the same name inside the v2.2.0 archive also contains console-origin and optional CRM variables; `required: false` does not make those variables optional. For a new deployment, download the current file from the documentation site and set the four variables below. This file is compatible with the v2.2.0 binary:
+The v2.2.1 server archive and online guide contain the same [base configuration](../config.example.yaml): one MCP backend and four required variables, with no console-origin or CRM variables. After extracting the server archive, copy its `config.example.yaml` to `config.yaml`. You can also download the identical file:
 
 ```bash
 curl -fL https://samuelsupe.github.io/mcphub/examples/config.example.yaml -o config.yaml
 ```
 
-Download as `config.yaml` only in a new deployment directory. Preserve and merge an existing deployment's configuration. Do not combine an archive's old configuration with the current variable inventory.
+Download as `config.yaml` only in a new deployment directory. Preserve and merge an existing deployment's configuration. Use the configuration and variable list from the same release.
 
 The base file configures one MCP backend and needs only the 4 variables below. It initially publishes no tools and has no user portal/write approvals. Follow its comments to set both exact published names and verified `effect: read` rules. For the console or ordinary HTTP API tools, use the [administrator deployment workflow](admin-guide.md). These commands build from source; use `mcphub` directly if already installed:
 

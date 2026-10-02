@@ -2,7 +2,7 @@
 
 [中文](user-guide.zh-CN.md) · [Documentation](README.md) · [Project home](../README.md)
 
-For people using company tools through Codex, Claude Code or another MCP client. This manual covers v2.2.0. Install `mcphub-cli` on your own computer; administrators configure the gateway, identity provider and Vault.
+For people using company tools through Codex, Claude Code or another MCP client. This manual covers v2.2.1. Install `mcphub-cli` on your own computer; administrators configure the gateway, identity provider and Vault.
 
 For first-time access: **install the CLI → run setup → confirm authorization → add the generated configuration to your client**. If a service requires a personal upstream account, connect it in the portal before completing the connection check.
 
@@ -25,26 +25,26 @@ Domains, tools and `ci_example` below are placeholders. Use your actual URL and 
 
 ## Install the CLI
 
-Choose the CLI package for your computer from the [v2.2.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0):
+Choose the CLI package for your computer from the [v2.2.1 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1):
 
 | Platform | CLI download |
 | --- | --- |
-| macOS Intel | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_linux_arm64.tar.gz) |
-| Windows x64 | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_windows_amd64.zip) |
-| Windows ARM64 | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub-cli_v2.2.0_windows_arm64.zip) |
+| macOS Intel | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_linux_arm64.tar.gz) |
+| Windows x64 | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_windows_amd64.zip) |
+| Windows ARM64 | [mcphub-cli.exe (ZIP)](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_windows_arm64.zip) |
 
-Compare the download's SHA-256 with [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS), extract it and put the executable on PATH. Windows requires version 10 or later; choose x64 for Intel/AMD computers and ARM64 for Windows on Arm.
+Compare the download's SHA-256 with [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/SHA256SUMS), extract it and put the executable on PATH. Windows requires version 10 or later; choose x64 for Intel/AMD computers and ARM64 for Windows on Arm.
 
 macOS/Linux example (Linux arm64 below; change the filename and use `shasum -a 256` on macOS):
 
 ```bash
-sha256sum mcphub-cli_v2.2.0_linux_arm64.tar.gz
+sha256sum mcphub-cli_v2.2.1_linux_arm64.tar.gz
 # Compare exactly with the same filename in SHA256SUMS before extracting.
 mkdir -p mcphub-cli-release "$HOME/.local/bin"
-tar -xzf mcphub-cli_v2.2.0_linux_arm64.tar.gz -C mcphub-cli-release
+tar -xzf mcphub-cli_v2.2.1_linux_arm64.tar.gz -C mcphub-cli-release
 install -m 755 mcphub-cli-release/mcphub-cli "$HOME/.local/bin/mcphub-cli"
 export PATH="$HOME/.local/bin:$PATH"
 mcphub-cli setup --help
@@ -55,8 +55,8 @@ This PATH setting applies to the current terminal. For later runs, use `"$HOME/.
 Windows PowerShell example (substitute the archive for your architecture):
 
 ```powershell
-Get-FileHash .\mcphub-cli_v2.2.0_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcphub-cli_v2.2.0_windows_amd64.zip -DestinationPath .\mcphub-cli
+Get-FileHash .\mcphub-cli_v2.2.1_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcphub-cli_v2.2.1_windows_amd64.zip -DestinationPath .\mcphub-cli
 ```
 
 If you have not added it to PATH, replace `mcphub-cli` in subsequent commands with `.\mcphub-cli\mcphub-cli.exe`.
@@ -64,7 +64,7 @@ If you have not added it to PATH, replace `mcphub-cli` in subsequent commands wi
 With Go 1.26 installed, you can also run:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.2.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.2.1
 ```
 
 Go installs into `go env GOBIN`, or `$(go env GOPATH)/bin` when GOBIN is empty. Add that directory to PATH. A source-built binary runs as `./mcphub-cli` until you install it into your tools directory.

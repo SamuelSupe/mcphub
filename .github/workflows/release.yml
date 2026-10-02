@@ -174,11 +174,40 @@ jobs:
                 *) exit 1 ;;
               esac
               diff -u <(printf '%s\n' "$expected" | sort) <(tar -tzf "$archive" | sort)
+              extracted="$(mktemp -d)"
+              tar -xzf "$archive" -C "$extracted"
+              diff -r "$GITHUB_WORKSPACE/docs" "$extracted/docs"
+              for file in "$GITHUB_WORKSPACE"/LICENSE "$GITHUB_WORKSPACE"/README*.md "$GITHUB_WORKSPACE"/SECURITY.md "$GITHUB_WORKSPACE"/RELEASE_NOTES_*.md; do
+                cmp "$file" "$extracted/$(basename "$file")"
+              done
+              case "$archive" in
+                mcphub_*)
+                  cmp "$GITHUB_WORKSPACE/config.example.yaml" "$extracted/config.example.yaml"
+                  diff -r "$GITHUB_WORKSPACE/deploy" "$extracted/deploy"
+                  ;;
+              esac
+              rm -rf "$extracted"
             done
             for archive in *.zip; do
               diff -u <(printf '%s\n' "$common_manifest" mcphub-cli.exe | sort) <(unzip -Z1 "$archive" | sort)
+              extracted="$(mktemp -d)"
+              unzip -q "$archive" -d "$extracted"
+              diff -r "$GITHUB_WORKSPACE/docs" "$extracted/docs"
+              for file in "$GITHUB_WORKSPACE"/LICENSE "$GITHUB_WORKSPACE"/README*.md "$GITHUB_WORKSPACE"/SECURITY.md "$GITHUB_WORKSPACE"/RELEASE_NOTES_*.md; do
+                cmp "$file" "$extracted/$(basename "$file")"
+              done
+              rm -rf "$extracted"
             done
           )
+
+      - name: Validate and start the packaged server
+        shell: bash
+        run: |
+          set -euo pipefail
+          extracted="$(mktemp -d)"
+          trap 'rm -rf "$extracted"' EXIT
+          tar -xzf "dist/mcphub_${GITHUB_REF_NAME}_linux_amd64.tar.gz" -C "$extracted"
+          bash scripts/verify-installation.sh "$extracted/mcphub" "$extracted"
 
       - name: Publish GitHub Release
         env:

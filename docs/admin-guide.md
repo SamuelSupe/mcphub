@@ -4,7 +4,7 @@
 
 [Read the online administrator manual](https://samuelsupe.github.io/mcphub/en/admin/)
 
-For administrators responsible for deployment, service connections, access policies, approval and operations. This manual covers v2.2.0. Installation and access on employee computers are covered by the [user manual](user-guide.md).
+For administrators responsible for deployment, service connections, access policies, approval and operations. This manual covers v2.2.1. Installation and access on employee computers are covered by the [user manual](user-guide.md).
 
 Recommended sequence: **deploy the gateway → connect a read-only service → publish tools explicitly → assign user permissions → enable client authorization → validate before enabling writes**.
 
@@ -28,18 +28,18 @@ Install `mcphub` on the gateway host and `mcphub-cli` on user computers. Adminis
 
 | Platform | Server download |
 | --- | --- |
-| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/mcphub_v2.2.0_linux_arm64.tar.gz) |
+| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub_v2.2.1_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub_v2.2.1_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub_v2.2.1_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub_v2.2.1_linux_arm64.tar.gz) |
 
-Download from the [v2.2.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.0) and verify against [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.0/SHA256SUMS). The following installs Linux arm64; change the filename for your platform and use `shasum -a 256` on macOS:
+Download from the [v2.2.1 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1) and verify against [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/SHA256SUMS). The following installs Linux arm64; change the filename for your platform and use `shasum -a 256` on macOS:
 
 ```bash
-sha256sum mcphub_v2.2.0_linux_arm64.tar.gz
+sha256sum mcphub_v2.2.1_linux_arm64.tar.gz
 # Compare exactly with the same filename in SHA256SUMS before extracting.
 mkdir -p mcphub-release "$HOME/.local/bin"
-tar -xzf mcphub_v2.2.0_linux_arm64.tar.gz -C mcphub-release
+tar -xzf mcphub_v2.2.1_linux_arm64.tar.gz -C mcphub-release
 install -m 755 mcphub-release/mcphub "$HOME/.local/bin/mcphub"
 export PATH="$HOME/.local/bin:$PATH"
 ```
@@ -47,12 +47,12 @@ export PATH="$HOME/.local/bin:$PATH"
 This PATH setting applies to the current terminal. For later runs, use `"$HOME/.local/bin/mcphub"` directly or add the tools directory to your service environment. With Go 1.26 installed:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.1
 ```
 
 Go installs into `go env GOBIN`, or `$(go env GOPATH)/bin` when GOBIN is empty. Add that directory to PATH too.
 
-**An archive's documentation and configuration are release-time snapshots.** The old base configuration in v2.2.0 also requires `MCPHUB_CONSOLE_ORIGIN` and CRM variables, so it does not match the online four-variable procedure. For new deployments, download the [current base configuration](../config.example.yaml) or [local administration configuration](../deploy/config.local.yaml). Both examples have been validated with the v2.2.0 release binary. The base example has no console, database or user portal; use the [remote templates](../deploy/README.md) for team deployments.
+**The v2.2.1 server archive includes the same configuration templates as this guide.** The base example needs four variables and has no console, database or user portal. For administration, use the bundled [local administration configuration](../deploy/config.local.yaml) or [remote templates](../deploy/README.md). The [online base configuration](../config.example.yaml) is identical to the bundled file. If you previously downloaded v2.2.0, its old base example also requires console-origin and CRM variables; use the v2.2.1 template for a new deployment. Preserve and review existing production configuration rather than replacing it.
 
 `validate --config PATH` checks configuration without creating a database. `serve --config PATH` starts the server and performs required migrations, writing structured JSON logs to stderr. Read [upgrades and backups](#upgrades-and-backups) before replacing an older version.
 
@@ -141,7 +141,7 @@ Each `client_id` belongs to a different authentication flow; register and config
 
 ## Enable client authorization
 
-Enable `client_authorization.enabled`, configure its portal `client_id`, and enable the managed database. SQLite and a **single MCPHub instance with PostgreSQL** use the same authorization lifecycle. Back up the database and encryption key before upgrading to v2.2.0 / schema 9 (v2.1.0 uses schema 8).
+Enable `client_authorization.enabled`, configure its portal `client_id`, and enable the managed database. SQLite and a **single MCPHub instance with PostgreSQL** use the same authorization lifecycle. Back up the database and encryption key before upgrading to v2.2.1 / schema 9 (v2.1.0 uses schema 8).
 
 Register the portal callback `https://hub.example.com/client-auth/auth/callback`. The portal is served on the MCP gateway origin, separately from the administration listener. The CLI and portal must receive JWT access tokens for the full MCP resource URL with the same `issuer + sub`. Pairwise subjects from different OIDC clients require an identity-provider configuration that gives these clients a consistent subject; email matching is not used. An optional portal client secret stays on the server through `client_secret_env`.
 
@@ -225,7 +225,7 @@ Request diagnostics persist completed MCP POST requests in managed SQLite/Postgr
 
 Recording happens after request processing. Storage failure never replays or changes a business operation: the server logs the failure and the UI reports recording gaps during this run. A crash before persistence, in-flight requests and GET streams remain outside this history. Use independent approval-audit archives where required. Deployments without managed storage retain the existing short-lived in-memory diagnostics only.
 
-`GET /api/v1/requests` accepts `since` and `until` (RFC3339 completion times), returning the actual `window_start`/`window_end`. `format=ndjson` exports up to 10,000 records under the same administrator authorization and filters; a nonzero `X-MCPHub-Next-Cursor` response header can be passed as `cursor` to continue, or narrow the UI time range. The new history table upgrades v2.2.0 to **schema 9** (v2.1.0 uses schema 8). Back up the database and matching key before upgrading; rollback to an older binary requires restoring the pre-upgrade backup.
+`GET /api/v1/requests` accepts `since` and `until` (RFC3339 completion times), returning the actual `window_start`/`window_end`. `format=ndjson` exports up to 10,000 records under the same administrator authorization and filters; a nonzero `X-MCPHub-Next-Cursor` response header can be passed as `cursor` to continue, or narrow the UI time range. Request history uses **schema 9** in v2.2.x (v2.1.0 uses schema 8). Back up the database and matching key before upgrading; rollback to v2.1.0 or earlier requires restoring the pre-upgrade backup.
 
 Admin-only APIs (on the **admin listener**, not the personal portal):
 
@@ -234,11 +234,11 @@ mcphub-cli admin --profile ops get '/client-grants?subject=alice&status=active&l
 mcphub-cli admin --profile ops get '/requests?endpoint=database-prod&outcome=scope_denied&limit=25'
 ```
 
-Both return `next_cursor`; pass it back as `cursor` with unchanged filters and, for request history, the returned time window. Grant filters also accept `client` and `endpoint`; request filters also accept `request_id`, `subject`, `client` and original `tool`. Normal pagination limits are 1–100. Revoke with `POST /api/v1/client-grants/{grant_id}/revoke` and `{"subject":"alice"}`. See the [v2.2.0 release and upgrade notes](../RELEASE_NOTES_v2.2.0.md) for the schema 9 migration.
+Both return `next_cursor`; pass it back as `cursor` with unchanged filters and, for request history, the returned time window. Grant filters also accept `client` and `endpoint`; request filters also accept `request_id`, `subject`, `client` and original `tool`. Normal pagination limits are 1–100. Revoke with `POST /api/v1/client-grants/{grant_id}/revoke` and `{"subject":"alice"}`. See the [v2.2.1 release and upgrade notes](../RELEASE_NOTES_v2.2.1.md) for the schema 9 migration.
 
 ## Upgrades and backups
 
-Review the [complete backup, upgrade and rollback procedure](../RELEASE_NOTES_v2.2.0.md#upgrade-and-rollback--升级与回滚) before upgrading from v2.1.0 or earlier. In v2.2.0, `serve` migrates managed SQLite/PostgreSQL databases to schema 9 (v2.1.0 uses schema 8); `validate` is read-only. Keep the matching `MCPHUB_CONFIG_KEY`. Rolling back requires the old database, key/configuration and binary together.
+Review the [complete backup, upgrade and rollback procedure](../RELEASE_NOTES_v2.2.1.md#upgrade-and-rollback--升级与回滚) before upgrading from v2.1.0 or earlier. In v2.2.1, `serve` migrates managed SQLite/PostgreSQL databases to schema 9 (v2.1.0 uses schema 8); `validate` is read-only. Keep the matching `MCPHUB_CONFIG_KEY`. Rolling back to v2.1.0 or earlier requires the old database, key/configuration and binary together. v2.2.0 and v2.2.1 both use schema 9.
 
 Explicitly populate `published_tools` for each backend and classify allowed tools as read or write. Empty publication lists expose no tools; writes and unclassified tools require remote browser approval. Local unauthenticated or YAML-only deployments can execute only published, explicitly read-only tools. Existing HTTP tools keep their enabled state; new manual tools default to disabled. Client grants and SSO are opt-in; new SSO users await local authorization.
 

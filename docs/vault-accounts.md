@@ -4,7 +4,7 @@
 
 This is an administrator configuration and operations guide. For employee access, use the [user manual](user-guide.md).
 
-Available since MCPHub v2.1.0. It supports HashiCorp Vault KV v2, SQLite and **one MCPHub instance with PostgreSQL**. MCPHub v2.2.0 migrates the database to schema 9 (v2.1.0 uses schema 8). Back up the database, matching encryption key and Vault data together.
+Fresh deployments support HashiCorp Vault KV v2, SQLite and **one MCPHub instance with PostgreSQL**. Managed storage uses schema 9. Back up the database, matching encryption key and Vault data together.
 
 ## User workflow
 

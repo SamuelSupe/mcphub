@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 const schema = `
@@ -223,7 +224,8 @@ func Open(ctx context.Context, path string, key []byte) (*Store, error) {
 	if err := os.Chmod(path, 0o600); err != nil {
 		return nil, fmt.Errorf("secure configuration database: %w", err)
 	}
-	databaseURL := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	// A Windows drive must be /C:/... in a file URI, not its authority.
+	databaseURL := url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(path), "/")}
 	query := databaseURL.Query()
 	// Reserve the writer before reading: a deferred snapshot cannot be upgraded
 	// after another Store commits, even with busy_timeout. Do not replay mutations.
@@ -287,7 +289,11 @@ func OpenReadOnly(ctx context.Context, path string, key []byte) (*Store, error) 
 	if err != nil {
 		return nil, fmt.Errorf("initialize configuration encryption: %w", err)
 	}
-	databaseURL := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve configuration database: %w", err)
+	}
+	databaseURL := url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(path), "/")}
 	query := databaseURL.Query()
 	query.Set("mode", "ro")
 	databaseURL.RawQuery = query.Encode()

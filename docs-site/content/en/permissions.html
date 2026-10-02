@@ -6,7 +6,7 @@
 <p>If manual client add omits the tool list, it freezes the currently eligible tools; it does not keep adding newly discovered tools. The setup wizard requires you to select at least one tool explicitly.</p>
 <h2 id="resources">Limit business resources</h2>
 <p>If a tool has a project argument, <code>/project=project-a</code> limits it to project A. The path is a JSON Pointer into tool arguments; use the tool's actual definition:</p>
-<pre><code>mcphub-cli client add --profile work --name project-a-read --endpoint database-prod --tool query --resource /project=project-a</code></pre>
+<pre><code>mcpbridge client add --profile work --name project-a-read --endpoint database-prod --tool query --resource /project=project-a</code></pre>
 <p>Resource conditions added by setup apply to every selected tool. Create separate entries for tools with different parameters, and ask your administrator to confirm fields and allowed values. Client limits cannot widen server-side access.</p>
 <h2 id="writes">Read-only access and permission to request writes</h2>
 <p>A read-only entry cannot request writes. Explicitly enable <code>--allow-write-requests</code>, or confirm write tools in setup, before submitting a write request. Write and unclassified tools still need approval for every operation.</p>

@@ -6,7 +6,7 @@
 <p>手动 client add 省略工具列表会冻结当前符合条件的工具，不会持续自动增加新工具。向导必须明确选择至少一个工具。</p>
 <h2 id="resources">限定业务资源</h2>
 <p>例如工具参数包含 project，<code>/project=project-a</code> 限定为项目 A。斜杠部分是工具参数的 JSON Pointer，应按工具定义填写：</p>
-<pre><code>mcphub-cli client add --profile work --name project-a-read --endpoint database-prod --tool query --resource /project=project-a</code></pre>
+<pre><code>mcpbridge client add --profile work --name project-a-read --endpoint database-prod --tool query --resource /project=project-a</code></pre>
 <p>向导增加的资源条件对所有选中工具生效。参数不同的工具建议分开建立入口，请管理员确认字段和允许值。客户端限制不能放宽服务端范围。</p>
 <h2 id="writes">只读与可申请写入</h2>
 <p>只读入口不能申请写操作。显式启用 <code>--allow-write-requests</code>，或在向导确认写工具后，才可发起写申请。写工具与未分类工具仍须逐次审批。</p>

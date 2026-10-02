@@ -1,19 +1,19 @@
 <h2 id="view">View your grants</h2>
 <p>The portal's client area shows names, services, scopes, tools, resource conditions, capabilities, expiry, and status. Locally, run:</p>
-<pre><code>mcphub-cli client list --profile work</code></pre>
+<pre><code>mcpbridge client list --profile work</code></pre>
 <p>Online results check the server and effective scopes. Offline results explicitly show cached data, which does not prove that authorization is still valid.</p>
 <h2 id="status">Grant states</h2>
 <table><thead><tr><th>State</th><th>Meaning and action</th></tr></thead><tbody><tr><td>Awaiting confirmation</td><td>Compare the pairing code, then confirm or reject.</td></tr><tr><td>Confirmed, awaiting terminal redemption</td><td>Return to the original terminal and let its flow continue.</td></tr><tr><td>Active</td><td>Within its validity period; current policies and account status still apply.</td></tr><tr><td>Expired / confirmation required</td><td>Review the scope, confirm a new grant, and reconnect.</td></tr><tr><td>Rejected / revoked</td><td>This grant cannot be used; submit a new request if needed.</td></tr></tbody></table>
 <h2 id="renew">Reauthorize or renew</h2>
-<pre><code>mcphub-cli client authorize --profile work --client ci_example</code></pre>
+<pre><code>mcpbridge client authorize --profile work --client ci_example</code></pre>
 <p>Compare the new pairing code and scope in the browser, confirm, and restart the MCP connection. Renewable sign-in does not automatically extend a client grant. --ttl must stay within the server's maximum duration.</p>
 <h2 id="scope">Change the scope</h2>
 <p>Unspecified settings are preserved; list parameters replace previous lists. This example replaces the resource condition with project B rather than adding it:</p>
-<pre><code>mcphub-cli client authorize --profile work --client ci_example --resource /project=project-b</code></pre>
+<pre><code>mcpbridge client authorize --profile work --client ci_example --resource /project=project-b</code></pre>
 <p>Repeat a parameter in the same command for multiple values. Browser confirmation and reconnection are still required. To narrow tools, explicitly provide the --tool list.</p>
 <h2 id="revoke">Revoke an entry or a whole session</h2>
 <p>Revoke authorization in the portal, or run:</p>
-<pre><code>mcphub-cli client revoke --profile work --client ci_example</code></pre>
+<pre><code>mcpbridge client revoke --profile work --client ci_example</code></pre>
 <p>Revoking all grants for a session affects every entry in that broker session, so confirm the target first. Revocation immediately blocks subsequent admission and cancels related active streams. It does not roll back effects already accepted upstream.</p>
 <h2 id="names">Authorize clients separately</h2>
 <p>Use recognizable names such as codex-project-a-read or claude-tasks. A name helps management but does not prove application identity. Other processes under the same system account may use the entry; keep your computer's access controls in place.</p>

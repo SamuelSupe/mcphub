@@ -12,7 +12,7 @@ import (
 )
 
 func runSetup(args []string) error {
-	flags := flag.NewFlagSet("mcphub-cli setup", flag.ContinueOnError)
+	flags := flag.NewFlagSet("mcpbridge setup", flag.ContinueOnError)
 	profile := flags.String("profile", "default", "MCP credential profile")
 	server := flags.String("server", "", "MCPHub HTTPS URL for first login")
 	id := flags.String("client-id", "", "registered public OIDC client ID for first login")

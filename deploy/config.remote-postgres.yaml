@@ -6,7 +6,7 @@
 # them only on host loopback. For a direct host deployment, change BOTH listen
 # values to 127.0.0.1:<port>, or a protected private address, before starting.
 # See deploy/README.md / deploy/README.zh-CN.md for HTTPS and identity setup.
-# User portal / mcphub-cli setup additionally require client_authorization.
+# User portal / mcpbridge setup additionally require client_authorization.
 
 server:
   listen: ":8080"

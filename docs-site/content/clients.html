@@ -4,17 +4,17 @@
 <pre><code>{
   "mcpServers": {
     "work-projects": {
-      "command": "/absolute/path/to/mcphub-cli",
+      "command": "/absolute/path/to/mcpbridge",
       "args": ["connect", "--profile", "work", "--client", "ci_example"],
       "env": { "MCPHUB_HOME": "/Users/you/.mcphub" }
     }
   }
 }</code></pre>
 <p>这是结构示例。command 为实际可执行路径；args 指定 profile 和实际入口 ID；MCPHUB_HOME 指向自己的私有凭证目录。使用向导输出，替换所有示例值。</p>
-<p>Windows JSON 路径需转义反斜杠，如 <code>C:\\Tools\\mcphub-cli\\mcphub-cli.exe</code>。合并现有对象，不要创建第二个同名顶层键。</p>
+<p>Windows JSON 路径需转义反斜杠，如 <code>C:\\Tools\\mcpbridge\\mcpbridge.exe</code>。合并现有对象，不要创建第二个同名顶层键。</p>
 <h2 id="other-client">在其他客户端中配置</h2>
 <ol><li>确认客户端能启动本机 stdio MCP 进程。</li><li>向导选择格式 1 · 通用 JSON。</li><li>使用 mcpServers 的客户端合并生成条目；表单式客户端分别填 command、args 和环境变量。</li><li>重新加载 MCP 连接，确认工具可见。</li><li>用相同 profile 和入口 ID 运行 doctor。</li></ol>
-<div class="callout"><strong>使用连接器完成客户端授权</strong>本指南使用 <code>mcphub-cli connect --client …</code>。仅把 HTTP URL 加入客户端，未必满足公司部署的授权要求，请采用管理员明确支持的方式。</div>
+<div class="callout"><strong>使用连接器完成客户端授权</strong>本指南使用 <code>mcpbridge connect --client …</code>。仅把 HTTP URL 加入客户端，未必满足公司部署的授权要求，请采用管理员明确支持的方式。</div>
 <h2 id="configuration-boundaries">配置可以分享吗</h2>
 <p>生成配置不含 Token，但包含本机路径和与你的授权绑定的入口 ID。其他员工应各自运行向导；共享配置不能替代对方登录，也不能直接在另一台电脑使用。</p>
 <p>建议不同 AI 客户端各建入口，方便独立撤销；多个服务分别授权。</p>

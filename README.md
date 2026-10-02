@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,7 +9,14 @@
 
 MCPHub exposes existing remote MCP servers and ordinary HTTP APIs as MCP tools. A single Streamable HTTP endpoint centralizes service connections, tool publication, user permissions, client authorization and write approval.
 
-Users install `mcphub-cli` on their computers, sign in through a browser and confirm access for each Agent. Administrators deploy `mcphub` and manage services, credentials and policies. The gateway runs as one instance with SQLite or PostgreSQL.
+Users install `mcpbridge` on their computers, sign in through a browser and confirm access for each Agent. Administrators deploy `mcphub` and manage services, credentials and policies. The gateway runs as one instance with SQLite or PostgreSQL.
+
+| Program | Install on | Main commands |
+| --- | --- | --- |
+| **mcphub — server** | Gateway host | `serve`, `validate` |
+| **mcpbridge — client** | Agent/user computer | `setup`, `login`, `connect`, `doctor` |
+
+From v2.2.2, `mcpbridge` replaces the executable name `mcphub-cli`. The client package is named `mcpbridge_v2.2.2_*`; use the `mcphub_v2.2.2_*` package to deploy the server. Run either executable with `--version` to confirm its name, version and role.
 
 ## Start here
 
@@ -30,9 +37,9 @@ First deployment: follow the [administrator manual](docs/admin-guide.md#preparat
 
 ## Version and upgrades
 
-These documents cover **v2.2.1**, aligning bundled configuration, installation examples and bilingual help with the release. [Release notes](RELEASE_NOTES_v2.2.1.md) · [Downloads](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1)
+These documents cover **v2.2.2**, renaming the client connector to MCPBridge and clearly separating client/server downloads. [Release notes](RELEASE_NOTES_v2.2.2.md) · [Downloads](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
 
-v2.2.1 retains **schema 9** from v2.2.0; earlier versions migrate on startup. Back up the database and matching encryption key before starting; rollback to v2.1.0 or earlier requires the pre-upgrade backup. Upgrades from v1.x also require reviewing tool publication and read/write policies, and the Go module path adds `/v2`. See the [upgrade and rollback procedure](RELEASE_NOTES_v2.2.1.md#upgrade-and-rollback--升级与回滚).
+v2.2.2 retains **schema 9** from v2.2.0; earlier versions migrate on startup. Back up the database and matching encryption key before starting; rollback to v2.1.0 or earlier requires the pre-upgrade backup. Upgrades from v1.x also require reviewing tool publication and read/write policies, and the Go module path adds `/v2`. See the [upgrade and rollback procedure](RELEASE_NOTES_v2.2.2.md#upgrade-and-rollback--升级与回滚).
 
 ## Capabilities and boundaries
 
@@ -87,9 +94,9 @@ MCP clients connect to the gateway; administrators manage policies through a sep
 ```mermaid
 flowchart LR
     C[MCP HTTP client] -->|POST /mcp + Bearer JWT| H[MCPHub]
-    S[Local stdio MCP client] --> CLI[mcphub-cli connect]
+    S[Local stdio MCP client] --> CLI[mcpbridge connect]
     CLI -->|HTTPS + user JWT| H
-    L[mcphub-cli login] -->|Browser login + PKCE| I[OIDC issuer]
+    L[mcpbridge login] -->|Browser login + PKCE| I[OIDC issuer]
     H -->|OIDC discovery + JWKS| I
     H -->|MCP Streamable HTTP| B[Backend MCP servers]
     H -->|Managed HTTP tools| A[REST APIs]

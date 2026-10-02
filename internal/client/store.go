@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	ErrLoginRequired  = errors.New("login required; run mcphub-cli login for this profile")
+	ErrLoginRequired  = errors.New("login required; run mcpbridge login for this profile")
 	ErrProfileChanged = errors.New("profile was logged in again; restart the MCP connection")
 	profileName       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 )

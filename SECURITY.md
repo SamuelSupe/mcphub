@@ -21,7 +21,7 @@ MCPHub's security boundary includes:
 
 The current published release explicitly does not provide stdio backends, a standalone legacy GET SSE endpoint, native TLS, dynamic tenants, opaque-token introspection, Tasks, or MCP Apps. Personal upstream credentials cover remote MCP endpoints through Vault; HTTP tool groups and dynamic cloud/database credentials are outside that integration. Local mode is loopback-only; authenticated remote mode is described below. TLS termination, external rate limiting, and edge access policy must be supplied by the deployment's reverse proxy or network layer.
 
-The release also provides a separate `mcphub-cli` executable with `login/connect/status/logout` for external OIDC user login. The server executable `mcphub` provides `serve/validate`. Only the local CLI connector speaks stdio; it sends user access tokens to its saved HTTP gateway, never to backend servers. Login uses a public client, PKCE S256, state/issuer validation and a loopback callback, and saves credentials only after the gateway accepts an authenticated handshake. Discovery and token requests require HTTPS and do not follow redirects. The callback listener is temporary and binds only `127.0.0.1`.
+The release also provides a separate `mcpbridge` executable with `login/connect/status/logout` for external OIDC user login. The server executable `mcphub` provides `serve/validate`. Only the local CLI connector speaks stdio; it sends user access tokens to its saved HTTP gateway, never to backend servers. Login uses a public client, PKCE S256, state/issuer validation and a loopback callback, and saves credentials only after the gateway accepts an authenticated handshake. Discovery and token requests require HTTPS and do not follow redirects. The callback listener is temporary and binds only `127.0.0.1`.
 
 Local credentials are unencrypted JSON. On macOS/Linux, `~/.mcphub/` uses owner-only permissions (directory `0700`, files `0600`). On Windows, `%USERPROFILE%\.mcphub\` and credential files are created with a protected DACL granting access only to the current user; opening them checks ownership and access rules. Credential directories, profiles, and lock files that are reparse points or grant access to other accounts are rejected. Keep them out of shared storage and public backups. Platform file locks and temporary-file replacement serialize refresh-token rotation. A new login invalidates existing connectors; logout clears cached tokens and prevents subsequent requests, but does not revoke issuer tokens, terminate already accepted operations, or sign out browser sessions. `connect` never starts interactive authorization, retries a 401 only once after refreshing, and never replays a tool operation on a network failure. stdout is exclusively MCP protocol output. No token values are exposed by status or diagnostics.
 
@@ -39,7 +39,7 @@ Logout clears local secrets before network I/O and tries remote session revocati
 
 ### Permission workbench and diagnostics
 
-Tool policy inspection and access simulation require configuration-administrator privileges; reviewer-only and MCP user scopes cannot access them. The simulator treats supplied scopes as assumptions and checks saved grants against the exact issuer/subject and current policy. It never mints credentials, creates approvals, previews or executes tools, or consumes execution quotas. Results are a configuration snapshot, not a verified user's permissions or a promise that later execution will succeed. Policy edits use the existing revision and optional configuration-approval controls. `mcphub-cli doctor` uses the connector's credential validation and refresh path and may persist rotated tokens. Its network actions are authorization status, MCP initialization and catalog discovery; it does not execute tools or start interactive authorization. Reports omit token, Grant credential and IPC secret values.
+Tool policy inspection and access simulation require configuration-administrator privileges; reviewer-only and MCP user scopes cannot access them. The simulator treats supplied scopes as assumptions and checks saved grants against the exact issuer/subject and current policy. It never mints credentials, creates approvals, previews or executes tools, or consumes execution quotas. Results are a configuration snapshot, not a verified user's permissions or a promise that later execution will succeed. Policy edits use the existing revision and optional configuration-approval controls. `mcpbridge doctor` uses the connector's credential validation and refresh path and may persist rotated tokens. Its network actions are authorization status, MCP initialization and catalog discovery; it does not execute tools or start interactive authorization. Reports omit token, Grant credential and IPC secret values.
 
 ### Reporting a vulnerability
 
@@ -127,13 +127,13 @@ MCPHub 的安全边界包括：
 
 当前正式发布版明确不提供 stdio 后端接入、独立旧式 GET SSE 端点、原生 TLS、动态租户、opaque token introspection、Tasks、MCP Apps 或自定义 MCP 扩展。Vault 个人上游凭证覆盖远程 MCP endpoint，尚未覆盖 HTTP 工具组及动态云/数据库凭证。本地模式只允许回环访问，认证远程模式见下文。TLS 终止、外部限流和边缘访问策略必须由部署使用的反向代理或网络层提供。
 
-本版本还提供独立的 `mcphub-cli` 可执行程序，提供 `login/connect/status/logout`，供用户通过外部 OIDC 身份服务登录；服务端程序 `mcphub` 提供 `serve/validate`。只有本地 CLI 连接器使用 stdio；用户 access token 仅发往保存的 HTTP 网关地址，不会发给后端。登录使用公开客户端、PKCE S256、state/issuer 校验和回环回调，只有网关接受认证握手后才保存凭证。Discovery 和 Token 请求必须使用 HTTPS，且不跟随重定向；临时回调监听器仅绑定 `127.0.0.1`。
+本版本还提供独立的 `mcpbridge` 可执行程序，提供 `login/connect/status/logout`，供用户通过外部 OIDC 身份服务登录；服务端程序 `mcphub` 提供 `serve/validate`。只有本地 CLI 连接器使用 stdio；用户 access token 仅发往保存的 HTTP 网关地址，不会发给后端。登录使用公开客户端、PKCE S256、state/issuer 校验和回环回调，只有网关接受认证握手后才保存凭证。Discovery 和 Token 请求必须使用 HTTPS，且不跟随重定向；临时回调监听器仅绑定 `127.0.0.1`。
 
 凭证以未加密 JSON 保存。macOS/Linux 的 `~/.mcphub/` 使用仅限所有者的目录 `0700`、文件 `0600` 权限。Windows 的 `%USERPROFILE%\.mcphub\` 与凭证文件创建时设置受保护的 DACL，仅授权当前用户；打开时校验所有权和访问规则。凭证目录、profile 或锁文件若为 reparse point 或向其他账号授权，会被拒绝访问。凭证不应进入共享存储或公开备份。平台文件锁与临时文件替换串行化 refresh token 轮换。重新登录会让已有连接器失效；退出登录清除本地 Token 并阻止后续请求，但不吊销身份服务 Token、不终止已接受的操作、不退出浏览器会话。`connect` 不发起交互授权；401 仅在刷新后重试一次，网络失败不重放工具操作。stdout 专用于 MCP 协议，状态和诊断不输出 Token。
 
 ### 权限工作台与接入诊断
 
-工具策略查看和权限模拟仅供配置管理员使用，普通 MCP 用户和只有审批权限的用户不可访问。模拟输入的 Scope 是假设条件，Grant 按精确 issuer／subject 和当前策略检查；不会签发凭证、创建审批、预览或执行工具，也不占用执行额度。结果只是配置快照，不证明用户实际权限或保证后续执行成功。策略修改沿用版本校验与可选的配置审批。`mcphub-cli doctor` 复用连接器的凭证校验与续期路径，可能保存轮换后的 Token；网络操作仅包括授权状态、MCP 初始化和目录发现，不执行工具或发起交互授权。报告不包含 Token、Grant 凭证或 IPC secret。
+工具策略查看和权限模拟仅供配置管理员使用，普通 MCP 用户和只有审批权限的用户不可访问。模拟输入的 Scope 是假设条件，Grant 按精确 issuer／subject 和当前策略检查；不会签发凭证、创建审批、预览或执行工具，也不占用执行额度。结果只是配置快照，不证明用户实际权限或保证后续执行成功。策略修改沿用版本校验与可选的配置审批。`mcpbridge doctor` 复用连接器的凭证校验与续期路径，可能保存轮换后的 Token；网络操作仅包括授权状态、MCP 初始化和目录发现，不执行工具或发起交互授权。报告不包含 Token、Grant 凭证或 IPC secret。
 
 ### 报告漏洞
 

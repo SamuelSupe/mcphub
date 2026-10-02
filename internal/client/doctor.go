@@ -56,7 +56,7 @@ func Doctor(ctx context.Context, store *Store, name string, opts DoctorOptions) 
 			r.Healthy = false
 		}
 	}
-	login := fmt.Sprintf("mcphub-cli login --profile %s", name)
+	login := fmt.Sprintf("mcpbridge login --profile %s", name)
 	status, err := store.Status(ctx, name)
 	if err != nil {
 		add("credential_store", "fail", "Credential files could not be read securely.", "Check the profile name and private directory ownership/permissions.")
@@ -99,13 +99,13 @@ func Doctor(ctx context.Context, store *Store, name string, opts DoctorOptions) 
 			})
 		}
 		if err != nil {
-			add("client_pairing", "fail", "Client pairing is missing or does not belong to this profile.", "Run mcphub-cli client list, then client add or client authorize for this profile.")
+			add("client_pairing", "fail", "Client pairing is missing or does not belong to this profile.", "Run mcpbridge client list, then client add or client authorize for this profile.")
 			return r
 		}
 		r.Endpoint = bound.Grant.EndpointID
 		add("client_pairing", "pass", "Client entry and private IPC credential match this profile.", "")
 		if !time.Now().Before(bound.Grant.ExpiresAt) {
-			add("client_grant", "fail", "The client authorization has expired.", fmt.Sprintf("mcphub-cli client authorize --profile %s --client %s", name, opts.ClientID))
+			add("client_grant", "fail", "The client authorization has expired.", fmt.Sprintf("mcpbridge client authorize --profile %s --client %s", name, opts.ClientID))
 			return r
 		}
 	}
@@ -122,7 +122,7 @@ func Doctor(ctx context.Context, store *Store, name string, opts DoctorOptions) 
 			snapshot, _, authErr = a.current(ctx, bound.Credential, "", true)
 		}
 		if authErr != nil {
-			add("client_grant", "fail", publicError(authErr).Error(), fmt.Sprintf("Check connectivity, then mcphub-cli client authorize --profile %s --client %s if authorization has ended.", name, opts.ClientID))
+			add("client_grant", "fail", publicError(authErr).Error(), fmt.Sprintf("Check connectivity, then mcpbridge client authorize --profile %s --client %s if authorization has ended.", name, opts.ClientID))
 			return r
 		}
 		r.EffectiveScopes = snapshot.EffectiveScopes

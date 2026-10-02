@@ -103,9 +103,9 @@ func Login(ctx context.Context, store *Store, opts LoginOptions) error {
 		return err
 	}
 	if opts.Admin {
-		fmt.Fprintf(opts.Output, "Logged in as administrator to profile %q. Use: mcphub-cli admin --profile %s get /overview\n", opts.Profile, opts.Profile)
+		fmt.Fprintf(opts.Output, "Logged in as administrator to profile %q. Use: mcpbridge admin --profile %s get /overview\n", opts.Profile, opts.Profile)
 	} else {
-		fmt.Fprintf(opts.Output, "Logged in to profile %q. Configure your MCP client to run: mcphub-cli connect --profile %s\n", opts.Profile, opts.Profile)
+		fmt.Fprintf(opts.Output, "Logged in to profile %q. Configure your MCP client to run: mcpbridge connect --profile %s\n", opts.Profile, opts.Profile)
 	}
 	if err := revokeLoginSnapshot(ctx, previous, opts.HTTPClient); err == nil {
 		_ = store.forgetRevocation(ctx, opts.Profile, previous)

@@ -4,7 +4,7 @@
 
 This is an administrator configuration and operations guide. For employee access, use the [user manual](user-guide.md).
 
-MCPHub can bridge OIDC or OAuth2 identity providers that support authorization code, PKCE S256 and Bearer UserInfo. `mcphub-cli` remains a public client; the upstream confidential client secret stays on the server. The Feishu example remains an integration starting point. Compatibility requires validation of the actual application endpoints, identity fields, tenant settings and directory adapter.
+MCPHub can bridge OIDC or OAuth2 identity providers that support authorization code, PKCE S256 and Bearer UserInfo. `mcpbridge` remains a public client; the upstream confidential client secret stays on the server. The Feishu example remains an integration starting point. Compatibility requires validation of the actual application endpoints, identity fields, tenant settings and directory adapter.
 
 The flow is browser → MCPHub `/sso` → enterprise identity provider → local user/group policy → MCPHub-issued access JWT → MCPHub tool policy and write approval → backend. Upstream tokens are neither MCP credentials nor backend credentials. Without `auth.sso`, existing external-JWT mode remains available.
 
@@ -114,7 +114,7 @@ Offboarding latency depends on sync cadence. Claim-only mode cannot proactively 
 
 ## Client use and operational boundaries
 
-Employee installation, login and Broker consent are covered by the [user manual](user-guide.md). Clients launch `mcphub-cli` without upstream tokens or client secrets.
+Employee installation, login and Broker consent are covered by the [user manual](user-guide.md). Clients launch `mcpbridge` without upstream tokens or client secrets.
 
 Access JWTs last ten minutes. `offline_access` enables rotating refresh tokens within an eight-hour local SSO session; another browser login is needed afterward. Upstream credentials are not retained and local refresh does not query upstream account state. Reuse of a consumed refresh token revokes its session family. The signing key is encrypted with the configuration key in the database; refresh credentials are stored only as hashes. Every access token also requires a live stored session and current local permissions.
 

@@ -1,5 +1,5 @@
 <h2 id="doctor">Check the entry your client actually uses</h2>
-<pre><code>mcphub-cli doctor --profile work --client ci_example</code></pre>
+<pre><code>mcpbridge doctor --profile work --client ci_example</code></pre>
 <p>The profile and ID must match your client configuration. Omit --client to check login alone. The default timeout is 15 seconds; add --timeout 30s for a slow network. The allowed range is 1 second to 2 minutes.</p>
 <p>Diagnostics check the private directory, login renewal, pairing, the live authorization, effective scopes, personal accounts, MCP initialization, and the first page of the tool catalog. They may refresh your MCPHub login token. They do not open a browser, start the Broker, create an authorization, refresh upstream credentials, or execute tools.</p>
 <p>Success or warnings only return exit code 0; a blocking problem returns 1. A successful check does not guarantee that every business call or permission will work.</p>
@@ -11,7 +11,7 @@
 <ol><li>Check your company account and target service.</li><li>Check that the authorization includes the required tools and scopes.</li><li>Ask your administrator to check publication and access permissions.</li><li>Authorize again when you need newly added tools.</li></ol>
 <p>If the wizard cannot discover the catalog, ask your administrator to check the version and settings. Older deployments may require a manual authorization under their guidance.</p>
 <h2 id="grant">Authorization expired, revoked, or changed</h2>
-<pre><code>mcphub-cli client authorize --profile work --client ci_example</code></pre>
+<pre><code>mcpbridge client authorize --profile work --client ci_example</code></pre>
 <p>Confirm in the browser, then reconnect the client. A valid login does not replace entry authorization. If an upstream account was replaced or disconnected, restore the account first, then authorize again.</p>
 <h2 id="account">Personal account problems</h2>
 <p>Connect or reconnect the service from Connected accounts in the portal. Contact your administrator if verification keeps failing. If the account is connected but a business operation is denied, check the upstream role and resource permissions.</p>

@@ -7,7 +7,7 @@ const messages = {
     login: "登录以查看并确认",
     logout: "退出网页会话",
     loading: "正在读取授权…",
-    empty: "尚无客户端授权。在本机运行 mcphub-cli client add 发起申请。",
+    empty: "尚无客户端授权。在本机运行 mcpbridge client add 发起申请。",
     request: "确认客户端授权",
     pair: "请与终端显示的配对码核对",
     confirm: "确认授权",
@@ -52,7 +52,7 @@ const messages = {
     logout: "Sign out of portal",
     loading: "Loading authorizations…",
     empty:
-      "No client authorizations. Run mcphub-cli client add on your computer to start.",
+      "No client authorizations. Run mcpbridge client add on your computer to start.",
     request: "Review client authorization",
     pair: "Compare this pairing code with your terminal",
     confirm: "Authorize client",

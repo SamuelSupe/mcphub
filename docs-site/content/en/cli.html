@@ -1,36 +1,36 @@
 <p>This page lists end-user commands. Replace example domains, services, tools, scopes, and ci_example with your actual values. Use --help to see the parameters supported by your installed version.</p>
 <h2 id="setup">setup · Connection wizard</h2>
-<pre><code>mcphub-cli setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work &gt; mcphub-mcp.json
-mcphub-cli setup --profile work &gt; mcphub-mcp.json</code></pre>
+<pre><code>mcpbridge setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work &gt; mcphub-mcp.json
+mcpbridge setup --profile work &gt; mcphub-mcp.json</code></pre>
 <p>Optionally set --callback-port. Choose the service, tools, resources, duration, name, and format in the terminal; log in and confirm in the browser. stdout contains a configuration without credentials, while prompts go to stderr.</p>
 <h2 id="login">login / status / logout</h2>
-<pre><code>mcphub-cli login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
-mcphub-cli login --profile work
-mcphub-cli status --profile work
-mcphub-cli logout --profile work</code></pre>
+<pre><code>mcpbridge login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+mcpbridge login --profile work
+mcpbridge status --profile work
+mcpbridge logout --profile work</code></pre>
 <p>login supports repeated --scope arguments and --callback-port. status shows cached login information and checks authorization when a Broker session exists. It does not print tokens.</p>
 <h2 id="client-add">client add · Manual entry</h2>
-<pre><code>mcphub-cli client add --profile work --name project-a-read --endpoint database-prod --scope mcp:database --scope db:read --tool query --resource /project=project-a --ttl 1h</code></pre>
+<pre><code>mcpbridge client add --profile work --name project-a-read --endpoint database-prod --scope mcp:database --scope db:read --tool query --resource /project=project-a --ttl 1h</code></pre>
 <table><thead><tr><th>Parameter</th><th>Meaning</th></tr></thead><tbody><tr><td>--endpoint / --name</td><td>Service ID and entry name.</td></tr><tr><td>--scope / --tool</td><td>Permissions and original tool names. Repeat as needed.</td></tr><tr><td>--resource /pointer=value</td><td>Resource conditions on tool arguments. Repeat as needed.</td></tr><tr><td>--ttl</td><td>For example, 30m or 1h, within the server limit, configurable from 1 minute to 8 hours.</td></tr><tr><td>--allow-write-requests</td><td>Allows write requests; each write still requires approval.</td></tr></tbody></table>
-<p>Entries are read-only by default. Omitting tools freezes the currently eligible tool set. Omitting scopes selects the required scopes from your existing permissions. The output uses mcphub-cli as command; desktop clients may need its actual absolute path.</p>
+<p>Entries are read-only by default. Omitting tools freezes the currently eligible tool set. Omitting scopes selects the required scopes from your existing permissions. The output uses mcpbridge as command; desktop clients may need its actual absolute path.</p>
 <h2 id="capabilities">Additional capabilities</h2>
 <p>Add --prompts, --resources, or --subscriptions when needed. Subscriptions also require resources to be allowed. Resource conditions on tool arguments do not restrict resource URIs or prompts. Create separate entries suited to those capabilities.</p>
 <h2 id="client-manage">client list / authorize / revoke</h2>
-<pre><code>mcphub-cli client list --profile work
-mcphub-cli client authorize --profile work --client ci_example
-mcphub-cli client authorize --profile work --client ci_example --tool query --resource /project=project-b
-mcphub-cli client revoke --profile work --client ci_example</code></pre>
+<pre><code>mcpbridge client list --profile work
+mcpbridge client authorize --profile work --client ci_example
+mcpbridge client authorize --profile work --client ci_example --tool query --resource /project=project-b
+mcpbridge client revoke --profile work --client ci_example</code></pre>
 <p>Reauthorization preserves unspecified settings; supplied lists replace the old lists. Confirm in the browser and reconnect.</p>
 <h2 id="doctor">doctor · Diagnostics</h2>
-<pre><code>mcphub-cli doctor --profile work
-mcphub-cli doctor --profile work --client ci_example
-mcphub-cli doctor --profile work --client ci_example --json --timeout 30s</code></pre>
+<pre><code>mcpbridge doctor --profile work
+mcpbridge doctor --profile work --client ci_example
+mcpbridge doctor --profile work --client ci_example --json --timeout 30s</code></pre>
 <p>The default timeout is 15 seconds; the allowed range is 1 second to 2 minutes. Success or warnings only return exit code 0; blocking problems return 1. No tools are executed. See <a href="troubleshooting.html">Troubleshooting</a>.</p>
 <h2 id="broker">connect / broker</h2>
-<pre><code>mcphub-cli connect --profile work --client ci_example
-mcphub-cli broker status
-mcphub-cli broker stop
-mcphub-cli broker run</code></pre>
+<pre><code>mcpbridge connect --profile work --client ci_example
+mcpbridge broker status
+mcpbridge broker stop
+mcpbridge broker run</code></pre>
 <p>The client launches connect, whose stdout is reserved for MCP. Running it directly in a terminal may wait for input. broker run is for foreground diagnostics. Stopping the Broker does not revoke remote authorizations. Broker logs are stored in broker.log in the private directory.</p>
 <h2 id="legacy">Compatible connections</h2>
 <p>Use connect --profile work alone only for services where your administrator explicitly allows connections without client authorization. Enforced authorization requires --client. See <a href="install.html#compatibility">Version requirements</a>.</p>

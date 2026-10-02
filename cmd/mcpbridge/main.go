@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/client"
+	"github.com/SamuelSupe/mcphub/v2/internal/version"
 )
 
 type scopeFlags []string
@@ -26,9 +27,16 @@ func main() {
 
 func run(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: mcphub-cli <setup|login|connect|status|logout|client|broker|doctor|admin> [flags]")
+		return fmt.Errorf("usage: mcpbridge <setup|login|connect|status|logout|client|broker|doctor|admin|version> [flags]; local client connector, server commands use mcphub")
 	}
 	command := args[1]
+	if command == "version" || command == "--version" {
+		if len(args) != 2 {
+			return fmt.Errorf("version does not accept arguments")
+		}
+		fmt.Fprintln(os.Stdout, "mcpbridge", version.Value, "(client)")
+		return nil
+	}
 	if command == "setup" {
 		return runSetup(args[2:])
 	}
@@ -46,10 +54,12 @@ func run(args []string) error {
 	}
 	switch command {
 	case "login", "connect", "status", "logout":
+	case "serve", "validate", "verify-audit":
+		return fmt.Errorf("%q is a server command; run it with the mcphub server executable. mcpbridge is the local client connector", command)
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
-	flags := flag.NewFlagSet("mcphub-cli "+command, flag.ContinueOnError)
+	flags := flag.NewFlagSet("mcpbridge "+command, flag.ContinueOnError)
 	profile := flags.String("profile", "default", "local credential profile")
 	var server, clientID *string
 	var clientEntry *string

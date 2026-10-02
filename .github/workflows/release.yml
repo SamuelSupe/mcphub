@@ -97,7 +97,7 @@ jobs:
           for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
             os="${target%/*}"
             arch="${target#*/}"
-            for binary in mcphub mcphub-cli; do
+            for binary in mcphub mcpbridge; do
               archive="${binary}_${GITHUB_REF_NAME}_${os}_${arch}.tar.gz"
               stage="$(mktemp -d)"
               CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build \
@@ -126,17 +126,17 @@ jobs:
             done
           done
           for arch in amd64 arm64; do
-            archive="mcphub-cli_${GITHUB_REF_NAME}_windows_${arch}.zip"
+            archive="mcpbridge_${GITHUB_REF_NAME}_windows_${arch}.zip"
             stage="$(mktemp -d)"
             CGO_ENABLED=0 GOOS=windows GOARCH="$arch" go build \
               -trimpath -ldflags="-s -w" \
-              -o "$stage/mcphub-cli.exe" ./cmd/mcphub-cli
+              -o "$stage/mcpbridge.exe" ./cmd/mcpbridge
             cp LICENSE README.md README.zh-CN.md SECURITY.md RELEASE_NOTES_*.md "$stage/"
             cp -R docs "$stage/"
             find "$stage" -exec touch -d "@$source_date_epoch" {} +
             (
               cd "$stage"
-              TZ=UTC zip -X -q -r "$GITHUB_WORKSPACE/dist/$archive" LICENSE README.md README.zh-CN.md SECURITY.md RELEASE_NOTES_*.md docs mcphub-cli.exe
+              TZ=UTC zip -X -q -r "$GITHUB_WORKSPACE/dist/$archive" LICENSE README.md README.zh-CN.md SECURITY.md RELEASE_NOTES_*.md docs mcpbridge.exe
             )
             rm -rf "$stage"
           done
@@ -150,10 +150,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for binary in mcphub mcphub-cli; do
+          for binary in mcphub mcpbridge; do
             test "$(find dist -maxdepth 1 -name "${binary}_*.tar.gz" -type f | wc -l)" -eq 4
           done
-          test "$(find dist -maxdepth 1 -name 'mcphub-cli_*_windows_*.zip' -type f | wc -l)" -eq 2
+          test "$(find dist -maxdepth 1 -name 'mcpbridge_*_windows_*.zip' -type f | wc -l)" -eq 2
           test -s dist/feishu-vault-agent-architecture.zh-CN.pdf
           cmp docs/feishu-vault-agent-architecture.zh-CN.pdf dist/feishu-vault-agent-architecture.zh-CN.pdf
           common_manifest="$(
@@ -169,13 +169,14 @@ jobs:
             sha256sum --check SHA256SUMS
             for archive in *.tar.gz; do
               case "$archive" in
-                mcphub-cli_*) expected="$(printf '%s\n' "$common_manifest" mcphub-cli)" ;;
-                mcphub_*) expected="$server_manifest" ;;
+                mcpbridge_*) binary=mcpbridge; expected="$(printf '%s\n' "$common_manifest" mcpbridge)" ;;
+                mcphub_*) binary=mcphub; expected="$server_manifest" ;;
                 *) exit 1 ;;
               esac
               diff -u <(printf '%s\n' "$expected" | sort) <(tar -tzf "$archive" | sort)
               extracted="$(mktemp -d)"
               tar -xzf "$archive" -C "$extracted"
+              test "$(go version -m "$extracted/$binary" | awk '$1 == "path" {print $2}')" = "github.com/SamuelSupe/mcphub/v2/cmd/$binary"
               diff -r "$GITHUB_WORKSPACE/docs" "$extracted/docs"
               for file in "$GITHUB_WORKSPACE"/LICENSE "$GITHUB_WORKSPACE"/README*.md "$GITHUB_WORKSPACE"/SECURITY.md "$GITHUB_WORKSPACE"/RELEASE_NOTES_*.md; do
                 cmp "$file" "$extracted/$(basename "$file")"
@@ -189,9 +190,10 @@ jobs:
               rm -rf "$extracted"
             done
             for archive in *.zip; do
-              diff -u <(printf '%s\n' "$common_manifest" mcphub-cli.exe | sort) <(unzip -Z1 "$archive" | sort)
+              diff -u <(printf '%s\n' "$common_manifest" mcpbridge.exe | sort) <(unzip -Z1 "$archive" | sort)
               extracted="$(mktemp -d)"
               unzip -q "$archive" -d "$extracted"
+              test "$(go version -m "$extracted/mcpbridge.exe" | awk '$1 == "path" {print $2}')" = github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge
               diff -r "$GITHUB_WORKSPACE/docs" "$extracted/docs"
               for file in "$GITHUB_WORKSPACE"/LICENSE "$GITHUB_WORKSPACE"/README*.md "$GITHUB_WORKSPACE"/SECURITY.md "$GITHUB_WORKSPACE"/RELEASE_NOTES_*.md; do
                 cmp "$file" "$extracted/$(basename "$file")"
@@ -207,7 +209,17 @@ jobs:
           extracted="$(mktemp -d)"
           trap 'rm -rf "$extracted"' EXIT
           tar -xzf "dist/mcphub_${GITHUB_REF_NAME}_linux_amd64.tar.gz" -C "$extracted"
+          test "$("$extracted/mcphub" --version)" = "mcphub ${GITHUB_REF_NAME#v} (server)"
           bash scripts/verify-installation.sh "$extracted/mcphub" "$extracted"
+
+      - name: Verify the packaged client
+        shell: bash
+        run: |
+          set -euo pipefail
+          extracted="$(mktemp -d)"
+          trap 'rm -rf "$extracted"' EXIT
+          tar -xzf "dist/mcpbridge_${GITHUB_REF_NAME}_linux_amd64.tar.gz" -C "$extracted"
+          bash scripts/verify-client.sh "$extracted/mcpbridge" "${GITHUB_REF_NAME#v}"
 
       - name: Publish GitHub Release
         env:

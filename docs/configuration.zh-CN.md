@@ -13,7 +13,7 @@
 
 ## 选择配置与生效方式
 
-本参考对应 v2.2.1。YAML 只允许一个文档，未知字段会被拒绝。**不要把管理 API 的 JSON 对象直接粘贴为 YAML**：例如 YAML 的 `headers` 是键值映射，API 的 `headers` 是对象数组；`enabled` 是托管 backend 的 API 字段，不是 YAML backend 字段。HTTP 工具组及 OpenAPI 导入只能通过控制台/API 管理。
+本参考对应 v2.2.2。YAML 只允许一个文档，未知字段会被拒绝。**不要把管理 API 的 JSON 对象直接粘贴为 YAML**：例如 YAML 的 `headers` 是键值映射，API 的 `headers` 是对象数组；`enabled` 是托管 backend 的 API 字段，不是 YAML backend 字段。HTTP 工具组及 OpenAPI 导入只能通过控制台/API 管理。
 
 | 场景 | 从哪里开始 | 需要准备 |
 | --- | --- | --- |
@@ -225,7 +225,7 @@ rate_limit:
 
 策略作用于认证和 scope 检查通过后的 `tools/call`、`prompts/get`、`resources/read`、`resources/subscribe`、`completion/complete` 和带资源订阅的 `subscriptions/listen`。流式响应在结束或取消前占用并发名额；一次多 endpoint 订阅会原子检查所有相关额度，每个 endpoint 计一次。初始化、目录读取、健康检查、取消、退订、管理探测和后台刷新不消耗这些额度。
 
-超限在调用后端前返回 HTTP `429`、`Retry-After` 秒数和包含原请求 ID 的 JSON-RPC 错误；并发限制的重试时间只是建议。`mcphub-cli connect` 显示限流错误与重试提示，不自动重放调用。保存配置、SIGHUP 和 HTTP tool 变更保留未变策略的额度及活动请求计数；进程重启会重置内存计数。策略随配置保存在 SQLite/PostgreSQL，计数不写数据库，仅适用于单实例。入口整体/IP/用户独立配额仍需单独的策略，未认证流量应在反向代理限制。
+超限在调用后端前返回 HTTP `429`、`Retry-After` 秒数和包含原请求 ID 的 JSON-RPC 错误；并发限制的重试时间只是建议。`mcpbridge connect` 显示限流错误与重试提示，不自动重放调用。保存配置、SIGHUP 和 HTTP tool 变更保留未变策略的额度及活动请求计数；进程重启会重置内存计数。策略随配置保存在 SQLite/PostgreSQL，计数不写数据库，仅适用于单实例。入口整体/IP/用户独立配额仍需单独的策略，未认证流量应在反向代理限制。
 
 ### 显式发布与资源范围
 
@@ -309,7 +309,7 @@ tool_rules:
 1. Agent 调用写工具，收到 `structuredContent.code: approval_pending`、`approval_id` 和 `approval_url`。写操作尚未执行；若配置预览，会先调用指定的只读工具。
 2. 用户打开链接，以审批人身份登录，核对操作摘要、目标、业务资源、完整参数，以及可用的变更前后预览；填写理由后批准一次或拒绝。
 3. `require_step_up: true` 时，先点击“加强身份验证”。MCPHub 请求 OIDC `max_age=0`、`prompt=login`、nonce 和配置的 ACR，并验证签名、issuer、客户端 audience、同一 subject、nonce、`auth_time` 和返回的 ACR；有 `at_hash` 时也校验。允许最多 30 秒时钟偏差。通过后仍需点击批准，证明仅绑定该审批单和浏览器会话，2 分钟内单次有效。身份服务缺少 OIDC 或没有满足配置的认证强度时拒绝批准。ACR 的具体 MFA/Passkey 含义由身份服务配置，不是通用字符串。
-4. 原调用人调用 `mcphub_resume_approval`，只传 `{"approval_id":"..."}`，执行已保存请求并重新检查当前权限、发布状态、资源范围及限流。查询进度使用独立状态工具，相同活跃请求会被合并。现有 `mcphub-cli connect` 配置无需修改。
+4. 原调用人调用 `mcphub_resume_approval`，只传 `{"approval_id":"..."}`，执行已保存请求并重新检查当前权限、发布状态、资源范围及限流。查询进度使用独立状态工具，相同活跃请求会被合并。现有 `mcpbridge connect` 配置无需修改。
 5. 执行前，申请人可调用 `mcphub_cancel_approval`，传 `approval_id` 和可选 `reason`；有审批人会话的申请人也可在页面取消。审批人可撤销尚未执行的批准。取消、撤销与执行原子竞争；已经接纳的写入可能完成，撤销不能回滚。
 
 **预览契约：** `preview_tool` 指向同一后端/工具组中已发布且明确标为只读的原始工具名，接收与写工具相同的参数。其 `structuredContent`（HTTP 工具为 JSON 对象响应体）须包含 `version`、`before`、`after`，例如 `{"version":"v7","before":{"limit":10},"after":{"limit":20}}`。`version_argument` 指向调用参数中的具体、非空版本字符串，不能使用 `*`。网关在申请及恢复时都验证预览权限和资源条件，并比对预览、版本及工具代次；变化或失败均拒绝执行。**后端写操作还必须原子检查该版本**，例如 HTTP `If-Match` 或数据库条件更新；仅预览无法消除检查与写入之间的竞争。HTTP 参数可通过已有 Header 参数映射把 `/expected_version` 对应的参数发为 `If-Match`。未配置预览时仍展示管理员定义的操作摘要、资源及完整参数，不会推测变更结果。
@@ -320,7 +320,7 @@ SQLite/PostgreSQL 原子消费批准，并发恢复不会执行两次；重复�
 
 每个 issuer/subject 最多 20 个活跃申请，执行请求最多 60 KiB，预览最多 32 KiB，含策略的完整审批记录最多 64 KiB，结果最多 16 MiB。请求、预览、结果、理由及核查详情加密保存；每分钟分批清理超过保留期的终态记录及详细审计，通用活动日志保留不含参数/理由的状态记录。配置变更前已接纳的操作仍可能完成。批准写入使用新的 HTTP/1 连接防止透明重试，上游须支持 HTTP/1.1；只读调用仍复用连接。
 
-v2.2.1 使用 **schema 9**（审批治理最初引入 schema 5），升级前备份数据库与加密密钥，v2.1.0 或更早二进制不能以写模式打开升级后的数据库。本地免登录模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
+v2.2.2 使用 **schema 9**（审批治理最初引入 schema 5），升级前备份数据库与加密密钥，v2.1.0 或更早二进制不能以写模式打开升级后的数据库。本地免登录模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
 
 
 ### 配置治理、双人审批与业务幂等
@@ -344,7 +344,7 @@ admin:
       signing_key: ${MCPHUB_AUDIT_SIGNING_KEY}
 ```
 
-配置管理员新增或修改后端、工具组、HTTP 工具、OpenAPI 导入时，API 和 `mcphub-cli admin request` 返回 **202**，包含 `pending_approval`、`approval_id`、`approval_url`；网页编辑器跳转到提案，配置尚未生效。另一位具有安全 scope 的用户通过“以安全管理员身份登录”（`/auth/login?role=security`）进入，核对脱敏前后差异后“批准并应用”。凭证变更会单独标记，但不显示凭证值。安全角色不能直接编辑配置，写操作审批角色不能批准配置。批准仍要求浏览器会话和 CSRF 验证，API Token 不可审批。删除及单纯的启用→停用立即生效；重新启用、停用同时修改其他字段均需审批。YAML、数据库和部署运维权限仍属于信任边界，静态治理配置不能通过管理 API 修改。
+配置管理员新增或修改后端、工具组、HTTP 工具、OpenAPI 导入时，API 和 `mcpbridge admin` 返回 **202**，包含 `pending_approval`、`approval_id`、`approval_url`；网页编辑器跳转到提案，配置尚未生效。另一位具有安全 scope 的用户通过“以安全管理员身份登录”（`/auth/login?role=security`）进入，核对脱敏前后差异后“批准并应用”。凭证变更会单独标记，但不显示凭证值。安全角色不能直接编辑配置，写操作审批角色不能批准配置。批准仍要求浏览器会话和 CSRF 验证，API Token 不可审批。删除及单纯的启用→停用立即生效；重新启用、停用同时修改其他字段均需审批。YAML、数据库和部署运维权限仍属于信任边界，静态治理配置不能通过管理 API 修改。
 
 提案绑定目标版本；工具和导入还绑定所属工具组版本。期间发生修改时，旧提案应用失败，不会覆盖新配置。OpenAPI 提案保存具体文档和生成的工具定义，批准时不会重新下载；自动刷新发现变更也会生成提案，继续使用已批准的定义。重启使尚未执行的提案失效，中断的应用标记为结果不确定，需人工核查。失败或过期后需要重新提交。每个 issuer/subject 最多 20 个活跃请求，完整配置提案上限 32 MiB。
 
@@ -429,7 +429,7 @@ Backend ID 的唯一性按大小写不敏感检查。tool/prompt 名称保留配
 
 ## 从完整 YAML 示例启动
 
-v2.2.1 服务端压缩包和在线指南提供相同的[基础配置](../config.example.yaml)：一个 MCP 后端、4 个必填变量，不需要控制台来源或 CRM 变量。解压服务端包后，将包内 `config.example.yaml` 复制为 `config.yaml`；也可下载同一文件：
+v2.2.2 服务端压缩包和在线指南提供相同的[基础配置](../config.example.yaml)：一个 MCP 后端、4 个必填变量，不需要控制台来源或 CRM 变量。解压服务端包后，将包内 `config.example.yaml` 复制为 `config.yaml`；也可下载同一文件：
 
 ```bash
 curl -fL https://samuelsupe.github.io/mcphub/examples/config.example.yaml -o config.yaml
@@ -472,7 +472,7 @@ go run ./cmd/mcphub serve --config ./config.yaml
 - 针对官方 Go MCP SDK v1.7.0 客户端的 `notifications/cancelled` 消息缺少 2026-07-28 metadata，Hub 入站和后端出站都会做兼容规范化，使取消或取消订阅后的同一逻辑 MCP session 仍可复用；这是互操作性 shim，不是自定义扩展。
 - 以 `backend.id` 为命名空间，改写资源 URI，避免不同后端的同名能力和 URI 冲突。
 - 使用 OIDC discovery 和 JWKS 验证 Bearer JWT；按后端 `required_scopes` 过滤目录和调用。
-- 提供独立的 `mcphub-cli` 程序，提供外部 OIDC 浏览器登录及本地 stdio 到 HTTP 的连接器，并自动刷新凭证。
+- 提供独立的 `mcpbridge` 程序，提供外部 OIDC 浏览器登录及本地 stdio 到 HTTP 的连接器，并自动刷新凭证。
 - 工具须显式发布，并受业务资源参数规则约束；写工具和未分类工具需要独立审批，支持多人复核、OIDC 加强认证、配置审批与签名审计投递。
 - 在 MCPHub 管理 SSO 用户、部门和用户组权限，通过个人授权门户与本地 Broker 控制客户端 Scope；`setup` 输出不含凭证的 MCP 配置，`doctor` 不执行工具即可检查访问问题。
 - 对原始后端 tool name 应用后端本地 `tool_rules` 和 Go `path.Match`；匹配规则的 scope 会合并去重，按 all-of 授权，并从 `tools/list` 隐藏未授权 tool。

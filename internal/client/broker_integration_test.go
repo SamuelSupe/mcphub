@@ -81,7 +81,7 @@ func TestSetupSelectsNarrowClientAndPrintsConfiguration(t *testing.T) {
 	}
 	for _, format := range []string{"1", "2"} {
 		var progress, output bytes.Buffer
-		opts := SetupOptions{Command: "/usr/local/bin/mcphub-cli", Input: strings.NewReader("1\n1\n\n30\neditor\n" + format + "\nyes\n"), Output: &progress, ConfigOutput: &output, HTTPClient: f.client, OpenBrowser: open}
+		opts := SetupOptions{Command: "/usr/local/bin/mcpbridge", Input: strings.NewReader("1\n1\n\n30\neditor\n" + format + "\nyes\n"), Output: &progress, ConfigOutput: &output, HTTPClient: f.client, OpenBrowser: open}
 		if err := Setup(ctx, f.store, "work", opts); err != nil {
 			t.Fatalf("setup: %v\n%s", err, progress.String())
 		}

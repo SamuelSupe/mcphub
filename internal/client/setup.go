@@ -220,7 +220,7 @@ func Setup(ctx context.Context, store *Store, name string, opts SetupOptions) er
 	}
 	command := opts.Command
 	if command == "" {
-		command = "mcphub-cli"
+		command = "mcpbridge"
 	}
 	directory, err := filepath.Abs(store.Dir)
 	if err != nil {

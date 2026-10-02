@@ -1,7 +1,7 @@
 # MCPHub
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -9,7 +9,14 @@
 
 MCPHub 将已有的远端 MCP Server 和普通 HTTP API 统一提供为 MCP 工具。它提供一个 Streamable HTTP 入口，集中管理服务接入、工具发布、用户权限、客户端授权与写操作审批。
 
-用户在自己的电脑安装 `mcphub-cli`，通过浏览器登录并为 Agent 确认访问范围；管理员部署 `mcphub`，维护服务、凭证和访问策略。网关保持单实例运行，支持 SQLite 或 PostgreSQL。
+用户在自己的电脑安装 `mcpbridge`，通过浏览器登录并为 Agent 确认访问范围；管理员部署 `mcphub`，维护服务、凭证和访问策略。网关保持单实例运行，支持 SQLite 或 PostgreSQL。
+
+| 程序 | 安装位置 | 主要命令 |
+| --- | --- | --- |
+| **mcphub — 服务端** | 网关服务器 | `serve`、`validate` |
+| **mcpbridge — 客户端** | Agent / 用户电脑 | `setup`、`login`、`connect`、`doctor` |
+
+从 v2.2.2 起，客户端程序由 `mcphub-cli` 改名为 `mcpbridge`，下载包以 `mcpbridge_v2.2.2_*` 开头；部署服务端选择 `mcphub_v2.2.2_*`。运行程序的 `--version` 可确认名称、版本与服务端/客户端身份。
 
 ## 从这里开始
 
@@ -30,9 +37,9 @@ MCPHub 将已有的远端 MCP Server 和普通 HTTP API 统一提供为 MCP 工�
 
 ## 版本与升级
 
-当前文档对应 **v2.2.1**：统一发布包配置、安装示例和中英文帮助文档。[发行说明](RELEASE_NOTES_v2.2.1.md) · [下载 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1)
+当前文档对应 **v2.2.2**：将客户端改名为 MCPBridge，明确区分服务端与客户端下载。[发行说明](RELEASE_NOTES_v2.2.2.md) · [下载 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
 
-v2.2.1 沿用 v2.2.0 的 **schema 9**；更早版本在启动时迁移。启动前备份数据库与匹配的加密密钥；回滚至 v2.1.0 或更早版本需要恢复升级前备份。从 v1.x 升级还需审核工具发布名单和读写策略，Go module 路径新增 `/v2`。详见[升级与回滚流程](RELEASE_NOTES_v2.2.1.md#upgrade-and-rollback--升级与回滚)。
+v2.2.2 沿用 v2.2.0 的 **schema 9**；更早版本在启动时迁移。启动前备份数据库与匹配的加密密钥；回滚至 v2.1.0 或更早版本需要恢复升级前备份。从 v1.x 升级还需审核工具发布名单和读写策略，Go module 路径新增 `/v2`。详见[升级与回滚流程](RELEASE_NOTES_v2.2.2.md#upgrade-and-rollback--升级与回滚)。
 
 ## 能力与边界
 
@@ -87,9 +94,9 @@ MCP 客户端连接网关，管理员通过独立管理入口维护策略；上�
 ```mermaid
 flowchart LR
     C[MCP HTTP 客户端] -->|POST /mcp + Bearer JWT| H[MCPHub]
-    S[本地 stdio MCP 客户端] --> CLI[mcphub-cli connect]
+    S[本地 stdio MCP 客户端] --> CLI[mcpbridge connect]
     CLI -->|HTTPS + 用户 JWT| H
-    L[mcphub-cli login] -->|浏览器登录 + PKCE| I[OIDC 身份服务]
+    L[mcpbridge login] -->|浏览器登录 + PKCE| I[OIDC 身份服务]
     H -->|OIDC discovery + JWKS| I
     H -->|MCP Streamable HTTP| B[MCP 后端服务]
     H -->|托管 HTTP tools| A[REST APIs]

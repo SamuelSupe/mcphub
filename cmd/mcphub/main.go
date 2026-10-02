@@ -11,6 +11,7 @@ import (
 
 	"github.com/SamuelSupe/mcphub/v2/internal/app"
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
+	"github.com/SamuelSupe/mcphub/v2/internal/version"
 )
 
 func main() {
@@ -22,9 +23,15 @@ func main() {
 
 func run(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: mcphub <serve|validate> --config PATH; mcphub verify-audit --file PATH --key ID=BASE64_PUBLIC_KEY")
+		return fmt.Errorf("usage: mcphub <serve|validate> --config PATH; mcphub verify-audit --file PATH --key ID=BASE64_PUBLIC_KEY; mcphub --version")
 	}
 	switch args[1] {
+	case "version", "--version":
+		if len(args) != 2 {
+			return fmt.Errorf("version does not accept arguments")
+		}
+		fmt.Fprintln(os.Stdout, "mcphub", version.Value, "(server)")
+		return nil
 	case "validate":
 		return validateCommand(args[2:])
 	case "serve":

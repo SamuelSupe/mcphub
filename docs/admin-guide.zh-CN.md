@@ -4,7 +4,7 @@
 
 [在线阅读：管理员文档站](https://samuelsupe.github.io/mcphub/admin/) · [在线用户指南](https://samuelsupe.github.io/mcphub/)
 
-面向负责部署、服务接入、权限策略、审批及运行维护的管理员，对应 v2.2.1。员工电脑的安装与接入步骤见[用户手册](user-guide.zh-CN.md)。
+面向负责部署、服务接入、权限策略、审批及运行维护的管理员，对应 v2.2.2。员工电脑的安装与接入步骤见[用户手册](user-guide.zh-CN.md)。
 
 推荐顺序：**部署网关 → 接入只读服务 → 显式发布工具 → 配置用户权限 → 启用客户端授权 → 验证后开放写操作**。
 
@@ -24,35 +24,37 @@
 | 远程管理 + SQLite / PostgreSQL | 团队使用、审批与集中管理 | [部署指南](../deploy/README.zh-CN.md)，独立管理员登录和 HTTPS |
 | YAML 管理 | 不启用控制台、仅发布明确只读的工具 | [完整配置示例](configuration.zh-CN.md#从完整-yaml-示例启动) |
 
-运行网关的机器安装 `mcphub`；用户电脑安装 `mcphub-cli`。管理员使用管理 CLI 时也需安装后者。服务端下载：
+运行网关的机器安装 `mcphub`；用户电脑安装 `mcpbridge`。管理员使用管理 CLI 时也需安装后者。服务端下载：
 
 | 平台 | 服务端下载 |
 | --- | --- |
-| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub_v2.2.1_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub_v2.2.1_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub_v2.2.1_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub_v2.2.1_linux_arm64.tar.gz) |
+| macOS Intel | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_linux_amd64.tar.gz) |
+| Linux arm64 | [mcphub](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcphub_v2.2.2_linux_arm64.tar.gz) |
 
-从 [v2.2.1 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1) 下载后核对 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/SHA256SUMS)。以下为 Linux arm64 的安装示例；按上表替换文件名，macOS 校验命令为 `shasum -a 256`：
+从 [v2.2.2 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2) 下载后核对 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/SHA256SUMS)。以下为 Linux arm64 的安装示例；按上表替换文件名，macOS 校验命令为 `shasum -a 256`：
 
 ```bash
-sha256sum mcphub_v2.2.1_linux_arm64.tar.gz
+sha256sum mcphub_v2.2.2_linux_arm64.tar.gz
 # 与 SHA256SUMS 中同名条目逐字核对，一致后再解压。
 mkdir -p mcphub-release "$HOME/.local/bin"
-tar -xzf mcphub_v2.2.1_linux_arm64.tar.gz -C mcphub-release
+tar -xzf mcphub_v2.2.2_linux_arm64.tar.gz -C mcphub-release
 install -m 755 mcphub-release/mcphub "$HOME/.local/bin/mcphub"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+安装后运行 `mcphub --version`，应显示 `mcphub 2.2.2 (server)`。`validate`、`serve` 是服务端命令；`mcpbridge` 是原 `mcphub-cli` 的新名称，供用户连接 Agent，不能启动或校验网关。源码更新不会自动替换目录里的旧二进制；要使用刚安装的程序路径。
+
 此 PATH 设置用于当前终端；后续可直接运行 `"$HOME/.local/bin/mcphub"`，或将工具目录加入服务环境。已安装 Go 1.26 时也可执行：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.1
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.2
 ```
 
 Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`；该目录也需要加入 PATH。
 
-**v2.2.1 服务端压缩包中的配置模板与本指南一致。** 基础文件只需 4 个变量，不含控制台、数据库或用户门户。需要管理功能时，选用包内的[本地管理配置](../deploy/config.local.yaml)或[远程模板](../deploy/README.zh-CN.md)；[在线基础配置](../config.example.yaml)与包内同名文件相同。如果之前下载的是 v2.2.0，其旧基础配置还要求控制台来源和 CRM 变量；新部署改用 v2.2.1 模板。已有生产配置应保留并逐项审核合并，不能直接覆盖。
+**v2.2.2 服务端压缩包中的配置模板与本指南一致。** 基础文件只需 4 个变量，不含控制台、数据库或用户门户。需要管理功能时，选用包内的[本地管理配置](../deploy/config.local.yaml)或[远程模板](../deploy/README.zh-CN.md)；[在线基础配置](../config.example.yaml)与包内同名文件相同。如果之前下载的是 v2.2.0，其旧基础配置还要求控制台来源和 CRM 变量；新部署改用 v2.2.2 模板。已有生产配置应保留并逐项审核合并，不能直接覆盖。
 
 `validate --config PATH` 只读检查配置，不创建数据库；`serve --config PATH` 启动服务并执行必要迁移，结构化 JSON 日志写入 stderr。旧版本升级先看[升级与备份](#升级与备份)。
 
@@ -93,14 +95,14 @@ mcphub serve --config config.yaml
 
 ## 远程管理员与 PostgreSQL
 
-支持独立管理员登录、远程 UI/API、`mcphub-cli admin` 与按管理员身份记录的配置审计。管理员 JWT 使用 `admin.public_url` 作为 audience，且必须具有 `admin.required_scopes`（默认 `mcphub:admin`）；普通 MCP 用户的登录凭证不会自动获得管理权限。
+支持独立管理员登录、远程 UI/API、`mcpbridge admin` 与按管理员身份记录的配置审计。管理员 JWT 使用 `admin.public_url` 作为 audience，且必须具有 `admin.required_scopes`（默认 `mcphub:admin`）；普通 MCP 用户的登录凭证不会自动获得管理权限。
 
 ```bash
-mcphub-cli login --admin --server https://admin.example.com --client-id mcphub-admin-cli --profile ops
-mcphub-cli admin --profile ops get /overview
-mcphub-cli admin --profile ops get /backends
-mcphub-cli admin --profile ops get /tool-groups
-mcphub-cli admin --profile ops get /events
+mcpbridge login --admin --server https://admin.example.com --client-id mcphub-admin-cli --profile ops
+mcpbridge admin --profile ops get /overview
+mcpbridge admin --profile ops get /backends
+mcpbridge admin --profile ops get /tool-groups
+mcpbridge admin --profile ops get /events
 ```
 
 数据库可选 SQLite（默认，兼容原 `database_path`）或 PostgreSQL（`database_driver: postgres` 与 `database_dsn_env`）。本版支持单实例网关；PostgreSQL 不代表已支持多实例运行时同步。完整的 OIDC 注册、浏览器登录、API 写入、数据库与 HTTPS 代理部署见 [部署指南](../deploy/README.zh-CN.md)。
@@ -141,7 +143,7 @@ mcphub-cli admin --profile ops get /events
 
 ## 启用客户端授权
 
-启用 `client_authorization.enabled`、配置用户门户 `client_id`，并启用托管数据库。支持 SQLite 和 **单实例 MCPHub + PostgreSQL**，升级到 v2.2.1 / schema 9 前请备份数据库与加密密钥（v2.1.0 为 schema 8）。
+启用 `client_authorization.enabled`、配置用户门户 `client_id`，并启用托管数据库。支持 SQLite 和 **单实例 MCPHub + PostgreSQL**，升级到 v2.2.2 / schema 9 前请备份数据库与加密密钥（v2.1.0 为 schema 8）。
 
 在身份服务注册门户回调 `https://hub.example.com/client-auth/auth/callback`。门户位于 MCP 服务的域名下，与管理端口分开。CLI 与门户必须取得 audience 为完整 MCP resource URL、`issuer + sub` 一致的 JWT access token。若身份服务对不同客户端返回不同的 pairwise subject，应先调整身份服务的主体策略；不会通过 email 拼接身份。门户可选的 client secret 通过服务端 `client_secret_env` 配置。
 
@@ -197,7 +199,7 @@ client_authorization:
 | 治理与审计 | 请求诊断 | 查看近期调用结果、拒绝原因和耗时；展开请求详情，直接定位对应的工具权限。 |
 | 治理与审计 | 变更记录 | 查看最近 50 条管理变更及操作者；敏感凭证不会展示。 |
 
-推荐工作顺序：**接入服务 → 显式发布与读写分类 → 配置用户/组织权限 → 客户端登录与授权 → 审批和诊断**。用户使用 `mcphub-cli setup` / `connect` 接入，在个人授权门户确认自己的客户端范围；管理员在管理控制台维护整体策略。SSO 身份源、管理员登录、数据库和审计投递等部署设置继续通过 YAML 和环境变量配置，详细步骤见 [SSO 与用户管理](sso-and-user-management.zh-CN.md)。
+推荐工作顺序：**接入服务 → 显式发布与读写分类 → 配置用户/组织权限 → 客户端登录与授权 → 审批和诊断**。用户使用 `mcpbridge setup` / `connect` 接入，在个人授权门户确认自己的客户端范围；管理员在管理控制台维护整体策略。SSO 身份源、管理员登录、数据库和审计投递等部署设置继续通过 YAML 和环境变量配置，详细步骤见 [SSO 与用户管理](sso-and-user-management.zh-CN.md)。
 
 两类编辑器都按 **连接信息 → 上游认证 → 客户端访问权限** 配置。上游 Header/OAuth 是 MCPHub 调用服务的凭证；所需 Scope 决定客户端能否使用后端或工具组：留空允许所有已认证客户端，填写多个时必须**全部满足**。在**已发布工具**中填写审核通过的原始工具名；发现新工具不会自动发布。工具级规则可为选定操作追加 Scope 和资源参数限制；高级连接配置按需展开。编辑已有凭证时，值留空会保留原值；删除 Header 行会移除对应凭证。
 
@@ -230,15 +232,15 @@ client_authorization:
 以下 API 仅位于**管理监听器**，个人门户不开放跨用户查询：
 
 ```bash
-mcphub-cli admin --profile ops get '/client-grants?subject=alice&status=active&limit=25'
-mcphub-cli admin --profile ops get '/requests?endpoint=database-prod&outcome=scope_denied&limit=25'
+mcpbridge admin --profile ops get '/client-grants?subject=alice&status=active&limit=25'
+mcpbridge admin --profile ops get '/requests?endpoint=database-prod&outcome=scope_denied&limit=25'
 ```
 
-两者都返回 `next_cursor`，保持筛选条件并作为 `cursor` 传回；请求历史翻页时同时保持返回的时间窗口。授权还可筛选 `client`、`endpoint`；诊断还可筛选 `request_id`、`subject`、`client` 和原始 `tool`。普通分页 `limit` 范围为 1–100。撤销接口为 `POST /api/v1/client-grants/{grant_id}/revoke`，正文 `{"subject":"alice"}`。schema 9 的迁移步骤见 [v2.2.1 变更和升级流程](../RELEASE_NOTES_v2.2.1.md)。
+两者都返回 `next_cursor`，保持筛选条件并作为 `cursor` 传回；请求历史翻页时同时保持返回的时间窗口。授权还可筛选 `client`、`endpoint`；诊断还可筛选 `request_id`、`subject`、`client` 和原始 `tool`。普通分页 `limit` 范围为 1–100。撤销接口为 `POST /api/v1/client-grants/{grant_id}/revoke`，正文 `{"subject":"alice"}`。schema 9 的迁移步骤见 [v2.2.2 变更和升级流程](../RELEASE_NOTES_v2.2.2.md)。
 
 ## 升级与备份
 
-从 v2.1.0 或更早版本升级前，请先阅读[完整备份、升级与回滚流程](../RELEASE_NOTES_v2.2.1.md#upgrade-and-rollback--升级与回滚)。v2.2.1 的 `serve` 会将托管 SQLite/PostgreSQL 迁移到 schema 9（v2.1.0 为 schema 8），`validate` 只读。保留匹配的 `MCPHUB_CONFIG_KEY`；回滚至 v2.1.0 或更早版本必须同时恢复旧数据库、密钥/配置和二进制；v2.2.0 与 v2.2.1 均使用 schema 9。
+从 v2.1.0 或更早版本升级前，请先阅读[完整备份、升级与回滚流程](../RELEASE_NOTES_v2.2.2.md#upgrade-and-rollback--升级与回滚)。v2.2.2 的 `serve` 会将托管 SQLite/PostgreSQL 迁移到 schema 9（v2.1.0 为 schema 8），`validate` 只读。保留匹配的 `MCPHUB_CONFIG_KEY`；回滚至 v2.1.0 或更早版本必须同时恢复旧数据库、密钥/配置和二进制；v2.2.0 与 v2.2.2 均使用 schema 9。
 
 逐项填写后端的 `published_tools`，并明确工具的读写分类。空发布名单不开放工具；写工具和未分类工具需要远程浏览器审批。本地免登录或仅 YAML 部署只能执行已发布且明确只读的工具。已有 HTTP 工具保留启停状态，新建手工工具默认停用。客户端授权与 SSO 按需启用，SSO 新用户默认待授权。
 

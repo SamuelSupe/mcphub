@@ -18,7 +18,7 @@ import (
 
 func runBroker(args []string) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: mcphub-cli broker <run|status|stop>")
+		return fmt.Errorf("usage: mcpbridge broker <run|status|stop>")
 	}
 	store, err := client.DefaultStore()
 	if err != nil {
@@ -47,10 +47,10 @@ func runBroker(args []string) error {
 
 func runClient(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mcphub-cli client <add|list|authorize|revoke> [flags]")
+		return fmt.Errorf("usage: mcpbridge client <add|list|authorize|revoke> [flags]")
 	}
 	command := args[0]
-	flags := flag.NewFlagSet("mcphub-cli client "+command, flag.ContinueOnError)
+	flags := flag.NewFlagSet("mcpbridge client "+command, flag.ContinueOnError)
 	profile := flags.String("profile", "default", "credential profile")
 	id := flags.String("client", "", "paired client instance ID")
 	name := flags.String("name", "", "display name for this client entry")
@@ -136,7 +136,7 @@ func runClient(args []string) error {
 		fmt.Fprintf(os.Stderr, "Authorized %s until %s. MCP configuration:\n", g.ClientID, g.ExpiresAt.Format(time.RFC3339))
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(map[string]any{"mcpServers": map[string]any{g.ClientName: map[string]any{"command": "mcphub-cli", "args": []string{"connect", "--profile", *profile, "--client", g.ClientID}}}})
+		return encoder.Encode(map[string]any{"mcpServers": map[string]any{g.ClientName: map[string]any{"command": "mcpbridge", "args": []string{"connect", "--profile", *profile, "--client", g.ClientID}}}})
 	default:
 		return fmt.Errorf("unknown client command %q", command)
 	}

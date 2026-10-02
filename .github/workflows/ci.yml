@@ -69,7 +69,13 @@ jobs:
       - name: Build binaries
         run: |
           go build -trimpath -o ./mcphub ./cmd/mcphub
-          go build -trimpath -o ./mcphub-cli ./cmd/mcphub-cli
+          go build -trimpath -o ./mcpbridge ./cmd/mcpbridge
+
+      - name: Verify client and server identity
+        run: |
+          version="$(sed -n 's/^const Value = "\([^"]*\)"$/\1/p' internal/version/version.go)"
+          test "$(./mcphub --version)" = "mcphub $version (server)"
+          bash scripts/verify-client.sh ./mcpbridge "$version"
 
       - name: Build container
         run: docker build --tag mcphub:ci .

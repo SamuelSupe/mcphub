@@ -1,4 +1,4 @@
-name: Windows CLI
+name: Windows MCPBridge client
 
 on:
   workflow_call:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   verify:
-    name: Windows CLI (${{ matrix.arch }})
+    name: Windows MCPBridge (${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:
@@ -34,22 +34,24 @@ jobs:
           cache: true
 
       - name: Test CLI on Windows
-        run: go test -v ./internal/client ./cmd/mcphub-cli
+        run: go test -v ./internal/client ./cmd/mcpbridge
 
       - name: Vet CLI
-        run: go vet ./internal/client ./cmd/mcphub-cli
+        run: go vet ./internal/client ./cmd/mcpbridge
 
       - name: Build Windows CLI
-        run: go build -trimpath -o mcphub-cli.exe ./cmd/mcphub-cli
+        run: go build -trimpath -o mcpbridge.exe ./cmd/mcpbridge
 
       - name: Smoke test Windows executable
         shell: pwsh
         run: |
+          $version = & .\mcpbridge.exe --version
+          if ($LASTEXITCODE -ne 0 -or $version -notlike 'mcpbridge * (client)') { throw "wrong client identity" }
           foreach ($command in @("login", "connect", "status", "logout")) {
-            & .\mcphub-cli.exe $command --help
+            & .\mcpbridge.exe $command --help
             if ($LASTEXITCODE -ne 0) { throw "$command failed" }
           }
-          & .\mcphub-cli.exe status --profile release-smoke
+          & .\mcpbridge.exe status --profile release-smoke
           if ($LASTEXITCODE -ne 0) { throw "status failed" }
-          & .\mcphub-cli.exe logout --profile release-smoke
+          & .\mcpbridge.exe logout --profile release-smoke
           if ($LASTEXITCODE -ne 0) { throw "logout failed" }

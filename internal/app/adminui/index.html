@@ -120,7 +120,7 @@
           <p id="policy-feedback" role="status"></p>
           <div id="policy-list" class="policy-list" aria-live="polite"></div>
           <p class="field-note">目录来自当前运行状态，不执行工具。服务停用或连接异常时，目录可能不完整。</p>
-          <details class="policy-help"><summary>客户端接入与排障</summary><p>登录 → 登记客户端入口 → 浏览器确认范围 → 将生成的 MCP 配置添加到客户端。</p><pre>mcphub-cli doctor --profile work --client ci_example</pre><p>doctor 检查凭证、客户端授权、Broker 和 MCP 目录，不调用工具、不自动打开浏览器。省略 --client 可检查普通连接。</p></details>
+          <details class="policy-help"><summary>客户端接入与排障</summary><p>登录 → 登记客户端入口 → 浏览器确认范围 → 将生成的 MCP 配置添加到客户端。</p><pre>mcpbridge doctor --profile work --client ci_example</pre><p>doctor 检查凭证、客户端授权、Broker 和 MCP 目录，不调用工具、不自动打开浏览器。省略 --client 可检查普通连接。</p></details>
         </section>
 
         <section data-page="identities" aria-label="用户与组织" hidden>

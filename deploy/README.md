@@ -2,9 +2,9 @@
 
 [中文](README.zh-CN.md) · [Administrator manual](../docs/admin-guide.md) · [Documentation](../docs/README.md)
 
-MCPHub v2.2.1 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes.
+MCPHub v2.2.2 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes.
 
-v2.2.1 aligns the packaged templates and installation documentation. It retains schema 9 from v2.2.0; earlier SQLite and PostgreSQL databases migrate on startup; retain the single-instance boundary and follow the [upgrade and rollback procedure](../RELEASE_NOTES_v2.2.1.md) before replacing an older version. Vault shared/personal accounts remain available. See [Vault deployment](../docs/vault-accounts.md), [SSO deployment](../docs/sso-and-user-management.md), and the [enterprise architecture and best practices](../docs/feishu-vault-agent-architecture.zh-CN.md) with its [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf).
+v2.2.2 renames the local client to MCPBridge; server templates and installation instructions remain aligned with the packaged server. It retains schema 9 from v2.2.0; earlier SQLite and PostgreSQL databases migrate on startup; retain the single-instance boundary and follow the [upgrade and rollback procedure](../RELEASE_NOTES_v2.2.2.md) before replacing an older version. Vault shared/personal accounts remain available. See [Vault deployment](../docs/vault-accounts.md), [SSO deployment](../docs/sso-and-user-management.md), and the [enterprise architecture and best practices](../docs/feishu-vault-agent-architecture.zh-CN.md) with its [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf).
 
 Completed MCP POST requests are retained for 30 days by default. Set `admin.request_retention` between `24h` and `8760h` to match operational needs. The administrator's request diagnostics page supports time filters and NDJSON export; see the [history contract and privacy boundaries](../docs/admin-guide.md#grant-and-request-diagnostics). Protect database backups and exports: arguments, results and tokens are excluded, but identity/routing indexes are readable database metadata.
 
@@ -15,7 +15,7 @@ Completed MCP POST requests are retained for 30 days by default. Set `admin.requ
 | HTTPS remote administration + PostgreSQL | [config.remote-postgres.yaml](config.remote-postgres.yaml), [Compose](compose.postgres.yaml) |
 | Feishu SSO + Vault + personal MCP accounts (integration example) | [config.feishu-vault.example.yaml](config.feishu-vault.example.yaml); requires real-tenant acceptance |
 
-The v2.2.1 server archive includes these same templates; the links provide identical files. A binary-only installation can save the selected YAML as `config.yaml` and use `--config config.yaml`, without a source checkout. The `deploy/...` paths below assume the complete repository root as the working directory.
+The v2.2.2 server archive includes these same templates; the links provide identical files. A binary-only installation can save the selected YAML as `config.yaml` and use `--config config.yaml`, without a source checkout. The `deploy/...` paths below assume the complete repository root as the working directory.
 
 ## Identity provider
 
@@ -29,7 +29,7 @@ Enable refresh grants and advertise `offline_access` for renewal. Browser tokens
 
 ## Environment variables
 
-Choose one example; do not configure every integration at once. Remote SQLite/PostgreSQL examples enable the admin console only. Employee `mcphub-cli setup` additionally needs [client authorization](../docs/admin-guide.md#enable-client-authorization) and registered portal/CLI clients. The table below applies to both `config.remote-*` templates and their Compose deployment; the Feishu example lists its own required variables in its [file header](config.feishu-vault.example.yaml).
+Choose one example; do not configure every integration at once. Remote SQLite/PostgreSQL examples enable the admin console only. Employee `mcpbridge setup` additionally needs [client authorization](../docs/admin-guide.md#enable-client-authorization) and registered portal/CLI clients. The table below applies to both `config.remote-*` templates and their Compose deployment; the Feishu example lists its own required variables in its [file header](config.feishu-vault.example.yaml).
 
 | Used by | Variable | Value |
 | --- | --- | --- |
@@ -126,12 +126,12 @@ Open `https://admin.example.com` and sign in through the identity provider. Mana
 Use a separate CLI admin profile:
 
 ```bash
-mcphub-cli login --admin --server https://admin.example.com \
+mcpbridge login --admin --server https://admin.example.com \
   --client-id mcphub-admin-cli --profile ops --callback-port 8400
-mcphub-cli admin --profile ops get /overview
-mcphub-cli admin --profile ops get /backends
-mcphub-cli admin --profile ops get /tool-groups
-mcphub-cli admin --profile ops get '/events?limit=50'
+mcpbridge admin --profile ops get /overview
+mcpbridge admin --profile ops get /backends
+mcpbridge admin --profile ops get /tool-groups
+mcpbridge admin --profile ops get '/events?limit=50'
 ```
 
 `admin` is a JSON management API client supporting `get/post/put/delete`. Paths are relative to `/api/v1`; all flags precede the method. Backend, tool and import operations use the [API paths in the configuration reference](../docs/configuration.md#tool-groups-and-managed-http-api-tools). Use `--file FILE` for JSON or `--file -` for stdin. JSON goes to stdout, ETags to stderr; tokens are never exported. The body limit is 6 MiB, matching OpenAPI uploads.
@@ -143,13 +143,13 @@ Save a disabled backend as `backend.json`:
 ```
 
 ```bash
-mcphub-cli admin --profile ops --file backend.json post /backends
-mcphub-cli admin --profile ops get /backends/crm
+mcpbridge admin --profile ops --file backend.json post /backends
+mcpbridge admin --profile ops get /backends/crm
 # Set enabled to true in backend.json; use the actual returned ETag.
-mcphub-cli admin --profile ops --file backend.json --if-match '"1"' put /backends/crm
-mcphub-cli admin --profile ops post /backends/crm/probe
-mcphub-cli status --profile ops
-mcphub-cli logout --profile ops
+mcpbridge admin --profile ops --file backend.json --if-match '"1"' put /backends/crm
+mcpbridge admin --profile ops post /backends/crm/probe
+mcpbridge status --profile ops
+mcpbridge logout --profile ops
 ```
 
 PUT takes the full input object. To preserve a Header secret, include its name and omit `value`; omit `client_secret` to retain an OAuth secret. Do not submit GET views containing runtime/revision/redaction fields directly as PUT bodies. Stale ETags return 409. Network errors do not replay writes; 401 allows at most one refresh/retry. Ordinary MCP clients use a separate user profile and the [user manual](../docs/user-guide.md) to generate their connection settings; administrator profiles cannot connect to MCP.

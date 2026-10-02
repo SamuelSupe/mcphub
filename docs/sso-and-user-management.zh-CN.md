@@ -4,14 +4,14 @@
 
 本文是管理员配置与运维专题。员工接入请阅读[用户手册](user-guide.zh-CN.md)。
 
-MCPHub 可以作为身份桥接服务接入 OIDC 或支持授权码、PKCE S256 和 Bearer UserInfo 的 OAuth2 身份源。客户端继续使用 `mcphub-cli`，无需持有上游应用密钥。飞书配置示例仍是联调起点；兼容性需由实际应用的授权接口、UserInfo 字段、租户配置和目录适配器确认。
+MCPHub 可以作为身份桥接服务接入 OIDC 或支持授权码、PKCE S256 和 Bearer UserInfo 的 OAuth2 身份源。客户端继续使用 `mcpbridge`，无需持有上游应用密钥。飞书配置示例仍是联调起点；兼容性需由实际应用的授权接口、UserInfo 字段、租户配置和目录适配器确认。
 
 ```text
 用户浏览器 → MCPHub /sso → 企业身份服务
                          ↓ 验证身份
                MCPHub 用户、部门、用户组权限
                          ↓ 本地签发的 JWT
-mcphub-cli / 本地 Broker → MCPHub → 工具策略 → 写审批 → 后端
+mcpbridge / 本地 Broker → MCPHub → 工具策略 → 写审批 → 后端
 ```
 
 上游 Token 仅用于身份验证，不作为 MCPHub 调用凭证，也不传给工具后端。不开启 `auth.sso` 时，保留现有外部 JWT 验证模式。
@@ -70,7 +70,7 @@ client_authorization:
   client_id: mcphub-portal
 ```
 
-在上游注册**机密 Web 客户端**，固定回调为 `https://hub.example.com/sso/callback`。上游 secret 只放服务端环境变量。MCPHub 的下游客户端是预注册的公开客户端，管理页面和用户门户不要配置 `client_secret_env`。建议给每个应用分别注册 client ID 和资源范围。上面的管理员客户端只注册了浏览器回调；若需要 `mcphub-cli login --admin`，另注册带 loopback 回调、admin resource 的客户端。
+在上游注册**机密 Web 客户端**，固定回调为 `https://hub.example.com/sso/callback`。上游 secret 只放服务端环境变量。MCPHub 的下游客户端是预注册的公开客户端，管理页面和用户门户不要配置 `client_secret_env`。建议给每个应用分别注册 client ID 和资源范围。上面的管理员客户端只注册了浏览器回调；若需要 `mcpbridge login --admin`，另注册带 loopback 回调、admin resource 的客户端。
 
 OIDC discovery 必须声明 S256；ID Token 校验签名、issuer、客户端 audience、有效期及 nonce。分组声明从经过验证的 ID Token 获取。加强认证只接受该 ID Token 中可验证的 `acr`、`auth_time`，由现有审批策略再次核对。普通 OAuth2 不能提供加强认证证明。
 
@@ -174,7 +174,7 @@ upstream:
 
 ## 客户端与部署边界
 
-员工安装、登录与 Broker 授权统一见[用户手册](user-guide.zh-CN.md)。客户端只启动 `mcphub-cli`，不填写上游 Token 或 client secret。
+员工安装、登录与 Broker 授权统一见[用户手册](user-guide.zh-CN.md)。客户端只启动 `mcpbridge`，不填写上游 Token 或 client secret。
 
 本地 access JWT 有效期 10 分钟；请求 `offline_access` 后可取得轮换 refresh token，SSO 会话最长 8 小时，之后重新登录。上游凭证不长期保存；本地刷新不会重新查询上游账号。已消费 refresh token 被重放时撤销整个会话。签名私钥使用现有配置密钥加密保存在数据库，refresh token 只保存摘要；access JWT 仍需通过数据库中的会话与最新用户权限检查。备份时必须一同保留数据库与匹配的配置加密密钥。
 

@@ -1,6 +1,6 @@
 # 飞书 SSO、Vault 与企业 Agent 接入架构
 
-架构核查日期：2026-09-26；版本说明更新于 2026-10-02，对应 MCPHub v2.2.1。本文面向架构评审、部署人员和安全管理员。员工日常接入见[用户手册](user-guide.zh-CN.md)，部署与维护入口见[管理员手册](admin-guide.zh-CN.md)。
+架构核查日期：2026-09-26；版本说明更新于 2026-10-02，对应 MCPHub v2.2.2。本文面向架构评审、部署人员和安全管理员。员工日常接入见[用户手册](user-guide.zh-CN.md)，部署与维护入口见[管理员手册](admin-guide.zh-CN.md)。
 
 [下载 27 页 PDF](feishu-vault-agent-architecture.zh-CN.pdf) · [配置示例](../deploy/config.feishu-vault.example.yaml) · [文档导航](README.zh-CN.md)。PDF 保留 2026-09-26、v2.1.0 发布前的架构评审快照；当前版本状态以本在线文档为准。
 
@@ -38,7 +38,7 @@ flowchart LR
     subgraph Local[员工电脑]
         C[Codex]
         A[Claude Code]
-        S[mcphub-cli connect / stdio]
+        S[mcpbridge connect / stdio]
         B[本地 Broker / 独立 ClientGrant]
         W[系统浏览器]
         C --> S
@@ -137,7 +137,7 @@ Hub scope（例如 `projects:read`）与上游 OAuth scope（例如 `project.rea
 
 v3 Token 文档声明支持表单编码与 `code_verifier`，与当前 Go OAuth 库的请求形式相符；但授权页的 PKCE 说明仍提示配合 v2 使用。**不能据此宣称整个组合已经兼容。** 正式启用前，必须验证正确 verifier 可换码、缺失/错误 verifier 必须失败、重复 code 必须失败；若组合不满足要求，应向飞书确认支持的成对端点，或接入企业 OIDC 身份桥接服务。不要通过关闭 PKCE 绕过兼容问题。[v3 Token 文档][feishu-token]、[授权页 PKCE 说明][feishu-authorize]
 
-Hub 登录只申请必要的用户身份权限。例子中的 `auth:user.id:read` 须先在应用控制台核对和开通；不为登录申请云文档、消息发送或业务写权限。`auth.sso.upstream.scopes` 是飞书授权范围；`mcphub-cli login --scope` 是 Hub 权限范围。
+Hub 登录只申请必要的用户身份权限。例子中的 `auth:user.id:read` 须先在应用控制台核对和开通；不为登录申请云文档、消息发送或业务写权限。`auth.sso.upstream.scopes` 是飞书授权范围；`mcpbridge login --scope` 是 Hub 权限范围。
 
 ### 4.2 首次登录与组织授权
 
@@ -186,7 +186,7 @@ Hub 登录只申请必要的用户身份权限。例子中的 `auth:user.id:read
 ```mermaid
 sequenceDiagram
     actor U as 员工与浏览器
-    participant L as mcphub-cli
+    participant L as mcpbridge
     participant H as MCPHub SSO
     participant F as 飞书
     participant P as Hub 用户门户
@@ -412,13 +412,13 @@ seal "awskms" {
 ### 10.1 用户的推荐流程
 
 1. 管理员启用本人账号并授予最小 endpoint/工具权限。
-2. 本机安装支持本方案的 `mcphub-cli`，运行向导并在浏览器用飞书登录。
+2. 本机安装支持本方案的 `mcpbridge`，运行向导并在浏览器用飞书登录。
 3. 在个人门户连接该 endpoint 的上游账号。
 4. 分别为 Codex、Claude Code 确认配对码与访问范围，使用生成的真实 client ID 配置 Agent。
 5. 在 Agent 中刷新 MCP 连接，先验证一个只读操作；写操作按审批流程进行。
 
 ```bash
-mcphub-cli setup --profile work \
+mcpbridge setup --profile work \
   --server https://hub.example.com/mcp --client-id mcphub-cli
 ```
 
@@ -427,20 +427,20 @@ mcphub-cli setup --profile work \
 需要精确脚本化时，以下命令分别创建只读入口（先完成 login 和用户授权）：
 
 ```bash
-mcphub-cli login --profile work \
+mcpbridge login --profile work \
   --server https://hub.example.com/mcp --client-id mcphub-cli \
   --scope projects:access --scope projects:read
 
-mcphub-cli client add --profile work --name codex-projects --endpoint projects \
+mcpbridge client add --profile work --name codex-projects --endpoint projects \
   --scope projects:access --scope projects:read \
   --tool get_project --resource /project=project-a --ttl 4h
 
-mcphub-cli client add --profile work --name claude-projects --endpoint projects \
+mcpbridge client add --profile work --name claude-projects --endpoint projects \
   --scope projects:access --scope projects:read \
   --tool get_project --resource /project=project-a --ttl 4h
 ```
 
-下例的 `ci_CODEX_FROM_OUTPUT`、`ci_CLAUDE_FROM_OUTPUT` 必须分别替换成上两条命令返回的真实 ID。`/absolute/path/to/mcphub-cli` 与 `/absolute/path/to/.mcphub` 替换成本机实际路径；不要照抄示例字面值。
+下例的 `ci_CODEX_FROM_OUTPUT`、`ci_CLAUDE_FROM_OUTPUT` 必须分别替换成上两条命令返回的真实 ID。`/absolute/path/to/mcpbridge` 与 `/absolute/path/to/.mcphub` 替换成本机实际路径；不要照抄示例字面值。
 
 ### 10.2 Codex
 
@@ -448,7 +448,7 @@ Codex 支持 stdio MCP，默认在 `~/.codex/config.toml` 配置。使用一个�
 
 ```toml
 [mcp_servers.mcphub_projects]
-command = "/absolute/path/to/mcphub-cli"
+command = "/absolute/path/to/mcpbridge"
 args = ["connect", "--profile", "work", "--client", "ci_CODEX_FROM_OUTPUT"]
 startup_timeout_sec = 30
 tool_timeout_sec = 120
@@ -462,11 +462,11 @@ MCPHUB_HOME = "/absolute/path/to/.mcphub"
 ```bash
 codex mcp add mcphub_projects \
   --env MCPHUB_HOME=/absolute/path/to/.mcphub -- \
-  /absolute/path/to/mcphub-cli connect --profile work --client ci_CODEX_FROM_OUTPUT
+  /absolute/path/to/mcpbridge connect --profile work --client ci_CODEX_FROM_OUTPUT
 codex mcp list
 ```
 
-这里由 `mcphub-cli` 处理 Hub 登录与 Grant，无需再运行 `codex mcp login` 登录同一条 stdio 入口。120 秒是示例工具超时，需要与实际后端超时配套；审批返回待处理状态，不应让工具调用一直阻塞等待人批准。
+这里由 `mcpbridge` 处理 Hub 登录与 Grant，无需再运行 `codex mcp login` 登录同一条 stdio 入口。120 秒是示例工具超时，需要与实际后端超时配套；审批返回待处理状态，不应让工具调用一直阻塞等待人批准。
 
 ### 10.3 Claude Code
 
@@ -475,7 +475,7 @@ codex mcp list
 ```bash
 claude mcp add --transport stdio --scope user mcphub-projects \
   --env MCPHUB_HOME=/absolute/path/to/.mcphub -- \
-  /absolute/path/to/mcphub-cli connect --profile work --client ci_CLAUDE_FROM_OUTPUT
+  /absolute/path/to/mcpbridge connect --profile work --client ci_CLAUDE_FROM_OUTPUT
 
 claude mcp list
 claude mcp get mcphub-projects
@@ -486,11 +486,11 @@ claude mcp get mcphub-projects
 ### 10.4 故障处理与重新授权
 
 ```bash
-mcphub-cli status --profile work
-mcphub-cli client list --profile work
-mcphub-cli doctor --profile work --client ci_CODEX_FROM_OUTPUT
-mcphub-cli client authorize --profile work --client ci_CODEX_FROM_OUTPUT
-mcphub-cli client revoke --profile work --client ci_CODEX_FROM_OUTPUT
+mcpbridge status --profile work
+mcpbridge client list --profile work
+mcpbridge doctor --profile work --client ci_CODEX_FROM_OUTPUT
+mcpbridge client authorize --profile work --client ci_CODEX_FROM_OUTPUT
+mcpbridge client revoke --profile work --client ci_CODEX_FROM_OUTPUT
 ```
 
 Grant 到期不能靠刷新登录 Token 自动延期；需要重新确认。切换上游账号或扩大工具/scope/资源范围后也应重新授权并重建 Agent 连接。
@@ -585,7 +585,7 @@ Hub 诊断不记录 Token、参数和结果正文；审批单为冻结执行需�
 
 上述静态验证不等于真实 SSO/业务联调。未安装或修改真实飞书应用、Vault 策略及 Agent 配置；未向外部服务发送业务凭证。
 
-当前本机 Codex 命令包装器缺少其目标可执行文件，Claude Code 命令未发现，因此本文客户端命令依据官方格式和 `mcphub-cli` 源码核对，尚未在这两款客户端完成本轮运行验证。
+当前本机 Codex 命令包装器缺少其目标可执行文件，Claude Code 命令未发现，因此本文客户端命令依据官方格式和 `mcpbridge` 源码核对，尚未在这两款客户端完成本轮运行验证。
 
 ## 16. 官方参考
 

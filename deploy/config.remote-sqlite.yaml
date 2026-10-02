@@ -3,7 +3,7 @@
 # MCPHUB_ADMIN_PUBLIC_URL, MCPHUB_ADMIN_CLIENT_ID, MCPHUB_CONFIG_KEY.
 # The key is Base64-encoded 32 bytes; retain the same key across restarts/upgrades.
 # See deploy/README.md / deploy/README.zh-CN.md for registration and proxy setup.
-# This example does not enable the user portal; mcphub-cli setup needs
+# This example does not enable the user portal; mcpbridge setup needs
 # client_authorization configured as shown in the administrator manual.
 
 server:

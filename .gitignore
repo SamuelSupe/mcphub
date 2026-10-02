@@ -1,6 +1,8 @@
 /mcphub
 /mcphub-cli
 /mcphub-cli.exe
+/mcpbridge
+/mcpbridge.exe
 /coverage.out
 /config.yaml
 /dist/

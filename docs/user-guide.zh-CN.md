@@ -2,7 +2,7 @@
 
 [English](user-guide.md) · [文档导航](README.zh-CN.md) · [项目首页](../README.zh-CN.md)
 
-面向在 Codex、Claude Code 或其他 MCP 客户端中使用公司工具的用户。本手册对应 v2.2.1。只需在自己的电脑安装 `mcphub-cli`；服务器、身份服务和 Vault 由管理员配置。
+面向在 Codex、Claude Code 或其他 MCP 客户端中使用公司工具的用户。本手册对应 v2.2.2。只需在自己的电脑安装 `mcpbridge`；服务器、身份服务和 Vault 由管理员配置。
 
 首次接入按 **安装 CLI → 运行接入向导 → 确认授权 → 将配置加入客户端** 完成。服务要求个人上游账号时，先在门户连接账号，再完成连接检查。
 
@@ -25,64 +25,67 @@
 
 ## 安装 CLI
 
-从 [v2.2.1 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1) 选择与电脑匹配的 CLI 包：
+从 v2.2.2 起，客户端由 `mcphub-cli` 改名为 `mcpbridge`。升级前退出 Agent；旧 Broker 可用 `mcphub-cli broker stop` 停止。将新程序安装为 `mcpbridge`（Windows 为 `mcpbridge.exe`），把已有 Agent 配置的 `command` 更新为新程序的实际路径，或执行 `mcpbridge setup --profile work` 重新生成配置。保留 `~/.mcphub/` / `MCPHUB_HOME`、已有 profile 和注册的 OAuth Client ID；例如 `--client-id mcphub-cli` 是身份服务中的注册 ID，不是程序文件名，无需随改名调整。
+
+从 [v2.2.2 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2) 选择与电脑匹配的 CLI 包：
 
 | 平台 | CLI 下载 |
 | --- | --- |
-| macOS Intel | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_darwin_amd64.tar.gz) |
-| macOS Apple Silicon | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_darwin_arm64.tar.gz) |
-| Linux amd64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_linux_amd64.tar.gz) |
-| Linux arm64 | [mcphub-cli](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_linux_arm64.tar.gz) |
-| Windows x64 | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_windows_amd64.zip) |
-| Windows ARM64 | [mcphub-cli.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_windows_arm64.zip) |
+| macOS Intel | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_darwin_amd64.tar.gz) |
+| macOS Apple Silicon | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_darwin_arm64.tar.gz) |
+| Linux amd64 | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_linux_amd64.tar.gz) |
+| Linux arm64 | [mcpbridge](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_linux_arm64.tar.gz) |
+| Windows x64 | [mcpbridge.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_windows_amd64.zip) |
+| Windows ARM64 | [mcpbridge.exe（ZIP）](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_windows_arm64.zip) |
 
-下载后与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/SHA256SUMS) 核对 SHA-256，解压并将可执行文件放入 PATH。Windows 需要 10 或更新版本；Intel/AMD 电脑选 x64，Windows on Arm 选 ARM64。
+下载后与 [SHA256SUMS](https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/SHA256SUMS) 核对 SHA-256，解压并将可执行文件放入 PATH。Windows 需要 10 或更新版本；Intel/AMD 电脑选 x64，Windows on Arm 选 ARM64。
 
 macOS/Linux 安装示例（以下为 Linux arm64，替换文件名；macOS 用 `shasum -a 256` 校验）：
 
 ```bash
-sha256sum mcphub-cli_v2.2.1_linux_arm64.tar.gz
+sha256sum mcpbridge_v2.2.2_linux_arm64.tar.gz
 # 与 SHA256SUMS 中同名条目逐字核对，一致后再解压。
-mkdir -p mcphub-cli-release "$HOME/.local/bin"
-tar -xzf mcphub-cli_v2.2.1_linux_arm64.tar.gz -C mcphub-cli-release
-install -m 755 mcphub-cli-release/mcphub-cli "$HOME/.local/bin/mcphub-cli"
+mkdir -p mcpbridge-release "$HOME/.local/bin"
+tar -xzf mcpbridge_v2.2.2_linux_arm64.tar.gz -C mcpbridge-release
+install -m 755 mcpbridge-release/mcpbridge "$HOME/.local/bin/mcpbridge"
 export PATH="$HOME/.local/bin:$PATH"
-mcphub-cli setup --help
+mcpbridge --version
+mcpbridge setup --help
 ```
 
-此 PATH 设置用于当前终端。后续可使用 `"$HOME/.local/bin/mcphub-cli"`，或将该目录加入 shell 的 PATH；图形客户端继续使用向导生成的绝对路径。
+此 PATH 设置用于当前终端。后续可使用 `"$HOME/.local/bin/mcpbridge"`，或将该目录加入 shell 的 PATH；图形客户端继续使用向导生成的绝对路径。
 
 Windows PowerShell 示例（文件名按实际架构替换）：
 
 ```powershell
-Get-FileHash .\mcphub-cli_v2.2.1_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcphub-cli_v2.2.1_windows_amd64.zip -DestinationPath .\mcphub-cli
+Get-FileHash .\mcpbridge_v2.2.2_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcpbridge_v2.2.2_windows_amd64.zip -DestinationPath .\mcpbridge
 ```
 
-未添加 PATH 时，将后续命令中的 `mcphub-cli` 替换为 `.\mcphub-cli\mcphub-cli.exe`。
+未添加 PATH 时，将后续命令中的 `mcpbridge` 替换为 `.\mcpbridge\mcpbridge.exe`。
 
 已安装 Go 1.26 的用户也可执行：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.2.1
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.2.2
 ```
 
-Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`，也需要加入 PATH。源码构建的文件需用 `./mcphub-cli` 运行，或按上面的 `install` 步骤安装。
+Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`，也需要加入 PATH。源码构建的文件需用 `./mcpbridge` 运行，或按上面的 `install` 步骤安装。
 
-从源码构建可用 `go build -trimpath -o ./mcphub-cli ./cmd/mcphub-cli`。安装后确保 MCP 客户端可以找到可执行文件；向导生成的配置使用实际绝对路径。
+从源码构建可用 `go build -trimpath -o ./mcpbridge ./cmd/mcpbridge`。安装后确保 MCP 客户端可以找到可执行文件；向导生成的配置使用实际绝对路径。
 
 ## 接入 MCP 客户端
 
 在安装 CLI 的同一台电脑运行：
 
 ```bash
-mcphub-cli setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work > mcphub-mcp.json
+mcpbridge setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work > mcphub-mcp.json
 ```
 
 已有 `work` 登录配置时，改用：
 
 ```bash
-mcphub-cli setup --profile work > mcphub-mcp.json
+mcpbridge setup --profile work > mcphub-mcp.json
 ```
 
 按向导完成以下步骤：
@@ -101,20 +104,20 @@ mcphub-cli setup --profile work > mcphub-mcp.json
 {
   "mcpServers": {
     "work-projects": {
-      "command": "/absolute/path/to/mcphub-cli",
+      "command": "/absolute/path/to/mcpbridge",
       "args": ["connect", "--profile", "work", "--client", "ci_example"]
     }
   }
 }
 ```
 
-保留向导实际生成的路径、客户端 ID，以及存在时的 `env.MCPHUB_HOME`。Windows JSON 路径需转义反斜杠，例如 `C:\\Tools\\mcphub-cli\\mcphub-cli.exe`。使用要求其他配置格式的客户端时，按其格式填写相同的 command、args 和环境变量。
+保留向导实际生成的路径、客户端 ID，以及存在时的 `env.MCPHUB_HOME`。Windows JSON 路径需转义反斜杠，例如 `C:\\Tools\\mcpbridge\\mcpbridge.exe`。使用要求其他配置格式的客户端时，按其格式填写相同的 command、args 和环境变量。
 
-重新加载客户端的 MCP 连接后，应能看到已授权的工具。可再运行 `mcphub-cli doctor --profile work --client ci_example` 检查连接。登录可续期与客户端授权是否到期是两件事。
+重新加载客户端的 MCP 连接后，应能看到已授权的工具。可再运行 `mcpbridge doctor --profile work --client ci_example` 检查连接。登录可续期与客户端授权是否到期是两件事。
 
 ## 连接个人账号
 
-1. 使用接入向导或 `mcphub-cli login` 登录 MCPHub。
+1. 使用接入向导或 `mcpbridge login` 登录 MCPHub。
 2. 打开 `https://hub.example.com/client-auth/`，在「已连接账号」点击目标服务的「连接账号」。支持浏览器授权的服务会打开上游登录页；其他服务只需填写个人 Token。
 3. 返回客户端继续调用。客户端配置、Broker 和 Agent 都不需要上游 Token，也不需要 Vault 路径。
 
@@ -139,7 +142,7 @@ mcphub-cli setup --profile work > mcphub-mcp.json
 需要明确指定工具和资源时，可手动操作：
 
 ```bash
-mcphub-cli client add --profile work --name editor-read --endpoint database-prod \
+mcpbridge client add --profile work --name editor-read --endpoint database-prod \
   --scope mcp:database --scope db:read --tool query --resource /project=project-a
 ```
 
@@ -147,12 +150,12 @@ mcphub-cli client add --profile work --name editor-read --endpoint database-prod
 
 | 操作 | 命令与效果 |
 | --- | --- |
-| 查看授权 | `mcphub-cli client list --profile work` |
-| 重新授权或续期 | `mcphub-cli client authorize --profile work --client ci_example`，重新浏览器确认后重启 MCP 连接 |
-| 调整资源范围 | `mcphub-cli client authorize --profile work --client ci_example --resource /project=project-b`，替换原资源列表并重新确认 |
-| 撤销一个授权 | `mcphub-cli client revoke --profile work --client ci_example`，阻止该授权的后续调用 |
-| 查看 Broker | `mcphub-cli broker status` |
-| 停止 Broker | `mcphub-cli broker stop`，停止本地连接，远端授权仍保留 |
+| 查看授权 | `mcpbridge client list --profile work` |
+| 重新授权或续期 | `mcpbridge client authorize --profile work --client ci_example`，重新浏览器确认后重启 MCP 连接 |
+| 调整资源范围 | `mcpbridge client authorize --profile work --client ci_example --resource /project=project-b`，替换原资源列表并重新确认 |
+| 撤销一个授权 | `mcpbridge client revoke --profile work --client ci_example`，阻止该授权的后续调用 |
+| 查看 Broker | `mcpbridge broker status` |
+| 停止 Broker | `mcpbridge broker stop`，停止本地连接，远端授权仍保留 |
 
 `client add` 输出完整 MCP 配置，参数包含 `connect --profile work --client ci_...`，无需 Token。一个入口对应一个 endpoint，多个 endpoint 使用多个入口。`connect` 按需启动共享 Broker，`broker run` 可前台诊断。可用 `MCPHUB_HOME` 指定其他私有目录，相关进程应保持一致。Broker 日志写入该目录的 `broker.log`；stdio 只传输 MCP 消息。
 
@@ -167,9 +170,9 @@ mcphub-cli client add --profile work --name editor-read --endpoint database-prod
 在用户电脑上，可针对 MCP 配置中实际使用的 profile 和客户端入口排障：
 
 ```bash
-mcphub-cli doctor --profile work
-mcphub-cli doctor --profile work --client ci_example
-mcphub-cli doctor --profile work --client ci_example --json --timeout 30s
+mcpbridge doctor --profile work
+mcpbridge doctor --profile work --client ci_example
+mcpbridge doctor --profile work --client ci_example --json --timeout 30s
 ```
 
 `doctor` 检查私有凭证目录、登录及续期、客户端配对、在线 Grant 状态与有效 Scope，再完成 MCP 初始化并读取工具目录第一页。Broker 已运行时通过 Broker 检查；未运行时给出提示，使用同一客户端凭证直接检查远端连接。该命令可能刷新 Token，但不会打开登录窗口、启动 Broker、创建授权或执行工具。报告不包含 Token 或 IPC 凭证，提供下一步操作；阻塞性失败退出码为 `1`，成功或仅警告为 `0`。默认超时 15 秒，可调整为 1 秒至 2 分钟。
@@ -182,10 +185,10 @@ mcphub-cli doctor --profile work --client ci_example --json --timeout 30s
 | --- | --- |
 | 首次登录提示待授权 | 联系管理员启用用户并配置服务、Scope 和工具权限 |
 | 向导没有可选工具或返回 403 | 确认登录身份与服务选择；请管理员检查发布状态和权限，不要自行扩大 Scope |
-| 授权到期、撤销或范围变化 | `mcphub-cli client authorize --profile work --client ci_example`，浏览器确认后重启 MCP 连接 |
+| 授权到期、撤销或范围变化 | `mcpbridge client authorize --profile work --client ci_example`，浏览器确认后重启 MCP 连接 |
 | 个人账号未连接、过期或需重连 | 到门户连接/重连账号；更换或断开账号后重新授权客户端 |
 | 未自动打开浏览器 | 在同一台电脑打开终端给出的 URL；核对管理员要求的回调端口 |
-| 401、登录过期且无法刷新 | 重新 `mcphub-cli login --profile work`，随后重启 MCP 连接 |
+| 401、登录过期且无法刷新 | 重新 `mcpbridge login --profile work`，随后重启 MCP 连接 |
 | 返回 429 | 等待服务额度恢复；不要自动重放写请求 |
 | 服务不可用或持续 503 | 保存诊断报告与请求 ID，交给管理员排查网关、身份服务和后端 |
 
@@ -196,8 +199,8 @@ mcphub-cli doctor --profile work --client ci_example --json --timeout 30s
 需要单独登录或续期时：
 
 ```bash
-mcphub-cli login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
-mcphub-cli status --profile work
+mcpbridge login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+mcpbridge status --profile work
 ```
 
 `login` 打开系统浏览器，最多等待 5 分钟接收本机回调。打开失败时，会打印可在同一台电脑浏览器中访问的授权链接。它校验 state/issuer，并完成一次已认证的 MCP 握手，成功后才替换原有凭证；失败或取消会保留原有登录。重复传入 `--scope` 可指定申请的权限，未指定时使用认证 challenge 或资源 metadata 的默认值；身份服务声明支持时会追加 `offline_access`。若未签发 refresh token，仍可登录，但会明确提示到期后需要重新登录。
@@ -208,7 +211,7 @@ mcphub-cli status --profile work
 {
   "mcpServers": {
     "mcphub": {
-      "command": "/absolute/path/to/mcphub-cli",
+      "command": "/absolute/path/to/mcpbridge",
       "args": ["connect", "--profile", "work"]
     }
   }
@@ -222,12 +225,12 @@ mcphub-cli status --profile work
 ## 本地数据与退出
 
 ```bash
-mcphub-cli status --profile work
-mcphub-cli logout --profile work
+mcpbridge status --profile work
+mcpbridge logout --profile work
 ```
 
 退出登录、停止 Broker、撤销客户端授权、断开个人账号是不同操作：停止 Broker 只停止本地连接；撤销客户端授权限制该客户端；断开个人账号影响该服务的上游凭证。个人账号请在门户断开，必要时还需在上游服务撤销授权。
 
-默认 profile 为 `default`。macOS/Linux 数据保存在 `~/.mcphub/`，目录权限 `0700`、文件权限 `0600`；Windows 保存在 `%USERPROFILE%\.mcphub\`，通过仅授权当前用户的 DACL 保护。Windows 凭证目录需位于支持 Windows 访问控制的本地文件系统（如 NTFS）。已有 profile 可直接由 `mcphub-cli` 使用，无需迁移。Token 以本地 JSON 保存，**不做加密**；不要放入共享目录或其他用户可读取的备份。临时文件替换与按 profile 的进程间锁保证多个连接器能够安全轮换 refresh token。
+默认 profile 为 `default`。macOS/Linux 数据保存在 `~/.mcphub/`，目录权限 `0700`、文件权限 `0600`；Windows 保存在 `%USERPROFILE%\.mcphub\`，通过仅授权当前用户的 DACL 保护。Windows 凭证目录需位于支持 Windows 访问控制的本地文件系统（如 NTFS）。已有 profile 可直接由 `mcpbridge` 使用，无需迁移。Token 以本地 JSON 保存，**不做加密**；不要放入共享目录或其他用户可读取的备份。临时文件替换与按 profile 的进程间锁保证多个连接器能够安全轮换 refresh token。
 
 无 Broker 的 profile 中，`status` 显示本地缓存状态、到期时间和能否续期，不输出 Token。`logout` 清除本地 Token、保留非敏感连接设置，使连接器后续请求停止并要求登录；已经接受的请求可能继续完成。它不会吊销身份服务中的 Token 或退出浏览器会话。重新登录后，需要重启该 profile 的已有连接器。

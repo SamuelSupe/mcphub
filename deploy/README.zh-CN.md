@@ -2,9 +2,9 @@
 
 [English](README.md) · [管理员手册](../docs/admin-guide.zh-CN.md) · [文档导航](../docs/README.zh-CN.md)
 
-本目录对应 MCPHub v2.2.1 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
+本目录对应 MCPHub v2.2.2 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
 
-v2.2.1 统一包内模板与安装文档，沿用 v2.2.0 的 schema 9；更早的 SQLite / PostgreSQL 数据库在启动时迁移。部署仍限单实例；替换旧版前请按[升级与回滚流程](../RELEASE_NOTES_v2.2.1.md)备份并检查兼容性。Vault 共享与个人上游账号继续可用。参见 [Vault 配置](../docs/vault-accounts.zh-CN.md)、[SSO 部署与组织同步](../docs/sso-and-user-management.zh-CN.md)，以及[企业接入架构与最佳实践](../docs/feishu-vault-agent-architecture.zh-CN.md)和 [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf)。
+v2.2.2 将本地客户端改名为 MCPBridge，服务端包内模板与安装文档保持一致，沿用 v2.2.0 的 schema 9；更早的 SQLite / PostgreSQL 数据库在启动时迁移。部署仍限单实例；替换旧版前请按[升级与回滚流程](../RELEASE_NOTES_v2.2.2.md)备份并检查兼容性。Vault 共享与个人上游账号继续可用。参见 [Vault 配置](../docs/vault-accounts.zh-CN.md)、[SSO 部署与组织同步](../docs/sso-and-user-management.zh-CN.md)，以及[企业接入架构与最佳实践](../docs/feishu-vault-agent-architecture.zh-CN.md)和 [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf)。
 
 已完成的 MCP POST 请求默认保留 30 天；可将 `admin.request_retention` 设置为 `24h`–`8760h`。管理员请求诊断页支持时间筛选和 NDJSON 导出，详见[请求历史与隐私边界](../docs/admin-guide.zh-CN.md#授权与请求诊断)。请保护数据库备份和导出文件：记录不含参数、结果和 Token，但查询索引仍含可读的身份与路由元数据。
 
@@ -15,7 +15,7 @@ v2.2.1 统一包内模板与安装文档，沿用 v2.2.0 的 schema 9；更早�
 | 远程管理 + PostgreSQL | 企业单实例部署，数据库独立运维 | [config.remote-postgres.yaml](config.remote-postgres.yaml)、[Compose](compose.postgres.yaml) |
 | 飞书 SSO + Vault + 个人 MCP 账号 | 联调起点，须完成真实租户验收 | [配置示例](config.feishu-vault.example.yaml) |
 
-v2.2.1 服务端包已包含这些模板，下载链接提供完全相同的文件。只运行二进制时，把选中的 YAML 保存为 `config.yaml`，后续使用 `--config config.yaml`，不要求完整源码。下面的 `deploy/...` 路径以完整仓库根目录为工作目录。
+v2.2.2 服务端包已包含这些模板，下载链接提供完全相同的文件。只运行二进制时，把选中的 YAML 保存为 `config.yaml`，后续使用 `--config config.yaml`，不要求完整源码。下面的 `deploy/...` 路径以完整仓库根目录为工作目录。
 
 ## 身份服务配置
 
@@ -31,7 +31,7 @@ v2.2.1 服务端包已包含这些模板，下载链接提供完全相同的文�
 
 ## 环境变量清单
 
-先选一个示例，不需要把所有集成都配置一遍。远程 SQLite/PostgreSQL 示例仅打开管理控制台；员工的 `mcphub-cli setup` 还需要按[管理员手册](../docs/admin-guide.zh-CN.md#启用客户端授权)启用 `client_authorization` 并注册门户/CLI 客户端。下表对应两个 `config.remote-*` 模板及其 Compose；飞书综合示例的所需变量见[文件头部](config.feishu-vault.example.yaml)。
+先选一个示例，不需要把所有集成都配置一遍。远程 SQLite/PostgreSQL 示例仅打开管理控制台；员工的 `mcpbridge setup` 还需要按[管理员手册](../docs/admin-guide.zh-CN.md#启用客户端授权)启用 `client_authorization` 并注册门户/CLI 客户端。下表对应两个 `config.remote-*` 模板及其 Compose；飞书综合示例的所需变量见[文件头部](config.feishu-vault.example.yaml)。
 
 | 适用范围 | 变量 | 填写内容 |
 | --- | --- | --- |
@@ -129,12 +129,12 @@ Compose 将数据保留在 `postgres-data` 卷中，不发布数据库端口，�
 CLI 使用独立管理员 profile，避免覆盖 MCP 客户端凭证：
 
 ```bash
-mcphub-cli login --admin --server https://admin.example.com \
+mcpbridge login --admin --server https://admin.example.com \
   --client-id mcphub-admin-cli --profile ops --callback-port 8400
-mcphub-cli admin --profile ops get /overview
-mcphub-cli admin --profile ops get /backends
-mcphub-cli admin --profile ops get /tool-groups
-mcphub-cli admin --profile ops get '/events?limit=50'
+mcpbridge admin --profile ops get /overview
+mcpbridge admin --profile ops get /backends
+mcpbridge admin --profile ops get /tool-groups
+mcpbridge admin --profile ops get '/events?limit=50'
 ```
 
 `admin` 是管理 API 的 JSON 客户端，路径相对于 `/api/v1`，支持 `get/post/put/delete`，全部 flags 放在方法之前；后端、HTTP tools、导入/刷新均使用[配置参考中的 API 路径](../docs/configuration.zh-CN.md#工具组与托管-http-api-tool)。JSON body 使用 `--file FILE`（`-` 表示 stdin）；输出 JSON 到 stdout，ETag 到 stderr，不导出 Token。请求上限 6 MiB，与 OpenAPI 上传一致。
@@ -146,13 +146,13 @@ mcphub-cli admin --profile ops get '/events?limit=50'
 ```
 
 ```bash
-mcphub-cli admin --profile ops --file backend.json post /backends
-mcphub-cli admin --profile ops get /backends/crm
+mcpbridge admin --profile ops --file backend.json post /backends
+mcpbridge admin --profile ops get /backends/crm
 # 把 backend.json 的 enabled 改为 true，使用刚读取的 ETag（此处仅示例）
-mcphub-cli admin --profile ops --file backend.json --if-match '"1"' put /backends/crm
-mcphub-cli admin --profile ops post /backends/crm/probe
-mcphub-cli status --profile ops
-mcphub-cli logout --profile ops
+mcpbridge admin --profile ops --file backend.json --if-match '"1"' put /backends/crm
+mcpbridge admin --profile ops post /backends/crm/probe
+mcpbridge status --profile ops
+mcpbridge logout --profile ops
 ```
 
 PUT 使用完整输入对象；保留 Header 时提供名称并省略 `value`，保留 OAuth secret 时省略 `client_secret`。不要直接将包含 runtime/revision/脱敏标记的 GET 响应作为 PUT 输入。失效 ETag 返回 409，不覆盖他人的变更。网络失败不重放写入；401 最多刷新并重试一次。普通 MCP 客户端使用独立用户 profile；按[用户手册](../docs/user-guide.zh-CN.md)生成配置，不能使用管理员 profile。

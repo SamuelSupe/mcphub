@@ -15,7 +15,7 @@ import (
 )
 
 func runDoctor(args []string) error {
-	flags := flag.NewFlagSet("mcphub-cli doctor", flag.ContinueOnError)
+	flags := flag.NewFlagSet("mcpbridge doctor", flag.ContinueOnError)
 	profile := flags.String("profile", "default", "MCP credential profile")
 	id := flags.String("client", "", "paired client instance to diagnose")
 	jsonOutput := flags.Bool("json", false, "output a structured report without credentials")

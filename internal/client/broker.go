@@ -309,15 +309,15 @@ func RunBroker(ctx context.Context, store *Store, base *http.Client) error {
 				var found bool
 				bound, found = p.Broker.Clients[message.Client]
 				if !found || subtle.ConstantTimeCompare([]byte(configstore.SecretHash(message.Secret)), []byte(bound.IPCHash)) != 1 {
-					return errors.New("client pairing required; run mcphub-cli client authorize")
+					return errors.New("client pairing required; run mcpbridge client authorize")
 				}
 				if !time.Now().Before(bound.Grant.ExpiresAt) {
-					return errors.New("client authorization expired; run mcphub-cli client authorize")
+					return errors.New("client authorization expired; run mcpbridge client authorize")
 				}
 				return nil
 			})
 			if err != nil {
-				reply(brokerReply{Error: "client authorization unavailable; run mcphub-cli client authorize or login"})
+				reply(brokerReply{Error: "client authorization unavailable; run mcpbridge client authorize or login"})
 				return
 			}
 			mu.Lock()

@@ -22,7 +22,7 @@ Use Go 1.26. The repository's module declares `go 1.26.0`.
 go version
 go mod download
 go build ./cmd/mcphub
-go build ./cmd/mcphub-cli
+go build ./cmd/mcpbridge
 ```
 
 For configuration-driven work, copy `config.example.yaml`, set the required environment variables, and run:
@@ -87,7 +87,7 @@ Use placeholders only in fields that [support environment expansion](docs/config
 go version
 go mod download
 go build ./cmd/mcphub
-go build ./cmd/mcphub-cli
+go build ./cmd/mcpbridge
 ```
 
 涉及配置时，复制 `config.example.yaml`，设置所需环境变量，然后运行：

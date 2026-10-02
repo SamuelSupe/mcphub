@@ -200,7 +200,7 @@ func (s *Store) localClient(name, id string) (localClient, error) {
 	}
 	f, err := privateFile(filepath.Join(s.Dir, "client-"+id+".json"), os.O_RDONLY)
 	if err != nil {
-		return localClient{}, errors.New("client entry not found; run mcphub-cli client add")
+		return localClient{}, errors.New("client entry not found; run mcpbridge client add")
 	}
 	defer f.Close()
 	var entry localClient

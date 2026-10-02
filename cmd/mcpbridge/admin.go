@@ -15,12 +15,12 @@ import (
 )
 
 func runAdmin(args []string) error {
-	flags := flag.NewFlagSet("mcphub-cli admin", flag.ContinueOnError)
+	flags := flag.NewFlagSet("mcpbridge admin", flag.ContinueOnError)
 	profile := flags.String("profile", "default", "administrator credential profile")
 	file := flags.String("file", "", "JSON request file; - reads stdin")
 	etag := flags.String("if-match", "", "ETag from the current resource, including quotes")
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: mcphub-cli admin [flags] <get|post|put|delete> /API-PATH\nExamples: get /overview; get /backends; get /tool-groups; get /events")
+		fmt.Fprintln(flags.Output(), "Usage: mcpbridge admin [flags] <get|post|put|delete> /API-PATH\nExamples: get /overview; get /backends; get /tool-groups; get /events")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {

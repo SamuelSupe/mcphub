@@ -1,37 +1,39 @@
+<p><strong>客户端现名为 MCPBridge。</strong> 从 v2.2.2 起，用户安装 <code>mcpbridge</code> 连接 Agent；管理员按<a href="admin/install.html">服务端指南</a>安装 <code>mcphub</code>。<code>serve</code>、<code>validate</code> 只属于服务端程序。</p>
 <h2 id="choose">选择正确的下载包</h2>
-<p>最终用户需要安装 <strong>mcphub-cli</strong>。版本为 v2.2.1 的下载文件如下；服务器程序由管理员安装。</p>
+<p>最终用户需要安装 <strong>mcpbridge</strong>。版本为 v2.2.2 的下载文件如下；服务器程序由管理员安装。</p>
 <table><thead><tr><th>电脑类型</th><th>下载</th></tr></thead><tbody>
-<tr><td>macOS · Apple Silicon（M 系列）</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_darwin_arm64.tar.gz">darwin_arm64.tar.gz</a></td></tr>
-<tr><td>macOS · Intel</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_darwin_amd64.tar.gz">darwin_amd64.tar.gz</a></td></tr>
-<tr><td>Linux · Intel / AMD 64 位</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_linux_amd64.tar.gz">linux_amd64.tar.gz</a></td></tr>
-<tr><td>Linux · ARM64</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_linux_arm64.tar.gz">linux_arm64.tar.gz</a></td></tr>
-<tr><td>Windows 10+ · Intel / AMD x64</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_windows_amd64.zip">windows_amd64.zip</a></td></tr>
-<tr><td>Windows 10+ · ARM64</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/mcphub-cli_v2.2.1_windows_arm64.zip">windows_arm64.zip</a></td></tr>
+<tr><td>macOS · Apple Silicon（M 系列）</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_darwin_arm64.tar.gz">darwin_arm64.tar.gz</a></td></tr>
+<tr><td>macOS · Intel</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_darwin_amd64.tar.gz">darwin_amd64.tar.gz</a></td></tr>
+<tr><td>Linux · Intel / AMD 64 位</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_linux_amd64.tar.gz">linux_amd64.tar.gz</a></td></tr>
+<tr><td>Linux · ARM64</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_linux_arm64.tar.gz">linux_arm64.tar.gz</a></td></tr>
+<tr><td>Windows 10+ · Intel / AMD x64</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_windows_amd64.zip">windows_amd64.zip</a></td></tr>
+<tr><td>Windows 10+ · ARM64</td><td><a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/mcpbridge_v2.2.2_windows_arm64.zip">windows_arm64.zip</a></td></tr>
 </tbody></table>
 <p>macOS 在「关于本机」查看芯片；Windows 在「设置 → 系统 → 关于」查看系统类型；Linux 使用 <code>uname -m</code>。<code>x86_64</code> 对应 amd64，<code>aarch64</code> 对应 arm64。</p>
 <h2 id="verify">核对下载文件</h2>
-<p>下载同版本的 <a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.1/SHA256SUMS">SHA256SUMS</a>。计算下载包的 SHA-256，和文件中同名条目的值逐字核对，一致后再解压。下列命令的文件名需按架构替换。</p>
+<p>下载同版本的 <a href="https://github.com/SamuelSupe/mcphub/releases/download/v2.2.2/SHA256SUMS">SHA256SUMS</a>。计算下载包的 SHA-256，和文件中同名条目的值逐字核对，一致后再解压。下列命令的文件名需按架构替换。</p>
 <h3>macOS Apple Silicon</h3>
-<pre><code>shasum -a 256 mcphub-cli_v2.2.1_darwin_arm64.tar.gz
-tar -xzf mcphub-cli_v2.2.1_darwin_arm64.tar.gz</code></pre>
+<pre><code>shasum -a 256 mcpbridge_v2.2.2_darwin_arm64.tar.gz
+tar -xzf mcpbridge_v2.2.2_darwin_arm64.tar.gz</code></pre>
 <h3>Linux amd64</h3>
-<pre><code>sha256sum mcphub-cli_v2.2.1_linux_amd64.tar.gz
-tar -xzf mcphub-cli_v2.2.1_linux_amd64.tar.gz</code></pre>
+<pre><code>sha256sum mcpbridge_v2.2.2_linux_amd64.tar.gz
+tar -xzf mcpbridge_v2.2.2_linux_amd64.tar.gz</code></pre>
 <h3>Windows PowerShell x64</h3>
-<pre><code>Get-FileHash .\mcphub-cli_v2.2.1_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcphub-cli_v2.2.1_windows_amd64.zip -DestinationPath .\mcphub-cli</code></pre>
+<pre><code>Get-FileHash .\mcpbridge_v2.2.2_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcpbridge_v2.2.2_windows_amd64.zip -DestinationPath .\mcpbridge</code></pre>
 <h2 id="run">让电脑和客户端找到连接器</h2>
-<p>将可执行文件放在固定的私有工具目录并加入 PATH，也可始终使用绝对路径。macOS/Linux 文件名为 <code>mcphub-cli</code>，Windows 为 <code>mcphub-cli.exe</code>。</p>
+<p>将可执行文件放在固定的私有工具目录并加入 PATH，也可始终使用绝对路径。macOS/Linux 文件名为 <code>mcpbridge</code>，Windows 为 <code>mcpbridge.exe</code>。</p>
 <p>macOS/Linux 在上一步解压后执行：</p>
 <pre><code>mkdir -p "$HOME/.local/bin"
-install -m 755 ./mcphub-cli "$HOME/.local/bin/mcphub-cli"
+install -m 755 ./mcpbridge "$HOME/.local/bin/mcpbridge"
 export PATH="$HOME/.local/bin:$PATH"
-mcphub-cli setup --help</code></pre>
-<p>此 PATH 设置用于当前终端；后续可运行 <code>"$HOME/.local/bin/mcphub-cli"</code>，或将该目录加入 shell 的 PATH。Go 安装路径是 <code>go env GOBIN</code>，为空时是 <code>$(go env GOPATH)/bin</code>，也需加入 PATH。</p>
-<p>看到接入参数说明，表示当前终端可以运行连接器。未添加 PATH 的 Windows 用户可运行 <code>.\mcphub-cli\mcphub-cli.exe setup --help</code>。图形客户端的 PATH 可能不同，因此保留向导生成的绝对路径最稳妥。系统阻止执行时，把具体提示交给 IT 或管理员处理。</p>
+mcpbridge --version
+mcpbridge setup --help</code></pre>
+<p>此 PATH 设置用于当前终端；后续可运行 <code>"$HOME/.local/bin/mcpbridge"</code>，或将该目录加入 shell 的 PATH。Go 安装路径是 <code>go env GOBIN</code>，为空时是 <code>$(go env GOPATH)/bin</code>，也需加入 PATH。</p>
+<p><code>mcpbridge --version</code> 应显示 <code>mcpbridge 2.2.2 (client)</code>。看到接入参数说明，表示当前终端可以运行连接器。未添加 PATH 的 Windows 用户可运行 <code>.\mcpbridge\mcpbridge.exe setup --help</code>。图形客户端的 PATH 可能不同，因此保留向导生成的绝对路径最稳妥。系统阻止执行时，把具体提示交给 IT 或管理员处理。</p>
 <h2 id="upgrade">升级已有连接器</h2>
-<ol><li>下载管理员推荐的版本，核对校验值。</li><li>退出使用连接器的客户端；Broker 正在运行时，可执行 <code>mcphub-cli broker stop</code>。</li><li>替换原路径的可执行文件。保留本机 <code>.mcphub</code> 目录，已有 profile 无需迁移。</li><li>重新启动客户端，运行 doctor 检查实际入口。文件位置改变时，更新配置中的 command。</li></ol>
+<ol><li>下载 MCPBridge 客户端包并核对校验和。</li><li>退出 Agent，使用 <code>mcphub-cli broker stop</code> 停止旧 Broker。</li><li>将新程序安装为 <code>mcpbridge</code>（Windows 为 <code>mcpbridge.exe</code>）。保留 <code>~/.mcphub</code> / <code>MCPHUB_HOME</code>、已有 profile 和 OAuth Client ID。</li><li>将 Agent 的 command 更新为新程序绝对路径，或用 <code>mcpbridge setup --profile work</code> 重新生成配置。重启 Agent 并运行 doctor。</li></ol>
 <p>停止 Broker 保留远端授权；升级不会自动延长已到期的授权。</p>
 <h2 id="compatibility">版本兼容范围</h2>
 <table><thead><tr><th>能力</th><th>所需服务版本</th></tr></thead><tbody><tr><td>基础 login / connect</td><td>可接入 v1.x。</td></tr><tr><td>客户端授权、Broker、接入向导</td><td>v2.0.0 或更新；向导还要求服务提供目录发现能力。</td></tr><tr><td>个人服务账号</td><td>v2.1.0 或更新。</td></tr><tr><td>个人账号就绪诊断</td><td>v2.2.0 或更新；旧服务可能只显示无法检查的警告。</td></tr></tbody></table>
-<p>发布文件及版本说明见 <a href="https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.1" target="_blank" rel="noopener">v2.2.1 Release</a>。已安装 Go 1.26 的用户可执行 <code>go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub-cli@v2.2.1</code>。</p>
+<p>发布文件及版本说明见 <a href="https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2" target="_blank" rel="noopener">v2.2.2 Release</a>。已安装 Go 1.26 的用户可执行 <code>go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.2.2</code>。</p>

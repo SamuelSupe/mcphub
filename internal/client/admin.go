@@ -80,7 +80,7 @@ func AdminRequest(ctx context.Context, store *Store, name string, opts AdminRequ
 		return err
 	}
 	if bound.kind != "admin" {
-		return errors.New("use a separate administrator profile: mcphub-cli login --admin --server https://admin.example.com --client-id CLIENT --profile PROFILE")
+		return errors.New("use a separate administrator profile: mcpbridge login --admin --server https://admin.example.com --client-id CLIENT --profile PROFILE")
 	}
 	c := httpClient(opts.HTTPClient, 2*time.Minute)
 	base := c.Transport

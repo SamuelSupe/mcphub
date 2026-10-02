@@ -1,5 +1,5 @@
 <h2 id="doctor">先检查实际使用的入口</h2>
-<pre><code>mcphub-cli doctor --profile work --client ci_example</code></pre>
+<pre><code>mcpbridge doctor --profile work --client ci_example</code></pre>
 <p>profile 和 ID 必须与客户端配置一致。只查登录可省略 --client。默认 15 秒，慢网络追加 --timeout 30s，允许 1 秒至 2 分钟。</p>
 <p>诊断检查私有目录、登录续期、配对、在线授权、有效 Scope、个人账号、MCP 初始化和工具目录第一页。可能刷新登录 Token，不打开浏览器、不启动 Broker、不创建授权、不刷新上游凭证、不执行工具。</p>
 <p>成功或仅警告退出码 0；阻塞问题为 1。通过诊断不保证全部业务调用或业务权限。</p>
@@ -11,7 +11,7 @@
 <ol><li>确认公司账号和目标服务。</li><li>检查授权是否含所需工具和 Scope。</li><li>请管理员检查发布状态和访问权限。</li><li>新增工具后重新授权。</li></ol>
 <p>向导不支持目录发现时，请管理员确认版本与设置；旧部署可按指导手动授权。</p>
 <h2 id="grant">授权到期、撤销或范围变化</h2>
-<pre><code>mcphub-cli client authorize --profile work --client ci_example</code></pre>
+<pre><code>mcpbridge client authorize --profile work --client ci_example</code></pre>
 <p>浏览器确认后重建连接。登录仍有效不能替代入口授权。账号被更换或断开时，先恢复账号再重新授权。</p>
 <h2 id="account">个人账号问题</h2>
 <p>门户「已连接账号」连接或重连服务。无法验证且持续失败时联系管理员。账号已连接而业务拒绝时，检查上游角色及资源权限。</p>

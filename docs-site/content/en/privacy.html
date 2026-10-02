@@ -1,7 +1,7 @@
 <h2 id="choose">Choose the right sign-out action</h2>
 <table><thead><tr><th>Goal</th><th>Action</th><th>Effect</th></tr></thead><tbody><tr><td>Sign out of the portal</td><td>End the web session.</td><td>Ends the portal session and keeps local and upstream connections.</td></tr><tr><td>Clear local sign-in</td><td>logout --profile work</td><td>Clears secrets for that profile, disconnects it, and attempts remote-session revocation.</td></tr><tr><td>Stop local connections</td><td>broker stop</td><td>Stops local transport and keeps remote grants.</td></tr><tr><td>Block one entry</td><td>Revoke in the portal or use client revoke.</td><td>Invalidates that client's grant.</td></tr><tr><td>Remove a personal service account</td><td>Disconnect in the portal.</td><td>Removes the upstream connection and invalidates related client grants.</td></tr></tbody></table>
 <h2 id="logout">Confirm remote revocation</h2>
-<pre><code>mcphub-cli logout --profile work</code></pre>
+<pre><code>mcpbridge logout --profile work</code></pre>
 <p>Local secrets are cleared first, then remote revocation is attempted. Offline failure may report that revocation was not confirmed; revoke the old session in the portal. Restart connections after signing in again.</p>
 <p>These actions do not invalidate identity-provider tokens or roll back writes already accepted upstream. Revoke upstream authorization through the business system's own process.</p>
 <h2 id="storage">What is stored on your computer?</h2>

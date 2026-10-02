@@ -1,7 +1,7 @@
 <h2 id="when">什么时候联系管理员</h2>
 <p>账号待授权、服务未开放、权限调整、账号服务异常、审批人配置和持续 503 需要管理员处理。先按 <a href="troubleshooting.html">症状排查</a>。</p>
 <h2 id="report">生成诊断</h2>
-<pre><code>mcphub-cli doctor --profile work --client ci_example --json --timeout 30s &gt; mcphub-diagnostics.json</code></pre>
+<pre><code>mcpbridge doctor --profile work --client ci_example --json --timeout 30s &gt; mcphub-diagnostics.json</code></pre>
 <p>使用实际入口。报告不包含 Token 或进程通信凭证。阻塞问题以非零状态退出，但保留已经输出的报告。</p>
 <h2 id="information">提供定位线索</h2>
 <ul><li>发生时间、时区和频率。</li><li>系统、架构、连接器版本及 AI 客户端版本。</li><li>MCPHub 地址、profile、入口 ID、服务、工具。</li><li>具体错误、诊断、请求 ID 或审批 ID。</li><li>期望和实际结果；最近是否重授权、更换账号或升级。</li></ul>
@@ -10,7 +10,7 @@
 <pre><code>问题：
 发生时间与时区：
 操作系统 / CPU 架构：
-mcphub-cli 版本：
+mcpbridge 版本：
 AI 客户端与版本：
 MCPHub 地址：
 Profile / 客户端 ID：
@@ -25,4 +25,4 @@ Endpoint / 工具：
 <h2 id="sensitive">提交前检查</h2>
 <p>不要发送凭证目录、登录 Token、个人 Token、完整授权 URL 或正在使用的配对码。业务标识和参数按公司要求处理，管理员可用时间与请求 ID 查询。</p>
 <h2 id="project">产品问题反馈</h2>
-<p>公司接入及业务问题先联系内部管理员。确认产品缺陷后，由管理员整理无秘密复现信息提交 <a href="https://github.com/SamuelSupe/mcphub/issues" target="_blank" rel="noopener">项目问题</a>。安全问题按 <a href="https://github.com/SamuelSupe/mcphub/blob/v2.2.1/SECURITY.md" target="_blank" rel="noopener">安全报告说明</a> 处理。</p>
+<p>公司接入及业务问题先联系内部管理员。确认产品缺陷后，由管理员整理无秘密复现信息提交 <a href="https://github.com/SamuelSupe/mcphub/issues" target="_blank" rel="noopener">项目问题</a>。安全问题按 <a href="https://github.com/SamuelSupe/mcphub/blob/v2.2.2/SECURITY.md" target="_blank" rel="noopener">安全报告说明</a> 处理。</p>

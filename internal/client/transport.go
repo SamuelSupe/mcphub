@@ -29,12 +29,12 @@ func (e *rateLimitError) Error() string {
 
 func (e *permissionError) Error() string {
 	if e.code != "" {
-		return e.code + "; run mcphub-cli client authorize for this entry; token refresh cannot grant client permissions"
+		return e.code + "; run mcpbridge client authorize for this entry; token refresh cannot grant client permissions"
 	}
 	if e.scopes == "" {
 		return "MCPHub denied this request; check the profile's permissions"
 	}
-	return fmt.Sprintf("insufficient scope: %q; run mcphub-cli login for this profile with the required --scope values", e.scopes)
+	return fmt.Sprintf("insufficient scope: %q; run mcpbridge login for this profile with the required --scope values", e.scopes)
 }
 
 type authenticatedTransport struct {

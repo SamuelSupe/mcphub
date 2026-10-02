@@ -16,13 +16,13 @@ Recommended sequence: **start the console → add backends → test connections 
 
 ## Preparation and installation
 
-Prepare an identity provider, HTTPS URLs for MCP and administration, one persistent database and a separately retained configuration encryption key. Run **one active Hub instance**; PostgreSQL does not coordinate multiple Hub runtimes.
+Prepare an identity provider, an HTTPS MCP URL, writable persistent storage and a separately retained configuration encryption key. Remote administration additionally requires an HTTPS admin origin and registered administrator identity. Run **one active Hub instance**; PostgreSQL does not coordinate multiple Hub runtimes.
 
 | Mode | Use case | Start here |
 | --- | --- | --- |
 | Local administration + SQLite | Development or maintenance on the gateway machine | [Minimal configuration below](#local-management-ui); unauthenticated and loopback-only |
 | Remote administration + SQLite / PostgreSQL | Team access, approval and centralized management | [Deployment guide](../deploy/README.md); separate administrator login and HTTPS |
-| YAML configuration | No console; explicitly published read tools only | [Full configuration example](configuration.md#starting-from-the-full-yaml-example) |
+| YAML configuration | No console; explicitly published read tools only | [Advanced YAML-only example](../deploy/config.yaml-only.example.yaml) |
 
 Install `mcphub` on the gateway host and `mcpbridge` on user computers. Administrators using the management CLI also need the latter. Server downloads:
 

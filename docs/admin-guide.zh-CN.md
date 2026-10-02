@@ -16,13 +16,13 @@
 
 ## 部署准备与安装
 
-准备可用的身份服务、MCP 与管理端的 HTTPS 地址、一个持久化数据库，以及独立保存的配置加密密钥。网关保持**单活**；PostgreSQL 不提供 Hub 多实例运行时协调。
+准备可用的身份服务、MCP HTTPS 地址、可写持久化目录，以及独立保存的配置加密密钥。远程管理另外配置管理员 HTTPS origin 与身份客户端。网关保持**单活**；PostgreSQL 不提供 Hub 多实例运行时协调。
 
 | 模式 | 适用场景 | 入口 |
 | --- | --- | --- |
 | 本地管理 + SQLite | 在网关所在机器开发或维护 | [下方最小配置](#本地管理-ui)，免登录且只绑定回环 |
 | 远程管理 + SQLite / PostgreSQL | 团队使用、审批与集中管理 | [部署指南](../deploy/README.zh-CN.md)，独立管理员登录和 HTTPS |
-| YAML 管理 | 不启用控制台、仅发布明确只读的工具 | [完整配置示例](configuration.zh-CN.md#从完整-yaml-示例启动) |
+| YAML 管理 | 不启用控制台、仅发布明确只读的工具 | [高级纯 YAML 示例](../deploy/config.yaml-only.example.yaml) |
 
 运行网关的机器安装 `mcphub`；用户电脑安装 `mcpbridge`。管理员使用管理 CLI 时也需安装后者。服务端下载：
 

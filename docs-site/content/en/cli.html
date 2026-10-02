@@ -1,10 +1,10 @@
 <p>This page lists end-user commands. Replace example domains, services, tools, scopes, and ci_example with your actual values. Use --help to see the parameters supported by your installed version.</p>
 <h2 id="setup">setup · Connection wizard</h2>
-<pre><code>mcpbridge setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work &gt; mcphub-mcp.json
+<pre><code>mcpbridge setup --server https://hub.example.com/mcp --client-id mcpbridge --profile work &gt; mcphub-mcp.json
 mcpbridge setup --profile work &gt; mcphub-mcp.json</code></pre>
 <p>Optionally set --callback-port. Choose the service, tools, resources, duration, name, and format in the terminal; log in and confirm in the browser. stdout contains a configuration without credentials, while prompts go to stderr.</p>
 <h2 id="login">login / status / logout</h2>
-<pre><code>mcpbridge login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+<pre><code>mcpbridge login --server https://hub.example.com/mcp --client-id mcpbridge --profile work
 mcpbridge login --profile work
 mcpbridge status --profile work
 mcpbridge logout --profile work</code></pre>

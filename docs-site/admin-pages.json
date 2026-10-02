@@ -9,7 +9,7 @@
     "slug": "admin/install",
     "title": "安装与首次启动",
     "group": "开始部署",
-    "description": "选择部署方式，安装服务端，并完成本地或远程管理的第一次启动。",
+    "description": "从新部署模板启动管理台、添加后端、测试连接并发布工具。",
     "sources": [
       { "file": "docs/admin-guide.zh-CN.md", "heading": "部署准备与安装" },
       { "file": "docs/admin-guide.zh-CN.md", "heading": "本地管理 UI" },
@@ -90,7 +90,7 @@
     "slug": "admin/client-authorizations",
     "title": "启用客户端授权",
     "group": "身份与权限",
-    "description": "开启个人授权中心，注册用户客户端，并逐步迁移到严格授权。",
+    "description": "开启个人授权中心，注册用户客户端，并按服务启用严格授权。",
     "sources": [
       { "file": "docs/admin-guide.zh-CN.md", "heading": "启用客户端授权" },
       { "file": "docs/configuration.zh-CN.md", "heading": "client_authorization" },
@@ -135,13 +135,12 @@
     "sources": [{ "file": "docs/admin-guide.zh-CN.md", "heading": "授权与请求诊断" }]
   },
   {
-    "slug": "admin/upgrade",
-    "title": "升级、备份与回滚",
+    "slug": "admin/backup",
+    "title": "备份与恢复",
     "group": "运行维护",
-    "description": "在升级 schema 9 前保留数据库与匹配密钥，并按完整步骤恢复旧版本。",
+    "description": "保管数据库和匹配密钥，在隔离环境演练恢复并验证实际调用。",
     "sources": [
-      { "file": "docs/admin-guide.zh-CN.md", "heading": "升级与备份" },
-      { "file": "RELEASE_NOTES_v2.2.2.md", "heading": "Upgrade and rollback / 升级与回滚" }
+      { "file": "docs/admin-guide.zh-CN.md", "heading": "备份与恢复" }
     ]
   },
   {

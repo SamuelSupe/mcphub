@@ -35,11 +35,11 @@ MCPHub 将已有的远端 MCP Server 和普通 HTTP API 统一提供为 MCP 工�
 
 首次部署：按[管理员手册](docs/admin-guide.zh-CN.md#部署准备与安装)准备身份服务、HTTPS、数据库与加密密钥，从一个只读服务开始验证。
 
-## 版本与升级
+## 版本与新部署
 
-当前文档对应 **v2.2.2**：将客户端改名为 MCPBridge，明确区分服务端与客户端下载。[发行说明](RELEASE_NOTES_v2.2.2.md) · [下载 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
+当前文档面向 **v2.2.2 全新部署**，默认启用管理台与 SQLite，启动时没有预设后端。客户端程序为 `mcpbridge`，服务端为 `mcphub`。[发行说明](RELEASE_NOTES_v2.2.2.md) · [下载 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
 
-v2.2.2 沿用 v2.2.0 的 **schema 9**；更早版本在启动时迁移。启动前备份数据库与匹配的加密密钥；回滚至 v2.1.0 或更早版本需要恢复升级前备份。从 v1.x 升级还需审核工具发布名单和读写策略，Go module 路径新增 `/v2`。详见[升级与回滚流程](RELEASE_NOTES_v2.2.2.md#upgrade-and-rollback--升级与回滚)。
+默认配置只要求 `MCPHUB_PUBLIC_URL`、`MCPHUB_AUTH_ISSUER` 和 `MCPHUB_CONFIG_KEY`。按“启动管理台 → 添加后端 → 测试连接 → 发布工具”完成接入；每个后端分别配置地址、认证凭证和权限。远程管理使用 `deploy/config.remote-*` 模板并注册管理员身份。
 
 ## 能力与边界
 

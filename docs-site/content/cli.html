@@ -1,10 +1,10 @@
 <p>仅列最终用户命令。域名、服务、工具、Scope 和 ci_example 都是示例，应替换为实际值。使用 --help 查看当前程序参数。</p>
 <h2 id="setup">setup · 接入向导</h2>
-<pre><code>mcpbridge setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work &gt; mcphub-mcp.json
+<pre><code>mcpbridge setup --server https://hub.example.com/mcp --client-id mcpbridge --profile work &gt; mcphub-mcp.json
 mcpbridge setup --profile work &gt; mcphub-mcp.json</code></pre>
 <p>可选 --callback-port。终端选择服务、工具、资源、时长、名称及格式，浏览器登录和确认。stdout 为无凭证配置，提示写入 stderr。</p>
 <h2 id="login">login / status / logout</h2>
-<pre><code>mcpbridge login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+<pre><code>mcpbridge login --server https://hub.example.com/mcp --client-id mcpbridge --profile work
 mcpbridge login --profile work
 mcpbridge status --profile work
 mcpbridge logout --profile work</code></pre>

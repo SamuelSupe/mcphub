@@ -17,15 +17,13 @@
 | 信息 | 示例或用途 |
 | --- | --- |
 | MCPHub 地址 | `https://hub.example.com/mcp`，包含完整路径 |
-| CLI client ID | 例如 `mcphub-cli`，由管理员预先登记 |
+| CLI client ID | 例如 `mcpbridge`，由管理员预先登记 |
 | 已开通的服务与工具 | 首次 SSO 登录可能处于待授权状态，需要管理员启用并分配权限 |
 | 回调端口（如有要求） | 固定端口示例 `8765`；在 `setup` 或 `login` 后加 `--callback-port 8765` |
 
 下文的域名、工具名和 `ci_example` 均为示例，请使用实际地址及命令返回的客户端 ID。`work` 是本机保存连接信息的 profile 名称，可以自行命名。向导要求服务端已启用客户端授权；旧部署见[兼容连接](#手动登录与兼容连接)。
 
 ## 安装 CLI
-
-从 v2.2.2 起，客户端由 `mcphub-cli` 改名为 `mcpbridge`。升级前退出 Agent；旧 Broker 可用 `mcphub-cli broker stop` 停止。将新程序安装为 `mcpbridge`（Windows 为 `mcpbridge.exe`），把已有 Agent 配置的 `command` 更新为新程序的实际路径，或执行 `mcpbridge setup --profile work` 重新生成配置。保留 `~/.mcphub/` / `MCPHUB_HOME`、已有 profile 和注册的 OAuth Client ID；例如 `--client-id mcphub-cli` 是身份服务中的注册 ID，不是程序文件名，无需随改名调整。
 
 从 [v2.2.2 Release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2) 选择与电脑匹配的 CLI 包：
 
@@ -79,7 +77,7 @@ Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`，也需
 在安装 CLI 的同一台电脑运行：
 
 ```bash
-mcpbridge setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work > mcphub-mcp.json
+mcpbridge setup --server https://hub.example.com/mcp --client-id mcpbridge --profile work > mcphub-mcp.json
 ```
 
 已有 `work` 登录配置时，改用：
@@ -199,7 +197,7 @@ mcpbridge doctor --profile work --client ci_example --json --timeout 30s
 需要单独登录或续期时：
 
 ```bash
-mcpbridge login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+mcpbridge login --server https://hub.example.com/mcp --client-id mcpbridge --profile work
 mcpbridge status --profile work
 ```
 
@@ -231,6 +229,6 @@ mcpbridge logout --profile work
 
 退出登录、停止 Broker、撤销客户端授权、断开个人账号是不同操作：停止 Broker 只停止本地连接；撤销客户端授权限制该客户端；断开个人账号影响该服务的上游凭证。个人账号请在门户断开，必要时还需在上游服务撤销授权。
 
-默认 profile 为 `default`。macOS/Linux 数据保存在 `~/.mcphub/`，目录权限 `0700`、文件权限 `0600`；Windows 保存在 `%USERPROFILE%\.mcphub\`，通过仅授权当前用户的 DACL 保护。Windows 凭证目录需位于支持 Windows 访问控制的本地文件系统（如 NTFS）。已有 profile 可直接由 `mcpbridge` 使用，无需迁移。Token 以本地 JSON 保存，**不做加密**；不要放入共享目录或其他用户可读取的备份。临时文件替换与按 profile 的进程间锁保证多个连接器能够安全轮换 refresh token。
+默认 profile 为 `default`。macOS/Linux 数据保存在 `~/.mcphub/`，目录权限 `0700`、文件权限 `0600`；Windows 保存在 `%USERPROFILE%\.mcphub\`，通过仅授权当前用户的 DACL 保护。Windows 凭证目录需位于支持 Windows 访问控制的本地文件系统（如 NTFS）。Token 以本地 JSON 保存，**不做加密**；不要放入共享目录或其他用户可读取的备份。临时文件替换与按 profile 的进程间锁保证多个连接器能够安全轮换 refresh token。
 
 无 Broker 的 profile 中，`status` 显示本地缓存状态、到期时间和能否续期，不输出 Token。`logout` 清除本地 Token、保留非敏感连接设置，使连接器后续请求停止并要求登录；已经接受的请求可能继续完成。它不会吊销身份服务中的 Token 或退出浏览器会话。重新登录后，需要重启该 profile 的已有连接器。

@@ -6,13 +6,13 @@
 
 面向负责部署、服务接入、权限策略、审批及运行维护的管理员，对应 v2.2.2。员工电脑的安装与接入步骤见[用户手册](user-guide.zh-CN.md)。
 
-推荐顺序：**部署网关 → 接入只读服务 → 显式发布工具 → 配置用户权限 → 启用客户端授权 → 验证后开放写操作**。
+推荐顺序：**启动管理台 → 添加后端 → 测试连接 → 发布工具 → 配置用户权限 → 验证实际调用**。
 
 - [部署准备与安装](#部署准备与安装) · [本地管理 UI](#本地管理-ui) · [远程管理与数据库](#远程管理员与-postgresql)
 - [登录客户端与上游凭证](#区分登录客户端与上游凭证)
 - [服务接入与工具发布](#服务接入与工具发布) · [用户与组织](#用户与组织) · [客户端授权](#启用客户端授权) · [上游账号](#配置上游账号)
 - [写审批与配置治理](#写审批与配置治理) · [控制台导航](#控制台导航) · [工具权限检查](#工具权限检查) · [授权与请求诊断](#授权与请求诊断)
-- [升级与备份](#升级与备份) · [运行维护](#运行维护) · [安全说明](#安全说明) · [已知限制与排障](#已知限制与排障提示)
+- [备份与恢复](#备份与恢复) · [运行维护](#运行维护) · [安全说明](#安全说明) · [已知限制与排障](#已知限制与排障提示)
 
 ## 部署准备与安装
 
@@ -44,7 +44,7 @@ install -m 755 mcphub-release/mcphub "$HOME/.local/bin/mcphub"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-安装后运行 `mcphub --version`，应显示 `mcphub 2.2.2 (server)`。`validate`、`serve` 是服务端命令；`mcpbridge` 是原 `mcphub-cli` 的新名称，供用户连接 Agent，不能启动或校验网关。源码更新不会自动替换目录里的旧二进制；要使用刚安装的程序路径。
+安装后运行 `mcphub --version`，应显示 `mcphub 2.2.2 (server)`。`validate`、`serve` 是服务端命令；`mcpbridge` 是用户连接器，供用户连接 Agent，不能启动或校验网关。源码更新不会自动替换目录里的旧二进制；要使用刚安装的程序路径。
 
 此 PATH 设置用于当前终端；后续可直接运行 `"$HOME/.local/bin/mcphub"`，或将工具目录加入服务环境。已安装 Go 1.26 时也可执行：
 
@@ -54,44 +54,33 @@ go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.2
 
 Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`；该目录也需要加入 PATH。
 
-**v2.2.2 服务端压缩包中的配置模板与本指南一致。** 基础文件只需 4 个变量，不含控制台、数据库或用户门户。需要管理功能时，选用包内的[本地管理配置](../deploy/config.local.yaml)或[远程模板](../deploy/README.zh-CN.md)；[在线基础配置](../config.example.yaml)与包内同名文件相同。如果之前下载的是 v2.2.0，其旧基础配置还要求控制台来源和 CRM 变量；新部署改用 v2.2.2 模板。已有生产配置应保留并逐项审核合并，不能直接覆盖。
+**v2.2.2 服务端包与在线指南包含相同模板。** 默认 `config.example.yaml` 启用本地管理台、SQLite 和 `backends: []`，只需要网关地址、OIDC issuer 和配置加密密钥。启动管理台后，逐个添加服务，分别填写凭证、测试连接，再发布已审核的工具并配置权限。团队远程管理使用远程模板；不启用控制台时选择独立的[高级纯 YAML 示例](../deploy/config.yaml-only.example.yaml)。
 
-`validate --config PATH` 只读检查配置，不创建数据库；`serve --config PATH` 启动服务并执行必要迁移，结构化 JSON 日志写入 stderr。旧版本升级先看[升级与备份](#升级与备份)。
+`validate --config PATH` 校验配置，不创建 SQLite 数据库；`serve --config PATH` 初始化新数据库并启动服务，JSON 日志写到 stderr。
 
 部署前先查[示例选择与配置生效方式](configuration.zh-CN.md#选择配置与生效方式)、[环境变量/Secret 写法](configuration.zh-CN.md#环境变量与-secret)和[部署变量清单](../deploy/README.zh-CN.md#环境变量清单)。不要把所有可选模块同时塞进基础配置。
 
 ## 本地管理 UI
 
-启用内嵌管理 UI 后，可直接配置连接，无需修改 backend YAML。新部署可将以下内容保存为 `config.yaml`，把 `MCPHUB_PUBLIC_URL`、`MCPHUB_AUTH_ISSUER` 设置为真实的 HTTPS 网关与身份服务地址，并通过 secret store 提供 Base64 编码的 32 字节 `MCPHUB_CONFIG_KEY`。密钥只生成一次（例如使用 `openssl rand -base64 32`），重启和升级时保留并安全保存。数据库目录需要可写。
+默认模板适用于全新部署，管理台只监听网关所在机器的 `127.0.0.1:8081`，无需管理员登录。远程访问按[远程部署指南](../deploy/README.zh-CN.md)配置 HTTPS 和管理员身份。
 
-```yaml
-server:
-  listen: "127.0.0.1:8080"
-  public_url: ${MCPHUB_PUBLIC_URL}
-auth:
-  issuer: ${MCPHUB_AUTH_ISSUER}
-admin:
-  enabled: true
-  listen: "127.0.0.1:8081"
-  database_path: ./data/mcphub.db
-  encryption_key_env: MCPHUB_CONFIG_KEY
-backends: []
-```
-
-上面是完整配置，也可下载[本地管理配置文件](../deploy/config.local.yaml)。在保存 `config.yaml` 的目录运行以下步骤，替换地址。此示例将密钥保存在用户私有目录；后续启动读取同一文件，服务管理器也应注入相同值。已有部署必须使用数据库原来的密钥。
+解压服务端包后，把包内 `config.example.yaml` 复制为 `config.yaml`；也可下载[相同的在线模板](../config.example.yaml)。在新部署目录中执行，替换两个 HTTPS 地址：
 
 ```bash
+cp mcphub-release/config.example.yaml config.yaml
 export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
 export MCPHUB_AUTH_ISSUER=https://idp.example.com
 umask 077
-mkdir -p "$HOME/.config/mcphub"
-test -f "$HOME/.config/mcphub/config.key" || openssl rand -base64 32 > "$HOME/.config/mcphub/config.key"
-export MCPHUB_CONFIG_KEY="$(cat "$HOME/.config/mcphub/config.key")"
+mkdir -p secrets
+test -f secrets/config.key || openssl rand -base64 32 > secrets/config.key
+export MCPHUB_CONFIG_KEY="$(cat secrets/config.key)"
 mcphub validate --config config.yaml
 mcphub serve --config config.yaml
 ```
 
-先运行 `mcphub validate --config config.yaml`，再运行 `mcphub serve --config config.yaml`，在网关所在机器打开[本地控制台](http://127.0.0.1:8081/)。默认 `mode: local` 无需登录，必须保持仅回环访问；远程访问请使用[远程管理](#远程管理员与-postgresql)的 `mode: remote`。网关仍需可用的 OIDC 身份服务才能就绪并认证 MCP 客户端。
+默认模板只要求以上三个变量。`MCPHUB_CONFIG_KEY` 是 Base64 编码的 32 字节密钥，只生成一次，重启时从同一个私有文件读取。服务管理器也需要注入这三个变量；MCPHub 不自动加载 `.env`。数据库位于配置文件旁的 `data/mcphub.db`，需要可写目录。
+
+打开[本地管理台](http://127.0.0.1:8081/)，初始服务列表为空。进入 **MCP 后端 → 添加 MCP 后端**，逐个填写地址与独立凭证，**测试连接**后保存，再到 **工具权限**设置明确的 `read` 分类、发布名单和所需 scope。按[服务接入流程](#服务接入与工具发布)实际调用一个只读工具。管理台启动不代表身份源可用；网关 `/readyz` 返回 200 还需要可用的 OIDC issuer。
 
 ## 远程管理员与 PostgreSQL
 
@@ -105,7 +94,7 @@ mcpbridge admin --profile ops get /tool-groups
 mcpbridge admin --profile ops get /events
 ```
 
-数据库可选 SQLite（默认，兼容原 `database_path`）或 PostgreSQL（`database_driver: postgres` 与 `database_dsn_env`）。本版支持单实例网关；PostgreSQL 不代表已支持多实例运行时同步。完整的 OIDC 注册、浏览器登录、API 写入、数据库与 HTTPS 代理部署见 [部署指南](../deploy/README.zh-CN.md)。
+数据库可选 SQLite（默认）或 PostgreSQL（`database_driver: postgres` 与 `database_dsn_env`）。本版支持单实例网关；PostgreSQL 不代表已支持多实例运行时同步。完整的 OIDC 注册、浏览器登录、API 写入、数据库与 HTTPS 代理部署见 [部署指南](../deploy/README.zh-CN.md)。
 
 ## 服务接入与工具发布
 
@@ -143,7 +132,7 @@ mcpbridge admin --profile ops get /events
 
 ## 启用客户端授权
 
-启用 `client_authorization.enabled`、配置用户门户 `client_id`，并启用托管数据库。支持 SQLite 和 **单实例 MCPHub + PostgreSQL**，升级到 v2.2.2 / schema 9 前请备份数据库与加密密钥（v2.1.0 为 schema 8）。
+启用 `client_authorization.enabled`、配置用户门户 `client_id`，并启用托管数据库。支持 SQLite 和 **单实例 MCPHub + PostgreSQL**，新数据库使用 schema 9，重启时保留数据库与匹配密钥。
 
 在身份服务注册门户回调 `https://hub.example.com/client-auth/auth/callback`。门户位于 MCP 服务的域名下，与管理端口分开。CLI 与门户必须取得 audience 为完整 MCP resource URL、`issuer + sub` 一致的 JWT access token。若身份服务对不同客户端返回不同的 pairwise subject，应先调整身份服务的主体策略；不会通过 email 拼接身份。门户可选的 client secret 通过服务端 `client_secret_env` 配置。
 
@@ -159,7 +148,7 @@ client_authorization:
 
 直接运行二进制时重启服务。Compose 部署将片段加入挂载的 `deploy/config.remote-postgres.yaml`，在原来的部署环境执行 `docker compose -f deploy/compose.postgres.yaml up -d --force-recreate mcphub`。还需单独注册员工 CLI 的公开客户端，按[外部 OIDC 注册](configuration.zh-CN.md#用户-cli-的外部-oidc-注册)配置 PKCE、回调和 MCP audience。先发布一个明确 `read` 的工具并授予用户相应 Scope，再让员工运行 `setup`；空的 `backends: []` 或 `published_tools: []` 不会自动产生可选工具。
 
-在指定 backend 或 HTTP 工具组设置 `require_client_grant: true`，可逐个迁移；全局开启则全部强制。两级条件取 OR。旧的 `connect --profile` 只能访问兼容 endpoint，登录握手不会暴露严格 endpoint。门户全局设置属于静态进程配置，修改后重启；endpoint 设置沿用现有配置治理流程。
+在指定 backend 或 HTTP 工具组设置 `require_client_grant: true`，可逐个设置；全局开启则全部强制。两级条件取 OR。不带 `--client` 的连接只能访问未强制客户端授权的 endpoint，登录握手不会暴露严格 endpoint。门户全局设置属于静态进程配置，修改后重启；endpoint 设置沿用现有配置治理流程。
 
 普通用户在门户确认自己的客户端范围；管理员可以查询和撤销，不能代替用户同意。外部 issuer 下，CLI 还需要[公开 OAuth 客户端注册](configuration.zh-CN.md#用户-cli-的外部-oidc-注册)；启用 SSO 桥接时按 SSO 指南配置本地公开客户端。
 
@@ -227,7 +216,7 @@ client_authorization:
 
 请求记录在处理完成后写入；写入失败不会重放或改变业务操作，服务器记录错误，页面提示本次运行的记录缺口。进程在写入前崩溃、进行中的请求和 GET 流不在此记录中；它不能替代审批审计的独立归档。未启用托管数据库的部署只保留原有短期内存诊断。
 
-`GET /api/v1/requests` 新增 `since`、`until`（RFC3339，按完成时间筛选），实际窗口在 `window_start`／`window_end` 中返回。`format=ndjson` 导出最多 10,000 条，仍受管理员鉴权和相同筛选限制；响应头 `X-MCPHub-Next-Cursor` 非零时可作为 `cursor` 继续导出，或在 UI 缩小时间范围。v2.2.x 的请求历史使用 **schema 9**（v2.1.0 为 schema 8）；升级前备份数据库与匹配密钥，回滚至 v2.1.0 或更早版本需恢复升级前备份。
+`GET /api/v1/requests` 新增 `since`、`until`（RFC3339，按完成时间筛选），实际窗口在 `window_start`／`window_end` 中返回。`format=ndjson` 导出最多 10,000 条，仍受管理员鉴权和相同筛选限制；响应头 `X-MCPHub-Next-Cursor` 非零时可作为 `cursor` 继续导出，或在 UI 缩小时间范围。请求历史持久化在新部署的 **schema 9** 数据库中，备份时保存数据库及匹配密钥。
 
 以下 API 仅位于**管理监听器**，个人门户不开放跨用户查询：
 
@@ -236,21 +225,19 @@ mcpbridge admin --profile ops get '/client-grants?subject=alice&status=active&li
 mcpbridge admin --profile ops get '/requests?endpoint=database-prod&outcome=scope_denied&limit=25'
 ```
 
-两者都返回 `next_cursor`，保持筛选条件并作为 `cursor` 传回；请求历史翻页时同时保持返回的时间窗口。授权还可筛选 `client`、`endpoint`；诊断还可筛选 `request_id`、`subject`、`client` 和原始 `tool`。普通分页 `limit` 范围为 1–100。撤销接口为 `POST /api/v1/client-grants/{grant_id}/revoke`，正文 `{"subject":"alice"}`。schema 9 的迁移步骤见 [v2.2.2 变更和升级流程](../RELEASE_NOTES_v2.2.2.md)。
+两者都返回 `next_cursor`，保持筛选条件并作为 `cursor` 传回；请求历史翻页时同时保持返回的时间窗口。授权还可筛选 `client`、`endpoint`；诊断还可筛选 `request_id`、`subject`、`client` 和原始 `tool`。普通分页 `limit` 范围为 1–100。撤销接口为 `POST /api/v1/client-grants/{grant_id}/revoke`，正文 `{"subject":"alice"}`。
 
-## 升级与备份
+## 备份与恢复
 
-从 v2.1.0 或更早版本升级前，请先阅读[完整备份、升级与回滚流程](../RELEASE_NOTES_v2.2.2.md#upgrade-and-rollback--升级与回滚)。v2.2.2 的 `serve` 会将托管 SQLite/PostgreSQL 迁移到 schema 9（v2.1.0 为 schema 8），`validate` 只读。保留匹配的 `MCPHUB_CONFIG_KEY`；回滚至 v2.1.0 或更早版本必须同时恢复旧数据库、密钥/配置和二进制；v2.2.0 与 v2.2.2 均使用 schema 9。
+全新部署初始化 SQLite 或 PostgreSQL 后，分别保管数据库备份和匹配的 `MCPHUB_CONFIG_KEY`。SQLite 使用一致性备份方式，PostgreSQL 使用数据库原生备份工具；启用 Vault 时协调其数据备份。
 
-逐项填写后端的 `published_tools`，并明确工具的读写分类。空发布名单不开放工具；写工具和未分类工具需要远程浏览器审批。本地免登录或仅 YAML 部署只能执行已发布且明确只读的工具。已有 HTTP 工具保留启停状态，新建手工工具默认停用。客户端授权与 SSO 按需启用，SSO 新用户默认待授权。
-
-首次启用管理时，配置管理监听器、加密密钥与可写数据库；首次启动导入 YAML 后端，之后以后端数据库为准。工具组和 OpenAPI 仍由 API 管理。切换数据库驱动不迁移数据，PostgreSQL 仍限单实例。升级后重启网关、刷新浏览器，单独安装 CLI 并重建客户端连接。详见[部署指南](../deploy/README.zh-CN.md)。
+恢复演练在隔离环境使用同版本程序、备份数据库及匹配密钥。检查后端地址、凭证、工具发布、用户权限和撤销记录，再验证实际调用。不要删除数据库来重新导入 YAML；管理台中的服务配置以数据库为准。
 
 ## 运行维护
 
 - 以 `/healthz` 检查进程存活，以 `/readyz` 检查身份验证器和 required 后端就绪；两者含义不同。详见[HTTP 端点](configuration.zh-CN.md#http-端点与-rfc-9728)。
 - YAML 可热改字段使用 SIGHUP；监听器、身份地址、管理配置以及 Vault/门户等静态设置变化需重启。已初始化的托管数据库是后端配置来源，之后修改 YAML backends 不生效。详见[热重载与关停](configuration.zh-CN.md#sighup-热重载与关停)。
-- 备份数据库及匹配的 `MCPHUB_CONFIG_KEY`，启用 Vault 时协调备份 Vault 数据。恢复后核对授权、账号和配置状态；切换数据库驱动不会迁移数据。
+- 备份数据库及匹配的 `MCPHUB_CONFIG_KEY`，启用 Vault 时协调备份 Vault 数据。恢复后核对授权、账号和配置状态；创建部署时选择数据库驱动。
 - 查看请求记录缺口、审批投递失败与归档积压；请求历史和最近配置变更不能替代独立审批审计归档。
 
 ### Docker 部署

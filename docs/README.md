@@ -26,7 +26,7 @@ These documents cover v2.2.2. Choose a manual for your role, then use the refere
 2. [Connect services and publish tools](admin-guide.md#connect-services-and-publish-tools)
 3. [Configure users and organizations](admin-guide.md#users-and-organizations), [client authorization](admin-guide.md#enable-client-authorization) and [upstream accounts](admin-guide.md#configure-upstream-accounts)
 4. [Configure write approval and governance](admin-guide.md#write-approval-and-configuration-governance)
-5. [Inspect grants and requests](admin-guide.md#grant-and-request-diagnostics), [upgrade and back up](admin-guide.md#upgrades-and-backups)
+5. [Inspect grants and requests](admin-guide.md#grant-and-request-diagnostics), [back up and recover](admin-guide.md#backups-and-recovery)
 
 ## Configuration and topic references
 
@@ -46,5 +46,5 @@ Use these for design context and historical records. Start with the manuals for 
 - [27-page architecture PDF](feishu-vault-agent-architecture.zh-CN.pdf): the 2026-09-26 review snapshot; current status is maintained in the online architecture document.
 - [Client Broker and authorization design](broker-authorization-design.zh-CN.md) (Chinese): historical first-version snapshot with schema and capability changes through v2.2.
 - [Screenshot notes](screenshots/README.md): provenance of the v2.1.0 demonstration screenshots.
-- [v2.2.2 release and upgrade notes](../RELEASE_NOTES_v2.2.2.md), [all releases](https://github.com/SamuelSupe/mcphub/releases).
+- [v2.2.2 release and fresh-deployment notes](../RELEASE_NOTES_v2.2.2.md), [all releases](https://github.com/SamuelSupe/mcphub/releases).
 - [Contributing](../CONTRIBUTING.md): development, validation and documentation conventions.

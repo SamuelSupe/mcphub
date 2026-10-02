@@ -1,40 +1,20 @@
-# YAML-only gateway: one MCP backend, no admin UI, portal or database.
-# 基础示例：单个 MCP 后端；管理控制台、用户门户及数据库请使用 deploy/ 示例。
-# Required environment: MCPHUB_PUBLIC_URL, MCPHUB_AUTH_ISSUER,
-# MCPHUB_PRIMARY_BACKEND_URL, MCPHUB_PRIMARY_API_KEY.
-# Copy to config.yaml; inject real values into the service process environment.
-# See docs/configuration.md / docs/configuration.zh-CN.md for fields and reload rules.
+# New deployment: local management UI + SQLite; add services in the console.
+# 新部署：本地管理台 + SQLite；启动后在控制台逐个添加服务。
+# Required environment: MCPHUB_PUBLIC_URL, MCPHUB_AUTH_ISSUER, MCPHUB_CONFIG_KEY.
+# The key is Base64-encoded 32 bytes; generate once and retain with the database.
+# Remote access uses deploy/config.remote-sqlite.yaml or config.remote-postgres.yaml.
 
 server:
-  # Host deployment behind an HTTPS proxy. In a container, use :8080 and
-  # restrict the published host port/network; do not expose raw HTTP publicly.
   listen: "127.0.0.1:8080"
-  public_url: ${MCPHUB_PUBLIC_URL} # Full HTTPS MCP URL, including /mcp.
-
+  public_url: ${MCPHUB_PUBLIC_URL}
 auth:
-  issuer: ${MCPHUB_AUTH_ISSUER} # External OIDC issuer, not the backend's issuer.
-
-backends:
-  - id: primary
-    url: ${MCPHUB_PRIMARY_BACKEND_URL}
-    # Startup retries unavailable backends and keeps /readyz at 503.
-    # A reload or managed change requires the candidate's required backends to connect.
-    # false only tolerates connection failure; it does not disable validation.
-    required: true
-    request_timeout: 30s
-    required_scopes: [mcp:primary.read] # Scopes on the user's MCPHub JWT.
-    headers:
-      X-API-Key: ${MCPHUB_PRIMARY_API_KEY} # Hub-to-backend credential.
-
-    # No tools are published until reviewed. To publish a verified read tool,
-    # replace search below with its exact original name and enable BOTH entries.
-    # 空列表不发布工具；确认只读后，同时填写发布名单和 read 策略。
-    published_tools: []
-    # published_tools: [search]  # Replace the empty list above; do not duplicate it.
-    # tool_rules:
-    #   - match: search
-    #     effect: read
-
-# YAML-only mode cannot approve write/unclassified tools. For remote management,
-# write approvals, HTTP API tools, SSO or personal accounts, start with
-# docs/admin-guide.md / docs/admin-guide.zh-CN.md and the matching deploy/ example.
+  issuer: ${MCPHUB_AUTH_ISSUER}
+admin:
+  enabled: true
+  mode: local
+  listen: "127.0.0.1:8081"
+  database_driver: sqlite
+  # Relative to this YAML file, not the process working directory.
+  database_path: ./data/mcphub.db
+  encryption_key_env: MCPHUB_CONFIG_KEY
+backends: []

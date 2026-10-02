@@ -6,7 +6,7 @@ mcpbridge setup --profile work &gt; tasks-mcp.json</code></pre>
 <p>Choose the target service and tools each time, use distinct client names, and merge entries into your client configuration. Separate entries for different AI clients also make revocation easier.</p>
 <h2 id="profiles">Separate companies and identities</h2>
 <p>Use different profiles for different MCPHub URLs or identities. Setup rejects mixing an existing profile with another URL or client ID. Create a new profile or explicitly sign in again:</p>
-<pre><code>mcpbridge setup --server https://other-hub.example.com/mcp --client-id mcphub-cli --profile other-work &gt; other-mcp.json</code></pre>
+<pre><code>mcpbridge setup --server https://other-hub.example.com/mcp --client-id mcpbridge --profile other-work &gt; other-mcp.json</code></pre>
 <p>Keep administrator sign-in profiles separate from everyday user profiles.</p>
 <h2 id="new-machine">Change computers or system accounts</h2>
 <ol><li>Install the connector in the new environment.</li><li>Run setup again, sign in, and authorize.</li><li>Use the newly generated paths, MCPHUB_HOME, and entry ID.</li><li>After checking the new connection, revoke unused old sessions or entries in the portal.</li></ol>

@@ -17,7 +17,8 @@
 
 | 场景 | 从哪里开始 | 需要准备 |
 | --- | --- | --- |
-| YAML 管理一个 MCP 后端 | [基础示例](../config.example.yaml) | 4 个环境变量；默认不发布工具，无数据库和用户门户 |
+| 默认本地管理台 + SQLite | [默认模板](../config.example.yaml)、[启动步骤](admin-guide.zh-CN.md#本地管理-ui) | 网关 URL、issuer、加密密钥三个变量；在 UI 添加后端 |
+| 高级纯 YAML 部署 | [独立示例](../deploy/config.yaml-only.example.yaml) | 在 YAML 逐个填写后端地址与凭证，显式发布已审核的只读工具 |
 | 本机管理、SQLite | [完整配置文件](../deploy/config.local.yaml)、[启动步骤](admin-guide.zh-CN.md#本地管理-ui) | 网关 URL、issuer、固定加密密钥 |
 | 团队远程管理 | [部署示例与变量清单](../deploy/README.zh-CN.md#环境变量清单) | 管理 URL、身份客户端、SQLite 或 PostgreSQL、HTTPS 代理 |
 | SSO / Vault 个人账号 | [SSO](sso-and-user-management.zh-CN.md)、[Vault](vault-accounts.zh-CN.md) | 在托管配置上增加所需模块；飞书示例还需真实租户验收 |
@@ -53,11 +54,10 @@
 # 片段：两种写法用途不同，请放在各自配置段。
 admin:
   encryption_key_env: MCPHUB_CONFIG_KEY # 从这个变量读取 Base64 编码的 32 字节密钥。
-# backends[].headers 中的值才使用 ${...}：
-#   X-API-Key: ${MCPHUB_PRIMARY_API_KEY}
+# 后端凭证在 UI 中按服务分别配置。
 ```
 
-不要写 `encryption_key_env: ${MCPHUB_CONFIG_KEY}`，否则会把密钥值误当变量名。数据库加密密钥只生成一次，备份和升级保留原值。SSO/Vault 同样通过各自的 `*_env` 引用 Secret，值由服务管理器或 Secret store 注入。
+不要写 `encryption_key_env: ${MCPHUB_CONFIG_KEY}`，否则会把密钥值误当变量名。数据库加密密钥只生成一次，备份和重启保留原值。SSO/Vault 同样通过各自的 `*_env` 引用 Secret，值由服务管理器或 Secret store 注入。
 
 `required: false` 只允许后端连接失败；该 backend 的 URL、OAuth 字段和受支持环境变量仍须完整有效。它不是“禁用配置”。不使用某个 YAML backend 时，应从当前配置移除该条目。
 
@@ -229,7 +229,7 @@ rate_limit:
 
 ### 显式发布与资源范围
 
-**相对 v1.x 的升级变化：** 远程后端工具现在默认不发布。升级前需在 YAML 或后端管理页面/API 的 `published_tools` 中逐项填写获准开放的原始工具名。已有 scope 通配规则不会自动发布工具；名单省略或为空时，工具不出现在目录，也无法直接调用。目录刷新发现新名称时仍默认关闭。手工 HTTP 工具默认 `enabled: false`，审核后显式启用；OpenAPI 页面勾选的操作属于显式发布，后续发现未勾选的操作不会自动发布。已有 HTTP 工具保留数据库中的启停状态。
+工具默认不发布。在后端管理页面/API 中逐项填写获准开放的原始工具名；scope 规则不等于发布名单。名单省略或为空时，工具不出现在目录，也无法直接调用。目录刷新发现新工具时仍默认关闭。手工 HTTP 工具默认禁用，审核后启用；OpenAPI 导入中明确选择要发布的操作。
 
 ```yaml
 published_tools: [search]
@@ -320,7 +320,7 @@ SQLite/PostgreSQL 原子消费批准，并发恢复不会执行两次；重复�
 
 每个 issuer/subject 最多 20 个活跃申请，执行请求最多 60 KiB，预览最多 32 KiB，含策略的完整审批记录最多 64 KiB，结果最多 16 MiB。请求、预览、结果、理由及核查详情加密保存；每分钟分批清理超过保留期的终态记录及详细审计，通用活动日志保留不含参数/理由的状态记录。配置变更前已接纳的操作仍可能完成。批准写入使用新的 HTTP/1 连接防止透明重试，上游须支持 HTTP/1.1；只读调用仍复用连接。
 
-v2.2.2 使用 **schema 9**（审批治理最初引入 schema 5），升级前备份数据库与加密密钥，v2.1.0 或更早二进制不能以写模式打开升级后的数据库。本地免登录模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
+新部署的托管数据库使用 **schema 9**，备份时保管数据库及匹配密钥。本地免登录模式和仅 YAML 部署不能执行写工具或未分类工具。MCP Token 和管理 API Bearer Token 均不能批准；应隔离 Agent 与审批人浏览器、配置/数据库权限及上游写凭证。未启用配置治理时，配置管理员可直接修改工具分类；启用独立安全审批可约束这些变更。MFA 不能替代审批人核对具体内容和后端最小权限控制。
 
 
 ### 配置治理、双人审批与业务幂等
@@ -429,40 +429,27 @@ Backend ID 的唯一性按大小写不敏感检查。tool/prompt 名称保留配
 
 ## 从完整 YAML 示例启动
 
-v2.2.2 服务端压缩包和在线指南提供相同的[基础配置](../config.example.yaml)：一个 MCP 后端、4 个必填变量，不需要控制台来源或 CRM 变量。解压服务端包后，将包内 `config.example.yaml` 复制为 `config.yaml`；也可下载同一文件：
+默认 [config.example.yaml](../config.example.yaml) 与 v2.2.2 服务端发行包、在线模板一致：本地管理台、SQLite、`backends: []`。它只要求 `MCPHUB_PUBLIC_URL`、`MCPHUB_AUTH_ISSUER` 和 `MCPHUB_CONFIG_KEY`，后端地址与认证凭证在 UI 中按服务配置。
+
+在新的私有部署目录中下载模板并启动，替换两个 HTTPS 地址：
 
 ```bash
 curl -fL https://samuelsupe.github.io/mcphub/examples/config.example.yaml -o config.yaml
+export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
+export MCPHUB_AUTH_ISSUER=https://idp.example.com
+umask 077
+mkdir -p secrets
+test -f secrets/config.key || openssl rand -base64 32 > secrets/config.key
+export MCPHUB_CONFIG_KEY="$(cat secrets/config.key)"
+mcphub validate --config config.yaml
+mcphub serve --config config.yaml
 ```
 
-只在新部署目录下载为 `config.yaml`；已有部署先保留原配置并逐项合并。配置和变量清单应使用同一版本。
+打开 `http://127.0.0.1:8081/`，按 **启动管理台 → 添加后端 → 测试连接 → 发布工具** 操作。每个后端分别填写服务地址和 Header/OAuth 凭证；只发布明确分类为 `read` 的已审核工具，并配置所需 scope。使用同一个密钥重启后，服务配置、凭证和工具权限从 SQLite 恢复。
 
-基础文件现在只配置一个 MCP 后端，需要下方 4 个变量。它默认不发布工具，也不开启用户门户/写审批；请按文件注释同时配置精确发布名单与已确认的 `effect: read`。需要控制台或普通 HTTP API 工具时，使用[管理员部署流程](admin-guide.zh-CN.md)。以下从源码构建，已安装二进制时可直接使用 `mcphub`：
+`validate` 是只读配置检查，不验证身份登录、后端连接或实际工具调用。`serve` 初始化新数据库。检查 `/healthz`、`/readyz`，然后按[部署验收](../deploy/README.zh-CN.md#启动后验收)实际调用工具。
 
-```bash
-cp config.example.yaml config.yaml
-
-# 示例；请替换为真实的 HTTPS 地址和 secret。不要把 secret 写进 Git。
-export MCPHUB_PUBLIC_URL='https://hub.example.com/mcp'
-export MCPHUB_AUTH_ISSUER='https://idp.example.com'
-export MCPHUB_PRIMARY_BACKEND_URL='https://mcp-a.example.com/mcp'
-export MCPHUB_PRIMARY_API_KEY='replace-me'
-
-go build -trimpath -o ./mcphub ./cmd/mcphub
-./mcphub validate --config ./config.yaml
-./mcphub serve --config ./config.yaml
-```
-
-`validate` 成功输出 `configuration valid`：检查 YAML、可展开字段、配置约束，以及适用的密钥/DSN 等环境变量。管理模式下会只读检查已有数据库；SQLite 文件缺失或存储尚未初始化时校验 YAML bootstrap。PostgreSQL 即使尚无 MCPHub 表，也必须有可连接的数据库和凭证；命令不创建数据库或迁移 schema。
-
-**通过校验不代表部署可用**：不会完成 IdP 登录、连接 MCP 后端、验证工具名或验证 Vault 路径权限；SSO 上游 Secret、目录 Token、Vault 凭证值和 CA 文件还有运行时检查。`serve` 才执行必要的存储迁移并启动服务，JSON 日志写到 stderr。启动后按[部署验收步骤](../deploy/README.zh-CN.md#启动后验收)检查实际连接。两个子命令都要求 `--config PATH`。
-
-也可以直接运行而不生成二进制：
-
-```bash
-go run ./cmd/mcphub validate --config ./config.yaml
-go run ./cmd/mcphub serve --config ./config.yaml
-```
+远程管理员使用[远程模板](../deploy/README.zh-CN.md)，补充管理员 origin、身份客户端和 scope；纯 YAML 部署使用独立的[高级示例](../deploy/config.yaml-only.example.yaml)，在文件中按后端填写实际地址、凭证、发布名单及只读策略。
 
 ## 能力与边界
 

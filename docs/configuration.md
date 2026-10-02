@@ -17,7 +17,8 @@ This reference targets v2.2.2. Configuration is one YAML document with strict fi
 
 | Scenario | Starting point | Prerequisites |
 | --- | --- | --- |
-| One MCP backend managed in YAML | [Base example](../config.example.yaml) | 4 environment variables; tools initially unpublished, no database or user portal |
+| Default local console + SQLite | [Default template](../config.example.yaml), [startup steps](admin-guide.md#local-management-ui) | 3 variables: MCP URL, issuer and encryption key; add backends in the UI |
+| Advanced YAML-only deployment | [Independent example](../deploy/config.yaml-only.example.yaml) | Fill each backend address and credential in YAML; explicitly publish reviewed read tools |
 | Local administration, SQLite | [Complete configuration](../deploy/config.local.yaml), [startup steps](admin-guide.md#local-management-ui) | MCP URL, issuer, persistent encryption key |
 | Remote team administration | [Deployment examples and variables](../deploy/README.md#environment-variables) | Admin URL, identity clients, SQLite or PostgreSQL, HTTPS proxy |
 | SSO / Vault personal accounts | [SSO](sso-and-user-management.md), [Vault](vault-accounts.md) | Add the required modules to a managed deployment; Feishu also needs real-tenant acceptance |
@@ -53,11 +54,10 @@ A `*_env` field contains an **environment variable name**, not the secret:
 # Fragment: place each setting in its respective section.
 admin:
   encryption_key_env: MCPHUB_CONFIG_KEY # Read the Base64-encoded 32-byte key from this variable.
-# In backends[].headers, values use ${...} instead:
-#   X-API-Key: ${MCPHUB_PRIMARY_API_KEY}
+# Backend credentials are configured separately for each service in the UI.
 ```
 
-Do not write `encryption_key_env: ${MCPHUB_CONFIG_KEY}`: that treats the key value as a variable name. Generate the database encryption key once and retain it with backups/upgrades. SSO and Vault likewise reference secrets through their `*_env` fields; inject values through the service manager or secret store.
+Do not write `encryption_key_env: ${MCPHUB_CONFIG_KEY}`: that treats the key value as a variable name. Generate the database encryption key once and retain it with backups. SSO and Vault likewise reference secrets through their `*_env` fields; inject values through the service manager or secret store.
 
 `required: false` only tolerates connection failure. That backend's URL, OAuth fields and supported environment variables must still be valid and complete; it does not disable the configuration. Remove an unused backend entry from the active YAML.
 
@@ -229,7 +229,7 @@ Rejected requests never reach the backend: HTTP `429`, `Retry-After` seconds and
 
 ### Explicit publication and resource limits
 
-**Upgrade change from v1.x:** remote backend tools now default to unpublished. Add every approved original name to `published_tools` in YAML or the backend admin editor/API before rollout. Existing scope globs do not publish tools. Empty or omitted `published_tools` hides all backend tools and denies direct calls. Catalog refreshes cannot publish a new name. Manual HTTP tools default to `enabled: false`; enable each reviewed tool explicitly. Selected OpenAPI operations are explicitly published by the import UI; later discovery of unselected operations does not publish them. Existing HTTP tools keep their stored enabled state.
+Tools start unpublished. Select every approved original tool name in the backend editor/API; scope rules do not publish tools. An empty or omitted publication list hides tools and denies direct calls. Catalog refresh does not publish new tools. Manual HTTP tools start disabled; enable reviewed tools explicitly and select approved OpenAPI operations during import.
 
 ```yaml
 published_tools: [search]
@@ -318,7 +318,7 @@ SQLite/PostgreSQL atomically consume each approval once; concurrent resumes cann
 
 Limits: 20 active requests per issuer/subject; 60 KiB execution request; 32 KiB preview; 64 KiB complete intent including policies; 16 MiB saved result. Requests, previews, results, reasons and investigation details are encrypted. A minute-based maintenance loop removes terminal records and detailed history past retention in bounded batches; general activity logs retain argument/reason-free state events. Already admitted writes may finish after policy changes. Approved writes use fresh HTTP/1 connections to prevent transparent retries, so upstreams must support HTTP/1.1. Reads retain connection pooling.
 
-v2.2.2 uses **schema 9** (approval governance first introduced schema 5). Back up the database and encryption key; v2.1.0 and earlier binaries cannot open the upgraded writable database. Local unauthenticated management and YAML-only deployments cannot execute writes/unclassified tools. MCP and management API bearer tokens cannot approve. Isolate reviewer browsers, configuration/database access and upstream write credentials from agents. With configuration governance disabled, configuration administrators can change classifications directly; enable independent security review to guard those changes. Strong authentication does not replace reviewing the operation or downstream least privilege.
+Fresh managed deployments use **schema 9**. Back up the database and matching encryption key. Local unauthenticated management and YAML-only deployments cannot execute writes/unclassified tools. MCP and management API bearer tokens cannot approve. Isolate reviewer browsers, configuration/database access and upstream write credentials from agents. With configuration governance disabled, configuration administrators can change classifications directly; enable independent security review to guard those changes. Strong authentication does not replace reviewing the operation or downstream least privilege.
 
 
 ### Configuration governance, quorum and operation identity
@@ -427,40 +427,27 @@ Register a **public native OAuth client** at that issuer with authorization-code
 
 ## Starting from the full YAML example
 
-The v2.2.2 server archive and online guide contain the same [base configuration](../config.example.yaml): one MCP backend and four required variables, with no console-origin or CRM variables. After extracting the server archive, copy its `config.example.yaml` to `config.yaml`. You can also download the identical file:
+The default [config.example.yaml](../config.example.yaml) is identical in the v2.2.2 server archive and online template. It enables the local console and SQLite with `backends: []`. Only `MCPHUB_PUBLIC_URL`, `MCPHUB_AUTH_ISSUER` and `MCPHUB_CONFIG_KEY` are required; configure addresses and credentials per service in the UI.
+
+Download the template into a new private deployment directory, replace the two HTTPS addresses, and start:
 
 ```bash
 curl -fL https://samuelsupe.github.io/mcphub/examples/config.example.yaml -o config.yaml
+export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
+export MCPHUB_AUTH_ISSUER=https://idp.example.com
+umask 077
+mkdir -p secrets
+test -f secrets/config.key || openssl rand -base64 32 > secrets/config.key
+export MCPHUB_CONFIG_KEY="$(cat secrets/config.key)"
+mcphub validate --config config.yaml
+mcphub serve --config config.yaml
 ```
 
-Download as `config.yaml` only in a new deployment directory. Preserve and merge an existing deployment's configuration. Use the configuration and variable list from the same release.
+Open `http://127.0.0.1:8081/` and follow **start the console → add backends → test connections → publish tools**. Configure a separate service URL and Header/OAuth credential for each backend. Publish only reviewed tools explicitly classified as `read`, and assign required scopes. Restarting with the same key restores service settings, credentials and tool policies from SQLite.
 
-The base file configures one MCP backend and needs only the 4 variables below. It initially publishes no tools and has no user portal/write approvals. Follow its comments to set both exact published names and verified `effect: read` rules. For the console or ordinary HTTP API tools, use the [administrator deployment workflow](admin-guide.md). These commands build from source; use `mcphub` directly if already installed:
+`validate` is a read-only configuration check; it does not verify identity login, backend connections or tool calls. `serve` initializes fresh storage. Check `/healthz` and `/readyz`, then make a real call using [deployment verification](../deploy/README.md#verify-the-deployment).
 
-```bash
-cp config.example.yaml config.yaml
-
-# Example only; replace with real HTTPS endpoints and secrets. Do not commit secrets.
-export MCPHUB_PUBLIC_URL='https://hub.example.com/mcp'
-export MCPHUB_AUTH_ISSUER='https://idp.example.com'
-export MCPHUB_PRIMARY_BACKEND_URL='https://mcp-a.example.com/mcp'
-export MCPHUB_PRIMARY_API_KEY='replace-me'
-
-go build -trimpath -o ./mcphub ./cmd/mcphub
-./mcphub validate --config ./config.yaml
-./mcphub serve --config ./config.yaml
-```
-
-`validate` prints `configuration valid` after checking YAML, supported expansion, configuration constraints and applicable key/DSN environment variables. In managed mode it reads an existing store without mutation, or checks YAML bootstrap when the SQLite file is absent or the store is uninitialized. PostgreSQL still requires a reachable database and credentials even before MCPHub tables exist; validation neither creates a database nor migrates its schema.
-
-**Validation is not deployment acceptance**: it does not complete IdP login, connect MCP backends, check published tool names or verify Vault path permissions. SSO upstream secrets, directory tokens, Vault credential values and CA files have additional runtime checks. `serve` applies required storage migrations and starts the service, with JSON logs on stderr. Then follow the [deployment acceptance steps](../deploy/README.md#verify-the-deployment). Both subcommands require `--config PATH`.
-
-You can also run without producing a binary:
-
-```bash
-go run ./cmd/mcphub validate --config ./config.yaml
-go run ./cmd/mcphub serve --config ./config.yaml
-```
+Remote administrators use the [remote templates](../deploy/README.md), adding an administrator origin, registered identity client and scopes. Deployments without a console use the separate [advanced YAML-only example](../deploy/config.yaml-only.example.yaml); fill each backend's actual address, credential, publication list and read policy in the file.
 
 ## Capabilities and boundaries
 

@@ -33,6 +33,7 @@ cpSync(path.join(root, 'assets'), path.join(output, 'assets'), { recursive: true
 for (const file of [
   'config.example.yaml', 'deploy/config.local.yaml', 'deploy/config.remote-sqlite.yaml',
   'deploy/config.remote-postgres.yaml', 'deploy/config.feishu-vault.example.yaml',
+  'deploy/config.yaml-only.example.yaml',
 ]) {
   const destination = path.join(output, 'examples', file);
   mkdirSync(path.dirname(destination), { recursive: true });

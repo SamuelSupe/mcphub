@@ -31,9 +31,6 @@ mcpbridge --version
 mcpbridge setup --help</code></pre>
 <p>此 PATH 设置用于当前终端；后续可运行 <code>"$HOME/.local/bin/mcpbridge"</code>，或将该目录加入 shell 的 PATH。Go 安装路径是 <code>go env GOBIN</code>，为空时是 <code>$(go env GOPATH)/bin</code>，也需加入 PATH。</p>
 <p><code>mcpbridge --version</code> 应显示 <code>mcpbridge 2.2.2 (client)</code>。看到接入参数说明，表示当前终端可以运行连接器。未添加 PATH 的 Windows 用户可运行 <code>.\mcpbridge\mcpbridge.exe setup --help</code>。图形客户端的 PATH 可能不同，因此保留向导生成的绝对路径最稳妥。系统阻止执行时，把具体提示交给 IT 或管理员处理。</p>
-<h2 id="upgrade">升级已有连接器</h2>
-<ol><li>下载 MCPBridge 客户端包并核对校验和。</li><li>退出 Agent，使用 <code>mcphub-cli broker stop</code> 停止旧 Broker。</li><li>将新程序安装为 <code>mcpbridge</code>（Windows 为 <code>mcpbridge.exe</code>）。保留 <code>~/.mcphub</code> / <code>MCPHUB_HOME</code>、已有 profile 和 OAuth Client ID。</li><li>将 Agent 的 command 更新为新程序绝对路径，或用 <code>mcpbridge setup --profile work</code> 重新生成配置。重启 Agent 并运行 doctor。</li></ol>
-<p>停止 Broker 保留远端授权；升级不会自动延长已到期的授权。</p>
-<h2 id="compatibility">版本兼容范围</h2>
-<table><thead><tr><th>能力</th><th>所需服务版本</th></tr></thead><tbody><tr><td>基础 login / connect</td><td>可接入 v1.x。</td></tr><tr><td>客户端授权、Broker、接入向导</td><td>v2.0.0 或更新；向导还要求服务提供目录发现能力。</td></tr><tr><td>个人服务账号</td><td>v2.1.0 或更新。</td></tr><tr><td>个人账号就绪诊断</td><td>v2.2.0 或更新；旧服务可能只显示无法检查的警告。</td></tr></tbody></table>
 <p>发布文件及版本说明见 <a href="https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2" target="_blank" rel="noopener">v2.2.2 Release</a>。已安装 Go 1.26 的用户可执行 <code>go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.2.2</code>。</p>
+<h2 id="compatibility">新部署的服务准备条件</h2>
+<p>使用匹配的 v2.2.2 网关和 MCPBridge。管理员先添加后端、测试连接并发布工具；运行 setup 还需要用户门户和客户端授权。取得实际网关地址、客户端 ID 和所需 scope 后继续。</p>

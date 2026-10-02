@@ -17,8 +17,6 @@ trap cleanup EXIT
 # Unreachable test endpoints exercise startup without contacting a real tenant.
 export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
 export MCPHUB_AUTH_ISSUER=https://127.0.0.1:1
-export MCPHUB_PRIMARY_BACKEND_URL=https://127.0.0.1:1/mcp
-export MCPHUB_PRIMARY_API_KEY=installation-test-only
 export MCPHUB_ADMIN_PUBLIC_URL=https://admin.example.com
 export MCPHUB_ADMIN_CLIENT_ID=mcphub-admin-web
 export MCPHUB_CONFIG_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
@@ -55,12 +53,10 @@ for name in config.example.yaml config.local.yaml config.remote-sqlite.yaml conf
     fi
     curl --fail --silent --max-time 2 http://127.0.0.1:8080/.well-known/oauth-protected-resource/mcp > /dev/null
     test "$(curl --silent --max-time 2 -o "$directory/ready.json" -w '%{http_code}' http://127.0.0.1:8080/readyz)" = 503
-    if [ "$name" != config.example.yaml ]; then
-      if [ "$name" = config.local.yaml ]; then
-        curl --fail --silent --max-time 2 http://127.0.0.1:8081/ > /dev/null
-      else
-        curl --fail --silent --max-time 2 -H 'Host: admin.example.com' http://127.0.0.1:8081/ > /dev/null
-      fi
+    if [ "$name" = config.example.yaml ] || [ "$name" = config.local.yaml ]; then
+      curl --fail --silent --max-time 2 http://127.0.0.1:8081/ > /dev/null
+    else
+      curl --fail --silent --max-time 2 -H 'Host: admin.example.com' http://127.0.0.1:8081/ > /dev/null
     fi
     kill "$server_pid"
     wait "$server_pid"

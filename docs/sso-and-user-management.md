@@ -32,7 +32,7 @@ auth:
       departments_claim: departments
     bootstrap_subjects: [initial-admin-subject]
     clients:
-      - id: mcphub-cli
+      - id: mcpbridge
         redirect_uris: [http://127.0.0.1/oauth/callback]
         resources: [https://hub.example.com/mcp]
       - id: mcphub-admin
@@ -118,7 +118,7 @@ Employee installation, login and Broker consent are covered by the [user manual]
 
 Access JWTs last ten minutes. `offline_access` enables rotating refresh tokens within an eight-hour local SSO session; another browser login is needed afterward. Upstream credentials are not retained and local refresh does not query upstream account state. Reuse of a consumed refresh token revokes its session family. The signing key is encrypted with the configuration key in the database; refresh credentials are stored only as hashes. Every access token also requires a live stored session and current local permissions.
 
-SQLite and **single-instance PostgreSQL** use schema **9** in v2.2.0 (v2.1.0: schema 8; v2.0.0: schema 7). Back up the database and matching encryption key before migration; older binaries must not write the upgraded database. Pending authorization transactions/codes are in memory and restart with the process; stored sessions and signing keys survive. Apply existing reverse-proxy limits to login and directory endpoints. Global logout, SCIM, SAML, multiple identity-source selection and multi-instance consistency are outside this implementation.
+Fresh SQLite and **single-instance PostgreSQL** storage uses schema **9**. Back up the database and matching encryption key. Pending authorization transactions/codes are in memory and restart with the process; stored sessions and signing keys survive. Apply existing reverse-proxy limits to login and directory endpoints. Global logout, SCIM, SAML, multiple identity-source selection and multi-instance consistency are outside this implementation.
 
 Pending or disabled users receive an OAuth `access_denied` callback with the fixed reason `account_access_required`. The CLI stops waiting immediately and the portal directs users to their MCPHub administrator. Sign in again after access is granted; failed login preserves existing local credentials.
 

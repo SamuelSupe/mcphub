@@ -37,7 +37,7 @@ auth:
     # Enable after the bootstrap admin has logged in and the adapter is ready.
     # directory_token_env: MCPHUB_DIRECTORY_TOKEN
     clients:
-      - id: mcphub-cli
+      - id: mcpbridge
         redirect_uris: [http://127.0.0.1/oauth/callback]
         resources: [https://hub.example.com/mcp]
       - id: mcphub-portal

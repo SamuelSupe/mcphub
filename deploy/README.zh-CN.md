@@ -4,7 +4,7 @@
 
 本目录对应 MCPHub v2.2.2 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
 
-v2.2.2 将本地客户端改名为 MCPBridge，服务端包内模板与安装文档保持一致，沿用 v2.2.0 的 schema 9；更早的 SQLite / PostgreSQL 数据库在启动时迁移。部署仍限单实例；替换旧版前请按[升级与回滚流程](../RELEASE_NOTES_v2.2.2.md)备份并检查兼容性。Vault 共享与个人上游账号继续可用。参见 [Vault 配置](../docs/vault-accounts.zh-CN.md)、[SSO 部署与组织同步](../docs/sso-and-user-management.zh-CN.md)，以及[企业接入架构与最佳实践](../docs/feishu-vault-agent-architecture.zh-CN.md)和 [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf)。
+本指南面向 v2.2.2 全新部署。默认配置启用本地管理台与 SQLite；团队远程管理使用本目录模板，增加 HTTPS 管理地址和管理员身份配置。启动管理台后逐个添加后端、分别配置凭证、测试连接，再发布工具。参见 [Vault](../docs/vault-accounts.zh-CN.md)和 [SSO](../docs/sso-and-user-management.zh-CN.md)可选配置。
 
 已完成的 MCP POST 请求默认保留 30 天；可将 `admin.request_retention` 设置为 `24h`–`8760h`。管理员请求诊断页支持时间筛选和 NDJSON 导出，详见[请求历史与隐私边界](../docs/admin-guide.zh-CN.md#授权与请求诊断)。请保护数据库备份和导出文件：记录不含参数、结果和 Token，但查询索引仍含可读的身份与路由元数据。
 
@@ -39,7 +39,7 @@ v2.2.2 服务端包已包含这些模板，下载链接提供完全相同的文�
 | 两个远程模板 | `MCPHUB_AUTH_ISSUER` | 外部 OIDC issuer；使用 Hub SSO 时按专题改为本网关 `/sso` |
 | 两个远程模板 | `MCPHUB_ADMIN_PUBLIC_URL` | 管理 HTTPS origin，例如 `https://admin.example.com`，不带尾部 `/` |
 | 两个远程模板 | `MCPHUB_ADMIN_CLIENT_ID` | 已注册的管理员浏览器客户端 ID，不是 CLI/用户门户 ID |
-| 两个远程模板 | `MCPHUB_CONFIG_KEY` | 固定的 Base64 编码 32 字节密钥，重启/升级保留原值 |
+| 两个远程模板 | `MCPHUB_CONFIG_KEY` | 固定的 Base64 编码 32 字节密钥，重启保留原值 |
 | 直接连接 PostgreSQL | `MCPHUB_DATABASE_URL` | 可连接的 DSN；外部数据库使用 TLS，密码需按 URL 编码 |
 | Compose 内置 PostgreSQL | `MCPHUB_POSTGRES_PASSWORD` | URL-safe 密码；Compose 自动生成容器内 `MCPHUB_DATABASE_URL` |
 | 宿主机 Caddy | `MCPHUB_HUB_HOST`、`MCPHUB_ADMIN_HOST` | 仅域名，分别注入 **Caddy 进程**；不要填写 URL 或 `/mcp` |
@@ -70,7 +70,7 @@ mcphub validate --config deploy/config.remote-sqlite.yaml
 mcphub serve --config deploy/config.remote-sqlite.yaml
 ```
 
-相对数据库路径以 YAML 所在目录为准：直接使用仓库文件时是 `deploy/data/mcphub.db`，复制到其他目录后随文件位置变化。保留原来的 `admin.database_path` 和密钥即可继续使用现有 SQLite 数据，`serve` 会执行所需 schema 迁移；旧二进制不能写入 schema 9 数据库。要沿用本地管理模式，保留 `mode: local`（默认值）；该模式无登录，仍只允许数字回环地址，禁止通过代理对外暴露。
+相对数据库路径以 YAML 所在目录为准：直接使用仓库模板时是 `deploy/data/mcphub.db`，复制到其他目录后随文件位置变化。选择可写目录，重启保留相同加密密钥。
 
 外部 PostgreSQL：示例监听 `:8080` / `:8081`，供容器使用。直接在宿主机运行前，复制为 `config.yaml`，将两个 `listen` 改为 `127.0.0.1:8080` / `127.0.0.1:8081` 或受保护的私有地址，然后执行：
 
@@ -81,7 +81,7 @@ mcphub validate --config config.yaml
 mcphub serve --config config.yaml
 ```
 
-为 MCPHub 使用独立数据库/专用 schema。数据库用户需要创建/升级表的权限；`citext` 扩展由数据库管理员预先执行 `CREATE EXTENSION IF NOT EXISTS citext`，或允许应用在首次启动时创建。连接串、CA 和加密密钥必须在服务环境中可用。`validate` 只读，不创建表；首次 `serve` 建表并导入 YAML backends。`validate` 仍会连接 PostgreSQL；数据库尚未创建、凭证错误或网络不通时不能通过。
+为 MCPHub 使用独立数据库/专用 schema。数据库用户需要创建表的权限；`citext` 扩展由数据库管理员预先执行 `CREATE EXTENSION IF NOT EXISTS citext`，或允许应用在首次启动时创建。连接串、CA 和加密密钥必须在服务环境中可用。`validate` 只读，不创建表；首次 `serve` 建表并导入 YAML backends。`validate` 仍会连接 PostgreSQL；数据库尚未创建、凭证错误或网络不通时不能通过。
 
 ### 使用 PostgreSQL Compose
 
@@ -142,15 +142,15 @@ mcpbridge admin --profile ops get '/events?limit=50'
 例如创建一个停用的后端，将以下内容保存为 `backend.json`：
 
 ```json
-{"id":"crm","url":"https://crm.example.com/mcp","enabled":false,"required":false,"required_scopes":["mcp:crm.read"],"headers":[]}
+{"id":"example","url":"https://mcp.example.com/mcp","enabled":false,"required":false,"required_scopes":["mcp:example.read"],"headers":[]}
 ```
 
 ```bash
 mcpbridge admin --profile ops --file backend.json post /backends
-mcpbridge admin --profile ops get /backends/crm
+mcpbridge admin --profile ops get /backends/example
 # 把 backend.json 的 enabled 改为 true，使用刚读取的 ETag（此处仅示例）
-mcpbridge admin --profile ops --file backend.json --if-match '"1"' put /backends/crm
-mcpbridge admin --profile ops post /backends/crm/probe
+mcpbridge admin --profile ops --file backend.json --if-match '"1"' put /backends/example
+mcpbridge admin --profile ops post /backends/example/probe
 mcpbridge status --profile ops
 mcpbridge logout --profile ops
 ```
@@ -161,6 +161,6 @@ PUT 使用完整输入对象；保留 Header 时提供名称并省略 `value`，
 
 两种数据库都以事务保存配置和审计，Header/OAuth secret 使用相同 AES-256-GCM 加密；SQLite 文件保持 0600。审计 actor 为远程管理员 JWT `sub`；本地操作为 `local`，后台刷新为 `system`。审计是配置变更历史，不是不可篡改的合规日志或所有 HTTP 请求日志。
 
-备份数据库并单独保管 `MCPHUB_CONFIG_KEY`。更换 `database_driver` 不会自动迁移原数据，尤其工具组和 OpenAPI 不存在于 YAML 中。切换存储需要单独的数据迁移；不要把空 PostgreSQL 当作已有 SQLite 的副本。多实例协调与跨库迁移工具仍不在本版范围内。远程 MCP endpoint 支持[个人上游账号](../docs/vault-accounts.zh-CN.md)。外部身份服务签发的 JWT 撤销依赖供应商；Hub 自管 SSO 还会校验当前本地会话与用户权限。退出 Hub 不等于撤销上游业务账号或身份服务的全局会话。
+备份数据库并单独保管 `MCPHUB_CONFIG_KEY`。新建部署时选择数据库驱动；工具组和 OpenAPI 通过 UI/API 管理。网关保持单活。远程 MCP endpoint 支持[个人上游账号](../docs/vault-accounts.zh-CN.md)。外部身份服务签发的 JWT 撤销依赖供应商；Hub 自管 SSO 还会校验当前本地会话与用户权限。退出 Hub 不等于撤销上游业务账号或身份服务的全局会话。
 
 MCP backend 和 HTTP 工具组可在管理 UI 的“限流策略”中设置 `requests_per_second`、`burst`、`max_concurrent`，也可通过管理 API 的 `rate_limit` 对象保存。默认全为 0、不限流；所有用户共享 endpoint 额度。策略保存在所选数据库，实时计数在当前进程内。详见[限流语义](../docs/configuration.zh-CN.md#endpoint-限流)。

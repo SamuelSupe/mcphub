@@ -22,7 +22,7 @@ admin:
   required_scopes: [mcphub:admin]
   database_driver: postgres
   # Environment variable NAMES. Do not put a DSN/key or ${...} here.
-  # Retain the same Base64-encoded 32-byte encryption key across restarts/upgrades.
+  # Retain the same Base64-encoded 32-byte encryption key across restarts.
   database_dsn_env: MCPHUB_DATABASE_URL
   encryption_key_env: MCPHUB_CONFIG_KEY
 

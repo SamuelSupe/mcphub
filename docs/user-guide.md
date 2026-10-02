@@ -17,15 +17,13 @@ Ask your administrator for:
 | Information | Example or purpose |
 | --- | --- |
 | MCPHub URL | `https://hub.example.com/mcp`, including the full path |
-| CLI client ID | Such as `mcphub-cli`, registered by the administrator |
+| CLI client ID | Such as `mcpbridge`, registered by the administrator |
 | Available services and tools | A first SSO login may remain pending until an administrator enables the user and grants access |
 | Callback port, if required | For a fixed port such as `8765`, add `--callback-port 8765` to `setup` or `login` |
 
 Domains, tools and `ci_example` below are placeholders. Use your actual URL and the client ID returned by the command. `work` is a local profile name you can choose. Setup requires server-side client authorization; see [compatible connections](#manual-login-and-compatible-connections) for older deployments.
 
 ## Install the CLI
-
-From v2.2.2, the client executable is renamed from `mcphub-cli` to `mcpbridge`. Quit your Agent before upgrading; stop an old Broker with `mcphub-cli broker stop`. Install the new executable as `mcpbridge` (`mcpbridge.exe` on Windows), update existing Agent `command` paths or regenerate configuration with `mcpbridge setup --profile work`. Keep `~/.mcphub/` / `MCPHUB_HOME`, profiles and the registered OAuth client ID. For example, `--client-id mcphub-cli` identifies an identity-provider registration, not an executable filename; it does not need renaming.
 
 Choose the CLI package for your computer from the [v2.2.2 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2):
 
@@ -79,7 +77,7 @@ To build from source, use `go build -trimpath -o ./mcpbridge ./cmd/mcpbridge`. M
 Run this on the computer where you installed the CLI:
 
 ```bash
-mcpbridge setup --server https://hub.example.com/mcp --client-id mcphub-cli --profile work > mcphub-mcp.json
+mcpbridge setup --server https://hub.example.com/mcp --client-id mcpbridge --profile work > mcphub-mcp.json
 ```
 
 For an existing `work` login, use this instead:
@@ -199,7 +197,7 @@ Reports contain no tokens. Share the time, profile, client ID, endpoint, request
 To log in or renew credentials separately:
 
 ```bash
-mcpbridge login --server https://hub.example.com/mcp --client-id mcphub-cli --profile work
+mcpbridge login --server https://hub.example.com/mcp --client-id mcpbridge --profile work
 mcpbridge status --profile work
 ```
 
@@ -231,6 +229,6 @@ mcpbridge logout --profile work
 
 Logout, stopping the Broker, revoking a client grant and disconnecting a personal account are separate actions. Stopping the Broker only stops local transport; revoking a grant restricts that client; disconnecting an account affects its upstream credentials. Disconnect personal accounts in the portal and revoke authorization at the upstream provider when necessary.
 
-Profiles default to `default` and are stored in `~/.mcphub/` on macOS/Linux (directory `0700`, files `0600`), or `%USERPROFILE%\.mcphub\` on Windows with a DACL granting access only to the current user. Windows credential storage requires a local filesystem supporting Windows access controls, such as NTFS. Existing profiles work with `mcpbridge` without migration. Tokens are stored as local JSON, **not encrypted**; keep this directory outside shared folders and backups accessible to other users. Temporary-file replacement and per-profile process locks protect refresh-token rotation across multiple connectors.
+Profiles default to `default` and are stored in `~/.mcphub/` on macOS/Linux (directory `0700`, files `0600`), or `%USERPROFILE%\.mcphub\` on Windows with a DACL granting access only to the current user. Windows credential storage requires a local filesystem supporting Windows access controls, such as NTFS. Tokens are stored as local JSON, **not encrypted**; keep this directory outside shared folders and backups accessible to other users. Temporary-file replacement and per-profile process locks protect refresh-token rotation across multiple connectors.
 
 For profiles without a Broker, `status` reports local cache state, expiry, and refresh capability, never token values. `logout` clears local tokens while keeping non-secret endpoint settings; subsequent connector requests fail and require login. Already accepted requests may finish. It does not revoke issuer tokens or sign out the browser. Logging in again requires restarting existing connectors for that profile.

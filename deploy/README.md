@@ -4,7 +4,7 @@
 
 MCPHub v2.2.2 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes.
 
-v2.2.2 renames the local client to MCPBridge; server templates and installation instructions remain aligned with the packaged server. It retains schema 9 from v2.2.0; earlier SQLite and PostgreSQL databases migrate on startup; retain the single-instance boundary and follow the [upgrade and rollback procedure](../RELEASE_NOTES_v2.2.2.md) before replacing an older version. Vault shared/personal accounts remain available. See [Vault deployment](../docs/vault-accounts.md), [SSO deployment](../docs/sso-and-user-management.md), and the [enterprise architecture and best practices](../docs/feishu-vault-agent-architecture.zh-CN.md) with its [PDF](../docs/feishu-vault-agent-architecture.zh-CN.pdf).
+This guide covers fresh v2.2.2 deployments. The default enables a local console and SQLite; team administration uses the remote templates here with an HTTPS admin origin and registered administrator identity. Start the console, add each backend with its own credentials, test the connection, then publish tools. See optional [Vault](../docs/vault-accounts.md) and [SSO](../docs/sso-and-user-management.md) configuration.
 
 Completed MCP POST requests are retained for 30 days by default. Set `admin.request_retention` between `24h` and `8760h` to match operational needs. The administrator's request diagnostics page supports time filters and NDJSON export; see the [history contract and privacy boundaries](../docs/admin-guide.md#grant-and-request-diagnostics). Protect database backups and exports: arguments, results and tokens are excluded, but identity/routing indexes are readable database metadata.
 
@@ -37,7 +37,7 @@ Choose one example; do not configure every integration at once. Remote SQLite/Po
 | Both remote templates | `MCPHUB_AUTH_ISSUER` | External OIDC issuer; Hub SSO instead uses the Hub `/sso` URL as described in its guide |
 | Both remote templates | `MCPHUB_ADMIN_PUBLIC_URL` | Admin HTTPS origin, e.g. `https://admin.example.com`, without a trailing `/` |
 | Both remote templates | `MCPHUB_ADMIN_CLIENT_ID` | Registered admin browser client ID, separate from CLI/user portal IDs |
-| Both remote templates | `MCPHUB_CONFIG_KEY` | Persistent Base64-encoded 32-byte key; retain across restarts/upgrades |
+| Both remote templates | `MCPHUB_CONFIG_KEY` | Persistent Base64-encoded 32-byte key; retain across restarts |
 | Direct PostgreSQL deployment | `MCPHUB_DATABASE_URL` | Reachable DSN; use TLS for external databases and URL-encode passwords |
 | Compose's PostgreSQL service | `MCPHUB_POSTGRES_PASSWORD` | URL-safe password; Compose constructs the container's `MCPHUB_DATABASE_URL` |
 | Host Caddy | `MCPHUB_HUB_HOST`, `MCPHUB_ADMIN_HOST` | Hostnames only, injected into the **Caddy process**; no URL scheme or `/mcp` |
@@ -59,7 +59,7 @@ test -f "$HOME/.config/mcphub/config.key" || openssl rand -base64 32 > "$HOME/.c
 export MCPHUB_CONFIG_KEY="$(cat "$HOME/.config/mcphub/config.key")"
 ```
 
-This key file is a local example for a new deployment. An existing database requires its original key. Restarts, service managers and containers must use the same value; keep backups of both the database and key.
+This key file is a local example for a new deployment. Restarts, service managers and containers must use the same value; keep backups of both the database and key.
 
 SQLite:
 
@@ -68,7 +68,7 @@ mcphub validate --config deploy/config.remote-sqlite.yaml
 mcphub serve --config deploy/config.remote-sqlite.yaml
 ```
 
-Relative database paths resolve from the YAML directory: the repository example uses `deploy/data/mcphub.db`; copying the YAML elsewhere changes this location. Keep the existing SQLite path and key to reuse existing data; `serve` applies any required schema migration; do not let an older binary write a schema-9 database. `mode: local` remains the default, with no login and a numeric loopback-only listener that must never be published through a proxy.
+Relative database paths resolve from the YAML directory: using the repository template stores SQLite at `deploy/data/mcphub.db`; copying it elsewhere changes this location. Choose a writable location and retain the key on every restart.
 
 External PostgreSQL: the example binds `:8080` / `:8081` for containers. Before running directly on a host, copy it to `config.yaml` and change both `listen` values to `127.0.0.1:8080` / `127.0.0.1:8081` or protected private addresses, then run:
 
@@ -78,7 +78,7 @@ mcphub validate --config config.yaml
 mcphub serve --config config.yaml
 ```
 
-Use a dedicated database/schema. The database role needs table creation/migration rights. A DBA must preinstall `CREATE EXTENSION IF NOT EXISTS citext` or allow the application to install it on startup. Supply the connection string, database CA and encryption key to the service. `validate` is read-only and does not create tables; the first `serve` initializes the schema and imports YAML backends. `validate` still connects to PostgreSQL; a missing database, invalid credentials or a network failure cannot pass.
+Use a dedicated database/schema. The database role needs table creation rights. A DBA must preinstall `CREATE EXTENSION IF NOT EXISTS citext` or allow the application to install it on startup. Supply the connection string, database CA and encryption key to the service. `validate` is read-only and does not create tables; the first `serve` initializes the schema and imports YAML backends. `validate` still connects to PostgreSQL; a missing database, invalid credentials or a network failure cannot pass.
 
 ### Use PostgreSQL Compose
 
@@ -139,15 +139,15 @@ mcpbridge admin --profile ops get '/events?limit=50'
 Save a disabled backend as `backend.json`:
 
 ```json
-{"id":"crm","url":"https://crm.example.com/mcp","enabled":false,"required":false,"required_scopes":["mcp:crm.read"],"headers":[]}
+{"id":"example","url":"https://mcp.example.com/mcp","enabled":false,"required":false,"required_scopes":["mcp:example.read"],"headers":[]}
 ```
 
 ```bash
 mcpbridge admin --profile ops --file backend.json post /backends
-mcpbridge admin --profile ops get /backends/crm
+mcpbridge admin --profile ops get /backends/example
 # Set enabled to true in backend.json; use the actual returned ETag.
-mcpbridge admin --profile ops --file backend.json --if-match '"1"' put /backends/crm
-mcpbridge admin --profile ops post /backends/crm/probe
+mcpbridge admin --profile ops --file backend.json --if-match '"1"' put /backends/example
+mcpbridge admin --profile ops post /backends/example/probe
 mcpbridge status --profile ops
 mcpbridge logout --profile ops
 ```
@@ -158,6 +158,6 @@ PUT takes the full input object. To preserve a Header secret, include its name a
 
 Both databases commit configuration and audit events transactionally and encrypt Header/OAuth secrets with AES-256-GCM. SQLite files retain 0600 permissions. Audit actors are remote JWT subjects, `local` for local administration and `system` for background refreshes. This is configuration history, not a tamper-proof compliance or complete HTTP access log.
 
-Back up the database and retain `MCPHUB_CONFIG_KEY` separately. Changing the driver does not migrate existing data; tool groups and OpenAPI imports have no YAML representation. Multi-instance coordination and cross-database migration tooling remain out of scope. Remote MCP endpoints support [personal upstream accounts](../docs/vault-accounts.md). With an external issuer, upstream JWT revocation depends on that provider; Hub-managed SSO also checks the current local session and user policy. Signing out of Hub does not revoke upstream business accounts or a global identity-provider session.
+Back up the database and retain `MCPHUB_CONFIG_KEY` separately. Choose the database driver for a fresh deployment. Tool groups and OpenAPI imports are managed through UI/API. Run one active Hub instance. Remote MCP endpoints support [personal upstream accounts](../docs/vault-accounts.md). With an external issuer, upstream JWT revocation depends on that provider; Hub-managed SSO also checks the current local session and user policy. Signing out of Hub does not revoke upstream business accounts or a global identity-provider session.
 
 MCP backends and HTTP tool groups expose **Rate limits** in the admin UI and a `rate_limit` object in the management API: `requests_per_second`, `burst`, `max_concurrent`. All default to zero (unlimited); users share the endpoint allowance. Policies persist in the selected database, while counters stay in the process. See [rate-limit semantics](../docs/configuration.md#endpoint-rate-limits).

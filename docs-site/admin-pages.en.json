@@ -9,7 +9,7 @@
     "slug": "admin/install",
     "title": "Install and start the gateway",
     "group": "Deployment",
-    "description": "Choose a deployment mode, install the server, and start local or remote administration.",
+    "description": "Start the console from the fresh-deployment template, add backends, test connections, and publish tools.",
     "sources": [
       {
         "file": "docs/admin-guide.md",
@@ -148,7 +148,7 @@
     "slug": "admin/client-authorizations",
     "title": "Enable client authorization",
     "group": "Identity and access",
-    "description": "Enable the personal portal, register user clients, and migrate services to strict authorization.",
+    "description": "Enable the personal portal, register user clients, and enable strict authorization for services.",
     "sources": [
       {
         "file": "docs/admin-guide.md",
@@ -224,14 +224,14 @@
     ]
   },
   {
-    "slug": "admin/upgrade",
-    "title": "Upgrade, back up, and roll back",
+    "slug": "admin/backup",
+    "title": "Backups and recovery",
     "group": "Operations",
-    "description": "Preserve the database and matching key before schema 9 migration, and restore them together for rollback.",
+    "description": "Retain the database and matching key, practice isolated recovery, and verify real calls.",
     "sources": [
       {
         "file": "docs/admin-guide.md",
-        "heading": "Upgrades and backups"
+        "heading": "Backups and recovery"
       }
     ]
   },

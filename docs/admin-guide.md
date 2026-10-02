@@ -6,13 +6,13 @@
 
 For administrators responsible for deployment, service connections, access policies, approval and operations. This manual covers v2.2.2. Installation and access on employee computers are covered by the [user manual](user-guide.md).
 
-Recommended sequence: **deploy the gateway → connect a read-only service → publish tools explicitly → assign user permissions → enable client authorization → validate before enabling writes**.
+Recommended sequence: **start the console → add backends → test connections → publish tools → assign user permissions → verify a real call**.
 
 - [Preparation and installation](#preparation-and-installation) · [Local management UI](#local-management-ui) · [Remote administration and databases](#remote-administrators-and-postgresql)
 - [Login clients and credentials](#distinguish-login-clients-and-upstream-credentials)
 - [Connect services and publish tools](#connect-services-and-publish-tools) · [Users and organizations](#users-and-organizations) · [Client authorization](#enable-client-authorization) · [Upstream accounts](#configure-upstream-accounts)
 - [Write approval and governance](#write-approval-and-configuration-governance) · [Console navigation](#console-navigation) · [Tool permission checks](#tool-permission-checks) · [Grant and request diagnostics](#grant-and-request-diagnostics)
-- [Upgrades and backups](#upgrades-and-backups) · [Operations](#operations) · [Security](#security-notes) · [Known limits and troubleshooting](#known-limits-and-troubleshooting)
+- [Backups and recovery](#backups-and-recovery) · [Operations](#operations) · [Security](#security-notes) · [Known limits and troubleshooting](#known-limits-and-troubleshooting)
 
 ## Preparation and installation
 
@@ -54,44 +54,33 @@ go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.2.2
 
 Go installs into `go env GOBIN`, or `$(go env GOPATH)/bin` when GOBIN is empty. Add that directory to PATH too.
 
-**The v2.2.2 server archive includes the same configuration templates as this guide.** The base example needs four variables and has no console, database or user portal. For administration, use the bundled [local administration configuration](../deploy/config.local.yaml) or [remote templates](../deploy/README.md). The [online base configuration](../config.example.yaml) is identical to the bundled file. If you previously downloaded v2.2.0, its old base example also requires console-origin and CRM variables; use the v2.2.2 template for a new deployment. Preserve and review existing production configuration rather than replacing it.
+**The v2.2.2 server archive includes the same templates as the online guide.** Its default `config.example.yaml` enables local administration and SQLite with `backends: []`; only the MCP URL, OIDC issuer and configuration encryption key are required. Start the console, add each service with its own credentials, test the connection, then publish reviewed tools and configure access. Use the remote templates for team administration, or the independent [advanced YAML-only example](../deploy/config.yaml-only.example.yaml) for deployments without a console.
 
-`validate --config PATH` checks configuration without creating a database. `serve --config PATH` starts the server and performs required migrations, writing structured JSON logs to stderr. Read [upgrades and backups](#upgrades-and-backups) before replacing an older version.
+`validate --config PATH` checks configuration without creating a SQLite database. `serve --config PATH` initializes fresh storage and starts the service, writing JSON logs to stderr.
 
 Before deployment, check [example selection and configuration ownership](configuration.md#choose-a-configuration-and-apply-changes), [environment/secret syntax](configuration.md#environment-variables-and-secrets) and the [deployment variable inventory](../deploy/README.md#environment-variables). Add optional modules only when needed.
 
 ## Local management UI
 
-Enable the embedded UI to manage connections without editing backend YAML. For a new deployment, save the following as `config.yaml`, set `MCPHUB_PUBLIC_URL` and `MCPHUB_AUTH_ISSUER` to your real HTTPS gateway and identity-service URLs, and supply a Base64-encoded 32-byte `MCPHUB_CONFIG_KEY` from your secret store. Generate the key once (for example, with `openssl rand -base64 32`) and retain it securely across restarts and upgrades. Choose a writable database location.
+The default is for a fresh deployment. Its unauthenticated management console listens only on `127.0.0.1:8081` on the gateway machine. For remote access, use the [remote deployment guide](../deploy/README.md) with HTTPS and registered administrator identities.
 
-```yaml
-server:
-  listen: "127.0.0.1:8080"
-  public_url: ${MCPHUB_PUBLIC_URL}
-auth:
-  issuer: ${MCPHUB_AUTH_ISSUER}
-admin:
-  enabled: true
-  listen: "127.0.0.1:8081"
-  database_path: ./data/mcphub.db
-  encryption_key_env: MCPHUB_CONFIG_KEY
-backends: []
-```
-
-The configuration above is complete; you can also download the [local administration file](../deploy/config.local.yaml). Run these steps from the directory containing `config.yaml`, replacing the URLs. The example saves the key in a private user directory. Subsequent starts read the same file, and your service manager must inject the same value. Existing deployments must use their database's original key.
+After extracting the server archive, copy its `config.example.yaml` to `config.yaml`, or download the [identical online template](../config.example.yaml). Run in a new deployment directory and replace the two HTTPS addresses:
 
 ```bash
+cp mcphub-release/config.example.yaml config.yaml
 export MCPHUB_PUBLIC_URL=https://hub.example.com/mcp
 export MCPHUB_AUTH_ISSUER=https://idp.example.com
 umask 077
-mkdir -p "$HOME/.config/mcphub"
-test -f "$HOME/.config/mcphub/config.key" || openssl rand -base64 32 > "$HOME/.config/mcphub/config.key"
-export MCPHUB_CONFIG_KEY="$(cat "$HOME/.config/mcphub/config.key")"
+mkdir -p secrets
+test -f secrets/config.key || openssl rand -base64 32 > secrets/config.key
+export MCPHUB_CONFIG_KEY="$(cat secrets/config.key)"
 mcphub validate --config config.yaml
 mcphub serve --config config.yaml
 ```
 
-Run `mcphub validate --config config.yaml`, then `mcphub serve --config config.yaml`. Open [the local console](http://127.0.0.1:8081/) on the gateway host. The admin listener does not require login and must remain loopback-only. The gateway still needs a working OIDC issuer to become ready and authenticate MCP clients.
+Only these three variables are required. `MCPHUB_CONFIG_KEY` is a Base64-encoded 32-byte key: generate it once and read the same private file on every restart. Your service manager must inject the same three values; MCPHub does not load `.env`. SQLite uses `data/mcphub.db` next to the YAML file and needs a writable directory.
+
+Open [the local console](http://127.0.0.1:8081/); the service list starts empty. Select **MCP backends → Add MCP backend**, enter each address and its own credentials, **test the connection**, then save. In **Tool permissions**, explicitly classify a reviewed tool as `read`, publish it and set required scopes. Follow the [service connection workflow](#connect-services-and-publish-tools) to make a real read call. An accessible console does not prove identity-provider readiness; `/readyz` returns 200 only with a working OIDC issuer.
 
 ## Remote administrators and PostgreSQL
 
@@ -105,7 +94,7 @@ mcpbridge admin --profile ops get /tool-groups
 mcpbridge admin --profile ops get /events
 ```
 
-Choose SQLite (default; existing `database_path` remains compatible) or PostgreSQL (`database_driver: postgres` and `database_dsn_env`). This supports one gateway instance, without multi-instance runtime synchronization. See the [deployment guide](../deploy/README.md) for OIDC setup, browser login, API writes, databases and HTTPS proxies.
+Choose SQLite (default) or PostgreSQL (`database_driver: postgres` and `database_dsn_env`). This supports one gateway instance, without multi-instance runtime synchronization. See the [deployment guide](../deploy/README.md) for OIDC setup, browser login, API writes, databases and HTTPS proxies.
 
 ## Connect services and publish tools
 
@@ -143,7 +132,7 @@ Each `client_id` belongs to a different authentication flow; register and config
 
 ## Enable client authorization
 
-Enable `client_authorization.enabled`, configure its portal `client_id`, and enable the managed database. SQLite and a **single MCPHub instance with PostgreSQL** use the same authorization lifecycle. Back up the database and encryption key before upgrading to v2.2.2 / schema 9 (v2.1.0 uses schema 8).
+Enable `client_authorization.enabled`, configure its portal `client_id`, and enable the managed database. SQLite and a **single MCPHub instance with PostgreSQL** use the same authorization lifecycle. Fresh storage uses schema 9; retain the database and encryption key across restarts.
 
 Register the portal callback `https://hub.example.com/client-auth/auth/callback`. The portal is served on the MCP gateway origin, separately from the administration listener. The CLI and portal must receive JWT access tokens for the full MCP resource URL with the same `issuer + sub`. Pairwise subjects from different OIDC clients require an identity-provider configuration that gives these clients a consistent subject; email matching is not used. An optional portal client secret stays on the server through `client_secret_env`.
 
@@ -227,7 +216,7 @@ Request diagnostics persist completed MCP POST requests in managed SQLite/Postgr
 
 Recording happens after request processing. Storage failure never replays or changes a business operation: the server logs the failure and the UI reports recording gaps during this run. A crash before persistence, in-flight requests and GET streams remain outside this history. Use independent approval-audit archives where required. Deployments without managed storage retain the existing short-lived in-memory diagnostics only.
 
-`GET /api/v1/requests` accepts `since` and `until` (RFC3339 completion times), returning the actual `window_start`/`window_end`. `format=ndjson` exports up to 10,000 records under the same administrator authorization and filters; a nonzero `X-MCPHub-Next-Cursor` response header can be passed as `cursor` to continue, or narrow the UI time range. Request history uses **schema 9** in v2.2.x (v2.1.0 uses schema 8). Back up the database and matching key before upgrading; rollback to v2.1.0 or earlier requires restoring the pre-upgrade backup.
+`GET /api/v1/requests` accepts `since` and `until` (RFC3339 completion times), returning the actual `window_start`/`window_end`. `format=ndjson` exports up to 10,000 records under the same administrator authorization and filters; a nonzero `X-MCPHub-Next-Cursor` response header can be passed as `cursor` to continue, or narrow the UI time range. Request history is retained in fresh **schema 9** storage; back up the database and matching key.
 
 Admin-only APIs (on the **admin listener**, not the personal portal):
 
@@ -236,21 +225,19 @@ mcpbridge admin --profile ops get '/client-grants?subject=alice&status=active&li
 mcpbridge admin --profile ops get '/requests?endpoint=database-prod&outcome=scope_denied&limit=25'
 ```
 
-Both return `next_cursor`; pass it back as `cursor` with unchanged filters and, for request history, the returned time window. Grant filters also accept `client` and `endpoint`; request filters also accept `request_id`, `subject`, `client` and original `tool`. Normal pagination limits are 1–100. Revoke with `POST /api/v1/client-grants/{grant_id}/revoke` and `{"subject":"alice"}`. See the [v2.2.2 release and upgrade notes](../RELEASE_NOTES_v2.2.2.md) for the schema 9 migration.
+Both return `next_cursor`; pass it back as `cursor` with unchanged filters and, for request history, the returned time window. Grant filters also accept `client` and `endpoint`; request filters also accept `request_id`, `subject`, `client` and original `tool`. Normal pagination limits are 1–100. Revoke with `POST /api/v1/client-grants/{grant_id}/revoke` and `{"subject":"alice"}`.
 
-## Upgrades and backups
+## Backups and recovery
 
-Review the [complete backup, upgrade and rollback procedure](../RELEASE_NOTES_v2.2.2.md#upgrade-and-rollback--升级与回滚) before upgrading from v2.1.0 or earlier. In v2.2.2, `serve` migrates managed SQLite/PostgreSQL databases to schema 9 (v2.1.0 uses schema 8); `validate` is read-only. Keep the matching `MCPHUB_CONFIG_KEY`. Rolling back to v2.1.0 or earlier requires the old database, key/configuration and binary together. v2.2.0 and v2.2.2 both use schema 9.
+After initializing a fresh SQLite or PostgreSQL deployment, keep a consistent database backup and its matching `MCPHUB_CONFIG_KEY` separately. Use SQLite-consistent backup methods or native PostgreSQL backup tools; coordinate Vault backups when enabled.
 
-Explicitly populate `published_tools` for each backend and classify allowed tools as read or write. Empty publication lists expose no tools; writes and unclassified tools require remote browser approval. Local unauthenticated or YAML-only deployments can execute only published, explicitly read-only tools. Existing HTTP tools keep their enabled state; new manual tools default to disabled. Client grants and SSO are opt-in; new SSO users await local authorization.
-
-To enable management for the first time, configure the admin listener, encryption key and writable database. The first start imports YAML backends; after bootstrap, the database is the backend source. Tool groups and OpenAPI imports remain API-managed. Changing the database driver does not migrate data. PostgreSQL remains single-instance. Restart the gateway, refresh the browser, install the separate CLI and restart client connections. See the [deployment guide](../deploy/README.md).
+Practice recovery in an isolated environment with the same program version, database backup and matching key. Inspect backend addresses, credentials, tool publication, user permissions and revocation records, then make a real call. Do not delete the database to reimport YAML: managed service configuration comes from the database.
 
 ## Operations
 
 - Use `/healthz` for process liveness and `/readyz` for verifier/required-backend readiness. See [HTTP endpoints](configuration.md#http-endpoints-and-rfc-9728).
 - Use SIGHUP for reloadable YAML fields. Listener, identity, administration, Vault/portal and other static settings require restart. Once initialized, managed storage supplies backend configuration; YAML backends no longer apply. See [reload and shutdown](configuration.md#sighup-reload-and-shutdown).
-- Back up the database with its matching `MCPHUB_CONFIG_KEY`; coordinate Vault data backups when enabled. Recheck grants, accounts and configuration after recovery. Changing database drivers does not migrate data.
+- Back up the database with its matching `MCPHUB_CONFIG_KEY`; coordinate Vault data backups when enabled. Recheck grants, accounts and configuration after recovery. Choose a database driver when creating the deployment.
 - Monitor recording gaps, failed approval deliveries and archive backlogs. Request history and recent configuration events do not replace independent approval-audit archives.
 
 ### Docker deployment

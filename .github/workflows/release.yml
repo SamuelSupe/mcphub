@@ -221,7 +221,7 @@ jobs:
           tar -xzf "dist/mcpbridge_${GITHUB_REF_NAME}_linux_amd64.tar.gz" -C "$extracted"
           bash scripts/verify-client.sh "$extracted/mcpbridge" "${GITHUB_REF_NAME#v}"
 
-      - name: Publish GitHub Release
+      - name: Prepare draft GitHub Release for installation acceptance
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -232,6 +232,6 @@ jobs:
             dist/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
-            --latest \
+            --draft \
             --title "MCPHub $GITHUB_REF_NAME" \
             --notes-file "RELEASE_NOTES_${GITHUB_REF_NAME}.md"

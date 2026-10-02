@@ -1,0 +1,24 @@
+# Advanced: no management UI or database; edit every backend in this YAML.
+# 高级示例：纯 YAML 管理；每个后端分别填写地址、凭证、发布工具和权限。
+# Required environment: MCPHUB_PUBLIC_URL, MCPHUB_AUTH_ISSUER.
+# Replace the example backend URL and header value before starting.
+# Only explicitly published read tools can execute in this mode.
+server:
+  listen: "127.0.0.1:8080"
+  public_url: ${MCPHUB_PUBLIC_URL}
+auth:
+  issuer: ${MCPHUB_AUTH_ISSUER}
+backends:
+  - id: example
+    url: https://mcp.example.com/mcp
+    required: true
+    request_timeout: 30s
+    headers:
+      X-API-Key: REPLACE_WITH_THIS_BACKEND_CREDENTIAL
+    required_scopes: [mcp:example.read]
+    published_tools: []
+    # After reviewing a real tool, replace the empty list and set its read rule:
+    # published_tools: [search]
+    # tool_rules:
+    #   - match: search
+    #     effect: read

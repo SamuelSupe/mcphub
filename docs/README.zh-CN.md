@@ -18,7 +18,7 @@
 
 ## 管理员手册
 
-**[在线管理员文档站](https://samuelsupe.github.io/mcphub/admin/)**：20 个中英文章节，与用户指南共用导航风格和全文搜索；对应语言的原始 Markdown 更新后自动发布。
+**[在线管理员文档站](https://samuelsupe.github.io/mcphub/admin/)**：20 个中英文章节，与用户指南共用导航风格和全文搜索；随正式发行同步发布。
 
 **[打开管理员手册](admin-guide.zh-CN.md)**：面向负责部署、权限、安全治理和运行维护的人员。
 
@@ -26,7 +26,7 @@
 2. [接入服务并发布工具](admin-guide.zh-CN.md#服务接入与工具发布)
 3. [配置用户与组织](admin-guide.zh-CN.md#用户与组织)、[客户端授权](admin-guide.zh-CN.md#启用客户端授权)和[上游账号](admin-guide.zh-CN.md#配置上游账号)
 4. [配置写审批与治理](admin-guide.zh-CN.md#写审批与配置治理)
-5. [查询授权和请求诊断](admin-guide.zh-CN.md#授权与请求诊断)、[升级与备份](admin-guide.zh-CN.md#升级与备份)
+5. [查询授权和请求诊断](admin-guide.zh-CN.md#授权与请求诊断)、[备份与恢复](admin-guide.zh-CN.md#备份与恢复)
 
 ## 配置与专题参考
 
@@ -46,5 +46,5 @@
 - [27 页架构 PDF](feishu-vault-agent-architecture.zh-CN.pdf)：2026-09-26 的评审快照，当前状态以在线架构文档为准。
 - [客户端 Broker 与授权同步设计](broker-authorization-design.zh-CN.md)：首版历史快照，附 v2.0–v2.2 的 schema 与能力变化。
 - [界面截图说明](screenshots/README.md)：v2.1.0 演示环境截图及来源。
-- [v2.2.2 发行与升级说明](../RELEASE_NOTES_v2.2.2.md)、[全部发行版本](https://github.com/SamuelSupe/mcphub/releases)。
+- [v2.2.2 发行与新部署说明](../RELEASE_NOTES_v2.2.2.md)、[全部发行版本](https://github.com/SamuelSupe/mcphub/releases)。
 - [贡献指南](../CONTRIBUTING.md)：开发、验证及文档维护约定。

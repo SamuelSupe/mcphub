@@ -35,11 +35,11 @@ First-time user: get the MCP URL and CLI client ID from your administrator, run 
 
 First deployment: follow the [administrator manual](docs/admin-guide.md#preparation-and-installation) to prepare identity, HTTPS, storage and an encryption key. Validate one read-only service first.
 
-## Version and upgrades
+## Version and fresh deployments
 
-These documents cover **v2.2.2**, renaming the client connector to MCPBridge and clearly separating client/server downloads. [Release notes](RELEASE_NOTES_v2.2.2.md) · [Downloads](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
+These documents cover **fresh v2.2.2 deployments**. The default enables the management console and SQLite with no preconfigured backends. Install `mcphub` on the gateway and `mcpbridge` on user computers. [Release notes](RELEASE_NOTES_v2.2.2.md) · [Downloads](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
 
-v2.2.2 retains **schema 9** from v2.2.0; earlier versions migrate on startup. Back up the database and matching encryption key before starting; rollback to v2.1.0 or earlier requires the pre-upgrade backup. Upgrades from v1.x also require reviewing tool publication and read/write policies, and the Go module path adds `/v2`. See the [upgrade and rollback procedure](RELEASE_NOTES_v2.2.2.md#upgrade-and-rollback--升级与回滚).
+The default requires only `MCPHUB_PUBLIC_URL`, `MCPHUB_AUTH_ISSUER` and `MCPHUB_CONFIG_KEY`. Follow **start the console → add backends → test connections → publish tools**. Configure a separate address, credential and access policy for each backend. Remote administration uses the `deploy/config.remote-*` templates and registered administrator identities.
 
 ## Capabilities and boundaries
 

@@ -6,7 +6,7 @@ mcpbridge setup --profile work &gt; tasks-mcp.json</code></pre>
 <p>每次选目标服务和工具，使用不同客户端名称，合并条目到客户端配置。不同 AI 客户端也建议单独建入口，方便撤销。</p>
 <h2 id="profiles">分开公司和身份</h2>
 <p>不同 MCPHub 地址或身份使用不同 profile。已有 profile 指向其他地址或 client ID 时，向导拒绝混用；创建新 profile，或明确重新登录：</p>
-<pre><code>mcpbridge setup --server https://other-hub.example.com/mcp --client-id mcphub-cli --profile other-work &gt; other-mcp.json</code></pre>
+<pre><code>mcpbridge setup --server https://other-hub.example.com/mcp --client-id mcpbridge --profile other-work &gt; other-mcp.json</code></pre>
 <p>管理员登录 profile 与日常用户 profile 分开。</p>
 <h2 id="new-machine">换电脑或系统账号</h2>
 <ol><li>新环境安装连接器。</li><li>重新运行向导，登录并授权。</li><li>使用新生成的路径、MCPHUB_HOME 和入口 ID。</li><li>确认新连接后，在门户撤销不再使用的旧会话或入口。</li></ol>

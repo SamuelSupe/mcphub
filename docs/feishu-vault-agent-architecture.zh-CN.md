@@ -390,7 +390,7 @@ admin:
   database_dsn_env: MCPHUB_DATABASE_URL
 ```
 
-数据库备份、Vault 数据和配置加密密钥必须协调恢复。v2.2.0 升级至 schema 9，升级后的数据库不能交给旧二进制写入。恢复历史数据库可能恢复旧授权，应核对撤销记录与账号绑定后再开放流量。
+数据库备份、Vault 数据和配置加密密钥必须协调恢复。新部署的托管数据库使用 schema 9。恢复历史数据库可能恢复旧授权，应核对撤销记录与账号绑定后再开放流量。
 
 ### 可选：AWS KMS 保护 Vault
 
@@ -419,7 +419,7 @@ seal "awskms" {
 
 ```bash
 mcpbridge setup --profile work \
-  --server https://hub.example.com/mcp --client-id mcphub-cli
+  --server https://hub.example.com/mcp --client-id mcpbridge
 ```
 
 向导输出通用 `mcpServers` JSON 或 VS Code JSON，不直接输出 Codex TOML，也不会覆盖现有客户端文件。给不同 Agent 运行各自的授权流程并使用不同入口名称。个人账号未连接时，根据提示打开 `https://hub.example.com/client-auth/` 完成连接，然后运行 `doctor`；不要把连接未完成误当成要给客户端填写 Token。
@@ -428,7 +428,7 @@ mcpbridge setup --profile work \
 
 ```bash
 mcpbridge login --profile work \
-  --server https://hub.example.com/mcp --client-id mcphub-cli \
+  --server https://hub.example.com/mcp --client-id mcpbridge \
   --scope projects:access --scope projects:read
 
 mcpbridge client add --profile work --name codex-projects --endpoint projects \

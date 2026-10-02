@@ -139,7 +139,7 @@ scope 取自 JWT 的 `scope` 和 `scp` 两个 claim：`scope` 只接受空格分
 | `encryption_key_env` | `MCPHUB_CONFIG_KEY` | 保存 Base64 编码 32 字节 AES 密钥的环境变量名；丢失或改变密钥会导致已存 Secret 无法解密。 |
 | `request_retention` | `720h`（30 天） | 已完成 MCP POST 请求历史的保留期，范围 `24h`–`8760h`；到期记录自动清理。诊断与导出见[管理员手册](admin-guide.zh-CN.md#授权与请求诊断)。 |
 
-空数据库首次启动时，MCPHub 会在一个事务中导入展开后的 YAML backends。bootstrap 标记写入后，所选数据库成为唯一 backend 来源，之后修改 YAML backend 不再生效。Header 值和 OAuth client secret 使用 AES-256-GCM 加密，管理 API 永不返回明文。
+空数据库首次启动时，MCPHub 会在一个事务中导入展开后的 YAML backends。bootstrap 标记写入后，所选数据库成为唯一 backend 来源，之后修改 YAML backend 不再生效。Header 值和 OAuth client secret 使用 AES-256-GCM 加密，管理 API 永不返回明文。SQLite 在读改写事务读取前取得写锁；并发本机管理最多等待 5 秒，超时返回失败，不重放变更。
 
 默认 UI 地址为 `http://127.0.0.1:8081/`，可以在不中断进程的情况下注册、测试、编辑、启停和删除后端。Required 后端连接失败时变更会被拒绝，当前 runtime 不受影响；optional 后端不可用时可以保存，并在后台持续重连。
 
@@ -466,13 +466,13 @@ mcphub serve --config config.yaml
 - 针对官方 Go MCP SDK v1.7.0 客户端的 `notifications/cancelled` 消息缺少 2026-07-28 metadata，Hub 入站和后端出站都会做兼容规范化，使取消或取消订阅后的同一逻辑 MCP session 仍可复用；这是互操作性 shim，不是自定义扩展。
 - 以 `backend.id` 为命名空间，改写资源 URI，避免不同后端的同名能力和 URI 冲突。
 - 使用 OIDC discovery 和 JWKS 验证 Bearer JWT；按后端 `required_scopes` 过滤目录和调用。
-- 提供独立的 `mcpbridge` 程序，提供外部 OIDC 浏览器登录及本地 stdio 到 HTTP 的连接器，并自动刷新凭证。
+- 提供独立的 `mcpbridge` 程序，支持内建账号、LDAP 或 OIDC 浏览器登录、Agent 设备授权，以及本地 stdio 到 HTTP 的连接器，并自动刷新凭证。
 - 工具须显式发布，并受业务资源参数规则约束；写工具和未分类工具需要独立审批，支持多人复核、OIDC 加强认证、配置审批与签名审计投递。
 - 在 MCPHub 管理 SSO 用户、部门和用户组权限，通过个人授权门户与本地 Broker 控制客户端 Scope；`setup` 输出不含凭证的 MCP 配置，`doctor` 不执行工具即可检查访问问题。
 - 对原始后端 tool name 应用后端本地 `tool_rules` 和 Go `path.Match`；匹配规则的 scope 会合并去重，按 all-of 授权，并从 `tools/list` 隐藏未授权 tool。
 - 支持后端静态请求头，或 OAuth 2.0 `client_credentials`；两者不能同时提供 `Authorization`。
-- 管理 UI 按总览、服务接入、访问控制、治理与审计组织九个页面，支持持久化中英文选择、按角色显示入口和窄屏布局。工具组可以把手工 HTTP tool 和多个 OpenAPI 3.0/3.1 import 通过 `/mcp` 发布；组内共享 Base URL、Header、OAuth、scope 和 timeout，且不会暴露 raw HTTP proxy。
-- 支持通过 OIDC 认证的远程浏览器/CLI 管理，以及单实例网关的加密 SQLite 或 PostgreSQL 配置存储。
+- 管理 UI 按总览、服务接入、访问控制、治理与审计组织页面，支持持久化中英文选择、按角色显示入口和窄屏布局。工具组可以把手工 HTTP tool 和多个 OpenAPI 3.0/3.1 import 通过 `/mcp` 发布；组内共享 Base URL、Header、OAuth、scope 和 timeout，且不会暴露 raw HTTP proxy。
+- 支持内建账号或可选 LDAP/OIDC 登录的远程浏览器/CLI 管理，以及单实例网关的加密 SQLite 或 PostgreSQL 配置存储。
 - 可在 UI/API 中配置 endpoint 每秒请求数、突发容量和最大并发；默认不限流，调用者共享额度。
 - 提供健康、就绪和 RFC 9728 Protected Resource Metadata 端点；配置支持 SIGHUP 热重载。
 

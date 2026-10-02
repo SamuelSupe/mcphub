@@ -195,6 +195,10 @@ func Open(ctx context.Context, path string, key []byte) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("initialize configuration encryption: %w", err)
 	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve configuration database: %w", err)
+	}
 	parent := filepath.Dir(path)
 	if _, err := os.Stat(parent); errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(parent, 0o700); err != nil {
@@ -219,7 +223,15 @@ func Open(ctx context.Context, path string, key []byte) (*Store, error) {
 	if err := os.Chmod(path, 0o600); err != nil {
 		return nil, fmt.Errorf("secure configuration database: %w", err)
 	}
-	db, err := sql.Open("sqlite", path)
+	databaseURL := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	query := databaseURL.Query()
+	// Reserve the writer before reading: a deferred snapshot cannot be upgraded
+	// after another Store commits, even with busy_timeout. Do not replay mutations.
+	query.Set("_txlock", "immediate")
+	query.Add("_pragma", "foreign_keys(1)")
+	query.Add("_pragma", "busy_timeout(5000)")
+	databaseURL.RawQuery = query.Encode()
+	db, err := sql.Open("sqlite", databaseURL.String())
 	if err != nil {
 		return nil, fmt.Errorf("open configuration database: %w", err)
 	}
@@ -234,14 +246,8 @@ func Open(ctx context.Context, path string, key []byte) (*Store, error) {
 			return closeOnError(err)
 		}
 	}
-	for _, pragma := range []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA foreign_keys=ON",
-		"PRAGMA busy_timeout=5000",
-	} {
-		if _, err := db.ExecContext(ctx, pragma); err != nil {
-			return closeOnError(fmt.Errorf("configure configuration database: %w", err))
-		}
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
+		return closeOnError(fmt.Errorf("configure configuration database: %w", err))
 	}
 	if err := migrateSchema(ctx, db); err != nil {
 		return closeOnError(err)

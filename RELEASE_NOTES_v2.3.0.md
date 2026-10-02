@@ -24,6 +24,7 @@ This release is designed for fresh deployments; no migration procedure for exist
 ## Reliability and performance audit
 
 - Completed pairing requests cannot cancel an already delivered login session after a client grant is revoked. Credential delivery also checks the confirmed grant and Broker session deadlines before creating an SSO family.
+- SQLite read-modify-write transactions reserve the writer before reading, preventing snapshot-upgrade failures during concurrent permission revocation or local administration. Connection replacement retains foreign-key enforcement and busy waiting; business mutations are not replayed.
 - Password hashing runs outside identity admission and database locks; fresh credential, lockout and TOTP checks remain serialized. Group permissions use one batch read, and enterprise source updates scan SSO families once for all affected users.
 - Interactive business calls reuse the connected MCP session and rely on the gateway's live authorization checks. Status and catalog refresh still validate authorization; failed calls are not replayed. Temporary private-file failures preserve the pending request, and delayed failures from an old connection cannot close a replacement.
 - Endpoint policy lookup reuses the transaction-aware implementation; catalog reconciliation is linear, with a database index for pairing grant lookups. No cache or dependency was added.

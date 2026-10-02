@@ -139,7 +139,7 @@ The default template enables administration. It serves an embedded UI and JSON A
 | `encryption_key_env` | `MCPHUB_CONFIG_KEY` | Environment variable containing a Base64-encoded 32-byte AES key. Losing or changing this key makes stored secrets unreadable. |
 | `request_retention` | `720h` (30 days) | Retention for completed MCP POST request history, from `24h` to `8760h`; expired records are pruned automatically. See [administrator diagnostics and export](admin-guide.md#grant-and-request-diagnostics). |
 
-On the first start with an empty database, expanded YAML backends are imported in one transaction. The selected database becomes the sole backend source after the bootstrap marker is written; later YAML backend edits have no effect. Header values and OAuth client secrets are encrypted with AES-256-GCM and are never returned by the management API.
+On the first start with an empty database, expanded YAML backends are imported in one transaction. The selected database becomes the sole backend source after the bootstrap marker is written; later YAML backend edits have no effect. Header values and OAuth client secrets are encrypted with AES-256-GCM and are never returned by the management API. SQLite reserves its write lock before each read-modify-write transaction; concurrent local administration waits up to five seconds, then reports failure without replaying the change.
 
 The UI is available at `http://127.0.0.1:8081/` by default. It can register, probe, edit, enable, disable, and delete backends without restarting the process. Required backend failures reject a change without replacing the current runtime; an unavailable optional backend is saved and continues reconnecting in the background.
 
@@ -464,13 +464,13 @@ Users do not hold direct permissions. Create groups in **Users & groups**, assig
 - Normalizes missing 2026-07-28 metadata on `notifications/cancelled` from official Go MCP SDK v1.7.0 clients on both Hub ingress and backend egress, so the same logical MCP session remains reusable after cancellation or unsubscribe; this is an interoperability shim, not a custom extension.
 - Namespaces capabilities with `backend.id` and rewrites resource URIs to avoid same-name capability and URI collisions between backends.
 - Verifies Bearer JWTs with OIDC discovery and JWKS, then filters catalogs and calls by each backend's `required_scopes`.
-- Includes the separate `mcpbridge` program for browser login through an external OIDC service and a local stdio-to-HTTP connector with credential refresh.
-- Requires explicit tool publication, resource-argument restrictions and independent approval for write/unclassified tools; supports reviewer quorum, OIDC step-up, configuration review and signed audit delivery.
+- Includes the separate `mcpbridge` program for built-in, LDAP or OIDC browser login, Agent device authorization and a local stdio-to-HTTP connector with credential refresh.
+- Requires explicit tool publication, resource-argument restrictions and independent approval for write/unclassified tools; supports reviewer quorum, local TOTP or verified OIDC step-up, configuration review and signed audit delivery.
 - Manages SSO user/group/department permissions and per-client scopes through the personal consent portal and local Broker. `setup` emits credential-free MCP configuration; `doctor` diagnoses access without executing tools.
 - Applies backend-local `tool_rules` to original tool names with Go `path.Match`; matching rules union and deduplicate required scopes, use all-of authorization, and hide unauthorized tools from `tools/list`.
 - Supports static backend request headers or OAuth 2.0 `client_credentials`; neither mode may provide a static `Authorization` header together with OAuth.
-- The administration UI groups nine pages under overview, connections, access control, and governance/audit. It supports persistent Chinese/English selection, role-aware navigation and narrow screens. Groups can publish hand-authored HTTP tools and multiple OpenAPI 3.0/3.1 imports through `/mcp`; group Base URL, headers, OAuth, scopes, and timeout are shared, and no raw HTTP proxy is exposed.
-- Supports OIDC-authenticated remote browser/CLI administration and encrypted SQLite or PostgreSQL configuration storage for one gateway instance.
+- The administration UI groups pages under overview, connections, access control, and governance/audit. It supports persistent Chinese/English selection, role-aware navigation and narrow screens. Groups can publish hand-authored HTTP tools and multiple OpenAPI 3.0/3.1 imports through `/mcp`; group Base URL, headers, OAuth, scopes, and timeout are shared, and no raw HTTP proxy is exposed.
+- Supports remote browser/CLI administration with built-in accounts or optional LDAP/OIDC sign-in and encrypted SQLite or PostgreSQL configuration storage for one gateway instance.
 - Configures per-endpoint request rates, burst capacity and concurrency through the UI/API; limits are disabled by default and shared by callers.
 - Provides health, readiness, and RFC 9728 Protected Resource Metadata endpoints, plus SIGHUP configuration reload.
 

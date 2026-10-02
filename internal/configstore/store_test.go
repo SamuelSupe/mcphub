@@ -266,6 +266,65 @@ func TestBootstrapIsIdempotentAndKeepsTheOriginalSnapshot(t *testing.T) {
 	}
 }
 
+func TestSQLiteTransactionsSerializeAcrossStores(t *testing.T) {
+	store, key, path := newTestStore(t)
+	other, err := Open(t.Context(), path, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	if _, err = store.db.ExecContext(t.Context(), "INSERT INTO metadata(key,value) VALUES('concurrent_write',?)", []byte("initial")); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := store.db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	var value []byte
+	if err = tx.QueryRowContext(t.Context(), "SELECT value FROM metadata WHERE key='concurrent_write'").Scan(&value); err != nil {
+		t.Fatal(err)
+	}
+	started, done := make(chan struct{}), make(chan error, 1)
+	go func() {
+		close(started)
+		second, err := other.db.BeginTx(t.Context(), nil)
+		if err == nil {
+			defer second.Rollback()
+			var value []byte
+			err = second.QueryRowContext(t.Context(), "SELECT value FROM metadata WHERE key='concurrent_write'").Scan(&value)
+			if err == nil && string(value) != "first" {
+				err = errors.New("waiting writer read an old snapshot")
+			}
+			if err == nil {
+				_, err = second.ExecContext(t.Context(), "UPDATE metadata SET value=? WHERE key='concurrent_write'", []byte("second"))
+			}
+			if err == nil {
+				err = second.Commit()
+			}
+		}
+		done <- err
+	}()
+	<-started
+	select {
+	case err := <-done:
+		t.Fatalf("another writer completed before the read-modify-write transaction: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if _, err = tx.ExecContext(t.Context(), "UPDATE metadata SET value=? WHERE key='concurrent_write'", []byte("first")); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-done; err != nil {
+		t.Fatal(err)
+	}
+	if err = store.db.QueryRowContext(t.Context(), "SELECT value FROM metadata WHERE key='concurrent_write'").Scan(&value); err != nil || string(value) != "second" {
+		t.Fatal("serialized updates were not committed", string(value), err)
+	}
+}
+
 func TestOpenSecuresSQLiteDatabaseAndSidecars(t *testing.T) {
 	ctx := context.Background()
 	store, _, path := newTestStore(t)

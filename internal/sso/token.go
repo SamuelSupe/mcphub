@@ -80,13 +80,20 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.Scopes = s.grantedScopes(identity, p.Scopes)
+		if p.Grants != nil {
+			client, registered := s.consentClient(r.Context(), p.ClientID)
+			if !registered || !client.RequireConsent || clientPolicy(client) != p.ClientPolicy {
+				oauthError(w, 400, "invalid_grant")
+				return
+			}
+		}
 		code = p
 		ttl := 10 * time.Minute
 		offline := slices.Contains(p.Scopes, "offline_access")
 		if offline {
 			ttl = 8 * time.Hour
 		}
-		session, refresh, err = s.store.CreateSSOSession(r.Context(), configstore.SSOSession{UserID: p.UserID, CredentialVersion: p.CredentialVersion, ClientID: p.ClientID, Resource: p.Resource, Scopes: p.Scopes, ExpiresAt: time.Now().Add(ttl)}, offline)
+		session, refresh, err = s.store.CreateSSOSession(r.Context(), configstore.SSOSession{UserID: p.UserID, CredentialVersion: p.CredentialVersion, ClientID: p.ClientID, ClientPolicy: p.ClientPolicy, Resource: p.Resource, Scopes: p.Scopes, ExpiresAt: time.Now().Add(ttl), Grants: p.Grants}, offline)
 	case "refresh_token":
 		// A rotated credential is usable only by its original client and resource.
 		session, err = s.store.SSORefreshSession(r.Context(), form.Get("refresh_token"))
@@ -97,6 +104,13 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		if session.ClientID != form.Get("client_id") || session.Resource != form.Get("resource") {
 			oauthError(w, 400, "invalid_grant")
 			return
+		}
+		if session.Grants != nil {
+			client, ok := s.consentClient(r.Context(), session.ClientID)
+			if !ok || !client.RequireConsent || clientPolicy(client) != session.ClientPolicy || !slices.Contains(client.Resources, session.Resource) {
+				oauthError(w, 400, "invalid_grant")
+				return
+			}
 		}
 		identity, err = s.tokenIdentity(r.Context(), session.UserID)
 		if err != nil {
@@ -199,12 +213,18 @@ func (v *Verifier) Verify(ctx context.Context, raw string, _ *http.Request) (*mc
 	if err != nil || session.UserID != claims.Subject || session.Resource != v.resource || session.ClientID != extra.ClientID {
 		return invalid()
 	}
+	if session.Grants != nil {
+		client, ok := v.server.consentClient(ctx, session.ClientID)
+		if !ok || !client.RequireConsent || clientPolicy(client) != session.ClientPolicy || !slices.Contains(client.Resources, session.Resource) {
+			return invalid()
+		}
+	}
 	identity, err := v.server.tokenIdentity(ctx, claims.Subject)
 	if err != nil || session.CredentialVersion != identity.CredentialVersion {
 		return invalid()
 	}
 	scopes := v.server.grantedScopes(identity, strings.Fields(extra.Scope))
-	return &mcpauth.TokenInfo{UserID: identity.ID, Scopes: scopes, Expiration: claims.Expiry.Time(), Extra: map[string]any{"issuer": v.server.cfg.Auth.Issuer, "identity": &identity}}, nil
+	return &mcpauth.TokenInfo{UserID: identity.ID, Scopes: scopes, Expiration: claims.Expiry.Time(), Extra: map[string]any{"issuer": v.server.cfg.Auth.Issuer, "identity": &identity, "native_grants": session.Grants, "oauth_client_id": session.ClientID}}, nil
 }
 
 func Identity(info *mcpauth.TokenInfo) *configstore.EffectiveIdentity {

@@ -19,6 +19,7 @@ type Manager struct {
 	aliases map[string]*Client
 	ids     []string
 	cancel  context.CancelFunc
+	workers sync.WaitGroup
 }
 
 type StatusDetail struct {
@@ -95,7 +96,11 @@ func (m *Manager) Start(parent context.Context, requireReady bool) error {
 		return fmt.Errorf("required backends are unavailable: %w", requiredErrors[0])
 	}
 	for _, client := range m.clients {
-		go client.Run(ctx)
+		m.workers.Add(1)
+		go func() {
+			defer m.workers.Done()
+			client.Run(ctx)
+		}()
 	}
 	return nil
 }
@@ -107,6 +112,7 @@ func (m *Manager) Close() {
 	for _, client := range m.clients {
 		client.Close()
 	}
+	m.workers.Wait()
 }
 
 func (m *Manager) Ready() bool {

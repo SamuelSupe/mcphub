@@ -29,6 +29,7 @@ import (
 )
 
 type App struct {
+	deploymentDigest     string
 	credentials          *upstream.Manager
 	requests             diagnostics.Recorder
 	requestWriteFailures atomic.Uint64
@@ -44,6 +45,7 @@ type App struct {
 
 	runtimeMu       sync.RWMutex
 	runtime         *runtime
+	draining        sync.WaitGroup
 	reloadMu        sync.Mutex
 	candidateMu     sync.Mutex
 	candidateCancel context.CancelFunc
@@ -184,6 +186,10 @@ func New(parent context.Context, cfg *config.Config, configPath string, logger *
 	if cfg.Auth.Builtin() && cfg.ClientAuthorization.Enabled && app.userAuth != nil {
 		ssoServer.SetDeviceHandlers(app.createDeviceAuthorization, app.deviceAuthorizationToken)
 	}
+	if ssoServer != nil && cfg.ClientAuthorization.Enabled {
+		app.configureNativeAuthorization()
+	}
+	app.deploymentDigest = fileDigest(configPath)
 	return app, nil
 }
 
@@ -273,6 +279,7 @@ func (a *App) Close() {
 		if rt != nil {
 			rt.close()
 		}
+		a.draining.Wait()
 		a.credentials.Close()
 		if a.store != nil {
 			_ = a.store.Close()
@@ -387,7 +394,7 @@ func (a *App) activateCandidate(candidate, previous *runtime) error {
 	}
 	a.installRuntimeLocked(candidate, previous)
 	a.runtimeMu.Unlock()
-	go previous.drain(previous.cfg.Server.DrainTimeout.Duration)
+	go a.drainRuntime(previous)
 	return nil
 }
 
@@ -402,6 +409,13 @@ func (a *App) installRuntimeLocked(candidate, previous *runtime) {
 	previous.hub.RetireApprovals()
 	a.limits.Configure(candidate.rateLimitPolicies())
 	a.runtime = candidate
+	// Register retirement while runtimeMu still excludes Close's final wait.
+	a.draining.Add(1)
+}
+
+func (a *App) drainRuntime(previous *runtime) {
+	defer a.draining.Done()
+	previous.drain(previous.cfg.Server.DrainTimeout.Duration)
 }
 
 func (a *App) cancelReloadCandidate() {

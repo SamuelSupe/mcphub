@@ -39,11 +39,12 @@ func (v *view) toolHandler(definition toolDefinition) mcp.ToolHandler {
 			return failure, nil
 		}
 		if v.personalEndpoint(definition.backendID) {
-			if v.grant == nil {
+			g := v.serviceGrant(definition.backendID)
+			if g == nil {
 				return v.accountRequired(definition.backendID, upstream.ErrConnect), nil
 			}
 			c, _ := v.hub.cfg.Backend(definition.backendID)
-			if _, err := v.hub.credentials.Binding(ctx, credentialEndpoint(c), v.grant.Issuer, v.grant.Subject); err != nil {
+			if _, err := v.hub.credentials.Binding(ctx, credentialEndpoint(c), g.Issuer, g.Subject); err != nil {
 				return v.accountRequired(definition.backendID, err), nil
 			}
 		}
@@ -122,7 +123,8 @@ func (v *view) canCallTool(req *mcp.CallToolRequest, definition toolDefinition) 
 	if !v.grantAllowsDefinition(definition) {
 		return false
 	}
-	if v.grant != nil && !v.grant.AllowsTool(definition.backendID, definition.original, definition.effect, req.Params.Arguments) {
+	g := v.serviceGrant(definition.backendID)
+	if g != nil && !g.AllowsTool(definition.backendID, definition.original, definition.effect, req.Params.Arguments) {
 		return false
 	}
 	if definition.httpTool {
@@ -142,8 +144,8 @@ func (v *view) canCallTool(req *mcp.CallToolRequest, definition toolDefinition) 
 	} else if !v.dynamicHTTP {
 		return hasRequiredScopes(granted, definition.requiredScopes)
 	}
-	if v.grant != nil {
-		scopes = v.grant.EffectiveScopes(scopes)
+	if g != nil {
+		scopes = g.EffectiveScopes(scopes)
 	}
 	missing, known := v.hub.MissingScopes(definition.backendID, scopes)
 	if !known || len(missing) != 0 {

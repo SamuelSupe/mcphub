@@ -10,6 +10,7 @@
 * {
   box-sizing: border-box;
 }
+[hidden] { display: none !important; }
 body {
   margin: 0;
 }
@@ -175,7 +176,7 @@ footer {
   }
 }
 
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #3265dc60; outline-offset: 3px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid #3265dc60; outline-offset: 3px; }
 button:hover:not(:disabled), .button:hover { filter: brightness(.96); }
 header > a { display: flex; align-items: center; gap: 12px; }
 .portal-brand { width: 28px; height: 30px; fill: #3265dc; }
@@ -209,6 +210,8 @@ header > a { display: flex; align-items: center; gap: 12px; }
 .local-account-dialog .field { display:grid; gap:8px; margin:16px 0; }
 .local-account-dialog button { margin:12px 8px 0 0; }
 .local-account-dialog::backdrop { background:#10213b66; }
+.local-account-dialog .account-security { margin:18px 0; padding:16px 0; border-top:1px solid #e2e7ef; }
+.local-account-dialog .account-security > summary { cursor:pointer; font-weight:600; }
 
 .device-page main { max-width:760px; }
 .device-page #device p, .device-page #identity { overflow-wrap:anywhere; }
@@ -219,3 +222,14 @@ header > a { display: flex; align-items: center; gap: 12px; }
 .device-page #device input[type="checkbox"] { margin-top:5px; width:18px; height:18px; flex-shrink:0; accent-color:#3265dc; }
 .device-page #device fieldset { padding:18px; border:1px solid #e2e7ef; border-radius:6px; display:grid; gap:12px; }
 .device-page #device legend { padding:0 8px; font-size:14px; font-weight:600; }
+
+.connection-heading { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.connection-heading h2 { padding:0; border:0; margin:0; flex:1; overflow-wrap:anywhere; }
+.connection-card > .card { padding:20px 0 0; margin:20px 0 0; border:0; border-top:1px solid #e2e7ef; border-radius:0; }
+.connection-card h3 { margin:0 0 12px; overflow-wrap:anywhere; }
+.connection-card .notice { font-size:14px; }
+.grant-technical { font-size:13px; color:#68778d; margin-top:16px; }
+.grant-technical summary, .grant-history > summary { cursor:pointer; padding:6px 0; }
+.grant-history { margin-top:28px; }
+.grant-history > summary { font-weight:600; color:#68778d; }
+.local-account-dialog .actions { margin-top:20px; }

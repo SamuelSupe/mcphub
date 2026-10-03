@@ -1,9 +1,9 @@
 # MCPHub
 
-> This guide covers v2.3.0 fresh deployments. Built-in accounts and Agent device authorization require v2.3.0; v2.2.2 does not include these features.
+> This guide covers v2.4.0 fresh deployments. Use matching MCPHub and MCPBridge packages; no migration workflow is included.
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.4.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -15,10 +15,10 @@ Users install `mcpbridge` on their computers, sign in through a browser and conf
 
 | Program | Install on | Main commands |
 | --- | --- | --- |
-| **mcphub — server** | Gateway host | `serve`, `validate`, `init-admin` |
+| **mcphub — server** | Gateway host | `serve`, `validate`, `init-admin`, `backup`, `verify-backup`, `restore` |
 | **mcpbridge — client** | Agent/user computer | `setup`, `login`, `connect`, `doctor` |
 
-From v2.2.2, `mcpbridge` replaces the executable name `mcphub-cli`. The client package is named `mcpbridge_v2.3.0_*`; use the `mcphub_v2.3.0_*` package to deploy the server. Run either executable with `--version` to confirm its name, version and role.
+From v2.2.2, `mcpbridge` replaces the executable name `mcphub-cli`. The client package is named `mcpbridge_v2.4.0_*`; use the `mcphub_v2.4.0_*` package to deploy the server. Run either executable with `--version` to confirm its name, version and role.
 
 ## Agent link authorization
 
@@ -42,6 +42,17 @@ The session initializes immediately with only `mcpbridge_auth_start` and `mcpbri
 
 Each pairing grants one service and tool capability; use existing setup for prompts, resource URIs or subscriptions. Current groups and the confirmed grant both restrict access, and new tools never expand old grants. Private credentials remain inside MCPBridge. Never copy tokens to an Agent. Failure preserves an existing working profile; choose a new profile for another user or server. Pure external issuers retain PKCE login and setup.
 
+For one desktop Agent connection spanning multiple services, use standard OAuth consent:
+
+```sh
+mcpbridge login --native --server https://hub.example.com/mcp --profile work
+mcpbridge connect --profile work
+```
+
+After browser login, select tools, prompts, resources, subscriptions, argument conditions and duration per service. Tools and write requests start unchecked; writes still need approval. Tool argument conditions cannot be combined with prompt or resource capabilities. The connection contains independently revocable service grants. Revoking one service leaves other valid services usable; the console can also revoke the entire connection. Newly discovered tools never enter old grants automatically.
+
+Register native MCP clients under **Operations → OAuth client registration** with a Client ID and exact redirects. They use PKCE S256 and only standard `Authorization: Bearer`; the server binds sessions to internal service grants, so no extra `MCPHub-Grant` header is needed. Changing or removing registration revokes that client's sessions and grants. Remote/headless Agents retain device-link pairing, which selects one service per pairing.
+
 ## Start here
 
 **[Online help center](https://samuelsupe.github.io/mcphub/en/)**: 19 end-user guides in English and Chinese, with grouped navigation, full-text search and client configuration examples.
@@ -62,7 +73,7 @@ First deployment: follow the [administrator manual](docs/admin-guide.md#preparat
 
 ## Version and fresh deployments
 
-These documents cover **fresh v2.3.0 deployments**. The default enables the management console and SQLite with no preconfigured backends. Install `mcphub` on the gateway and `mcpbridge` on user computers. [Release notes](RELEASE_NOTES_v2.3.0.md) · [Download v2.3.0](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0).
+These documents cover **fresh v2.4.0 deployments**. The default enables the management console and SQLite with no preconfigured backends. Install `mcphub` on the gateway and `mcpbridge` on user computers. [Release notes](RELEASE_NOTES_v2.4.0.md) · [Download v2.4.0](https://github.com/SamuelSupe/mcphub/releases/tag/v2.4.0).
 
 The default requires only `MCPHUB_PUBLIC_URL` and `MCPHUB_CONFIG_KEY`. Follow **start MCPHub → initialize the administrator locally → sign in → create groups, assign group permissions, add users and connect backends → test connections → publish tools**. See [built-in accounts](docs/builtin-accounts.md) for passwords and MFA; enterprise LDAP and OIDC are optional and can be configured together in the console. Configure each backend separately. Remote administration uses `deploy/config.remote-*`.
 

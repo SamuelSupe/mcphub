@@ -1,10 +1,11 @@
-<p>Available in v2.3.0 and matching MCPBridge. MCPHub must use its built-in issuer with client authorization enabled. Sign in with local accounts, LDAP or OIDC; your account must be enabled and have group access.</p>
+<p>Available in v2.4.0 and matching MCPBridge. MCPHub must use its built-in issuer with client authorization enabled. Sign in with local accounts, LDAP or OIDC; your account must be enabled and have group access.</p>
 <h2 id="pair">Connect using a link</h2>
 <pre><code>mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "Project Agent" --json</code></pre>
 <ol><li>Show the user the returned <code>verification_uri_complete</code> and <code>user_code</code>. The link contains only the public comparison code.</li><li>Open the link in the user's browser, sign in and compare the code. The requester supplies the client name; it is not a verified application identity.</li><li>Choose a service and specific tools, then narrow resource restrictions and duration. No tools are selected by default; write access is off by default.</li><li>Approve access and return to the Agent to collect credentials and check connectivity.</li></ol>
 <pre><code>mcpbridge pair finish --request pr_example --wait --json
 mcpbridge connect --profile work --client ci_example</code></pre>
 <p>Replace the request and client IDs with the actual results. Without <code>--wait</code>, finish checks once. <code>pending_user</code> requires browser approval; <code>ready</code> means private credentials were saved and MCP connectivity was checked. Denied, expired or failed deliveries require an explicit new request. Never copy passwords or tokens to your Agent.</p>
+<p>Switching languages preserves your service, tools, duration and resource restrictions. Write access is shown only when requested and eligible tools exist. If a code is invalid or expired, start a fresh request in your Agent and enter its new code on the same page. Invalid resource restrictions do not end the request; correct the form and submit again.</p>
 <h2 id="interactive">Agents without command execution</h2>
 <p>Use the actual absolute MCPBridge executable path in the client's stdio configuration, with these arguments:</p>
 <pre><code>["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "Project Agent", "--interactive-auth"]</code></pre>

@@ -13,6 +13,40 @@ import (
 )
 
 type clientGrantKey struct{}
+type clientGrantsKey struct{}
+
+func WithClientGrants(ctx context.Context, grants map[string]configstore.ClientGrant) context.Context {
+	return context.WithValue(ctx, clientGrantsKey{}, grants)
+}
+func ClientGrantsFromContext(ctx context.Context) map[string]configstore.ClientGrant {
+	grants, _ := ctx.Value(clientGrantsKey{}).(map[string]configstore.ClientGrant)
+	return grants
+}
+
+func (v *view) serviceGrant(id string) *configstore.ClientGrant {
+	if v.grants != nil {
+		if g, ok := v.grants[id]; ok {
+			return &g
+		}
+		return nil
+	}
+	if v.grant != nil && v.grant.EndpointID == id {
+		return v.grant
+	}
+	return nil
+}
+
+func (v *view) hasGrants() bool { return v.grant != nil || v.grants != nil }
+func (v *view) allGrants() []configstore.ClientGrant {
+	if v.grant != nil {
+		return []configstore.ClientGrant{*v.grant}
+	}
+	result := []configstore.ClientGrant{}
+	for _, id := range sortedKeys(v.grants) {
+		result = append(result, v.grants[id])
+	}
+	return result
+}
 
 func WithClientGrant(ctx context.Context, grant configstore.ClientGrant) context.Context {
 	return context.WithValue(ctx, clientGrantKey{}, &grant)
@@ -84,8 +118,16 @@ func (h *Hub) RequiresClientGrant(id string) bool {
 	return h.currentHTTPTools().RequiresClientGrant(id)
 }
 
-func (h *Hub) filterGrantEndpoints(ids []string, g *configstore.ClientGrant) []string {
+func (h *Hub) filterGrantEndpoints(ids []string, g *configstore.ClientGrant, collection map[string]configstore.ClientGrant, scopes []string) []string {
 	return slices.DeleteFunc(slices.Clone(ids), func(id string) bool {
+		if collection != nil {
+			grant, ok := collection[id]
+			if !ok {
+				return true
+			}
+			missing, known := h.MissingScopes(id, grant.EffectiveScopes(scopes))
+			return !known || len(missing) > 0
+		}
 		if g != nil {
 			return id != g.EndpointID
 		}
@@ -186,28 +228,37 @@ func (v *view) grantAllowsDefinition(d toolDefinition) bool {
 	if v.identity != nil && !v.identity.Permissions.AllowsTool(d.backendID, d.original, d.effect) {
 		return false
 	}
-	if v.grant == nil {
+	if !v.hasGrants() {
 		return !v.hub.RequiresClientGrant(d.backendID)
 	}
-	g := v.grant
-	return g.EndpointID == d.backendID && g.Capabilities.Tools && slices.Contains(g.AllowedTools, d.original) && (d.effect == "read" || g.AllowWriteRequests) && g.ToolPolicies[d.original] == grantToolPolicy(d)
+	g := v.serviceGrant(d.backendID)
+	return g != nil && g.Capabilities.Tools && slices.Contains(g.AllowedTools, d.original) && (d.effect == "read" || g.AllowWriteRequests) && g.ToolPolicies[d.original] == grantToolPolicy(d) && !slices.ContainsFunc(d.requiredScopes, func(scope string) bool { return !slices.Contains(g.EffectiveScopes(v.granted), scope) })
 }
 
 func (v *view) ownsApproval(a configstore.Approval) bool {
-	if v.grant == nil {
+	if !v.hasGrants() {
 		return a.Intent.ClientGrant == nil
 	}
-	return a.Intent.ClientGrant != nil && *a.Intent.ClientGrant == v.grant.GrantBinding
+	g := v.serviceGrant(a.Intent.BackendID)
+	return g != nil && a.Intent.ClientGrant != nil && *a.Intent.ClientGrant == g.GrantBinding
 }
 
 func (v *view) grantMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-		if v.grant == nil {
+		if !v.hasGrants() {
 			return next(ctx, method, req)
 		}
 		g := v.grant
+		if id := backendForParams(req.GetParams()); id != "" {
+			g = v.serviceGrant(id)
+		} else if v.grants != nil {
+			return v.collectionMiddleware(ctx, method, req, next)
+		}
 		deny := func() (mcp.Result, error) {
 			return nil, &jsonrpc.Error{Code: -32003, Message: string(configstore.ErrGrantInsufficient)}
+		}
+		if g == nil {
+			return deny()
 		}
 		extra := req.GetExtra()
 		if extra == nil || extra.TokenInfo == nil || extra.TokenInfo.UserID != g.Subject || extra.TokenInfo.Extra["issuer"] != g.Issuer {
@@ -233,11 +284,33 @@ func (v *view) grantMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 			return nil, &jsonrpc.Error{Code: -32003, Message: err.Error()}
 		}
 		defer release()
-		return next(callCtx, method, req)
+		return next(WithClientGrant(callCtx, *g), method, req)
 	}
 }
 
 func (v *view) admitGrant(ctx context.Context) (context.Context, func(), error) {
+	if g := ClientGrantFromContext(ctx); g != nil {
+		return v.hub.grantStore.AdmitClientGrant(ctx, g.GrantBinding, g.Issuer, g.Subject)
+	}
+	if v.grants != nil {
+		var releases []func()
+		release := func() {
+			for _, stop := range releases {
+				stop()
+			}
+		}
+		for _, g := range v.allGrants() {
+			var stop func()
+			var err error
+			ctx, stop, err = v.hub.grantStore.AdmitClientGrant(ctx, g.GrantBinding, g.Issuer, g.Subject)
+			if err != nil {
+				release()
+				return ctx, nil, err
+			}
+			releases = append(releases, stop)
+		}
+		return ctx, release, nil
+	}
 	if v.grant == nil {
 		return ctx, func() {}, nil
 	}
@@ -247,8 +320,9 @@ func (v *view) admitGrant(ctx context.Context) (context.Context, func(), error) 
 func (h *Hub) CloseGrantViews() {
 	h.viewsMu.Lock()
 	var views []*view
+	clear(h.grantResources)
 	for key, v := range h.views {
-		if v.grant != nil {
+		if v.hasGrants() {
 			views = append(views, v)
 			delete(h.views, key)
 		}
@@ -266,20 +340,37 @@ func (h *Hub) PruneClientGrantViews(ctx context.Context) {
 	h.viewsMu.RLock()
 	views := make(map[string]*view)
 	for key, v := range h.views {
-		if v.grant != nil {
+		if v.hasGrants() {
 			views[key] = v
 		}
 	}
 	h.viewsMu.RUnlock()
 	for key, v := range views {
-		if h.grantStore.ValidateClientGrant(ctx, *v.grant) == nil {
+		valid := true
+		for _, grant := range v.allGrants() {
+			if h.grantStore.ValidateClientGrant(ctx, grant) != nil {
+				valid = false
+				h.viewsMu.Lock()
+				delete(h.grantResources, grant.GrantID)
+				h.viewsMu.Unlock()
+			}
+		}
+		if valid {
 			continue
 		}
 		h.viewsMu.Lock()
-		if h.views[key] == v {
+		removed := h.views[key] == v
+		if removed {
 			delete(h.views, key)
+			if v.grants != nil && v.activeRequests > 0 {
+				v.retired = true
+				h.viewsMu.Unlock()
+				continue
+			}
 		}
 		h.viewsMu.Unlock()
-		v.close()
+		if removed {
+			v.close()
+		}
 	}
 }

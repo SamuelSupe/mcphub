@@ -1,6 +1,7 @@
 import { t } from "./i18n.js";
 
 const byId = (id) => document.getElementById(id);
+let selectionGeneration = 0;
 const labels = {
 	personal_account_connected: "个人账号已连接，保存的凭证可用",
 	personal_account_not_connected: "需要先在个人授权中心连接此服务账号",
@@ -35,6 +36,13 @@ export function openAccessCheck(endpoint, tool, api, grant = null) {
     form = byId("access-check-form"),
     output = byId("access-check-result");
   form.reset();
+  let current = ++selectionGeneration;
+  const userSelect = byId("access-check-user"), clientSelect = byId("access-check-client"), feedback = byId("access-check-selection-feedback");
+  byId("access-check-selection").hidden = true;
+  userSelect.replaceChildren(new Option(t("手动填写或选择用户"), ""));
+  clientSelect.replaceChildren(new Option(t("不指定授权，只检查用户权限"), ""));
+  feedback.textContent = "";
+  byId("access-check-run").disabled = false;
   if (grant) {
     byId("access-check-subject").value = grant.subject;
     byId("access-check-grant").value = grant.grant_id;
@@ -44,6 +52,7 @@ export function openAccessCheck(endpoint, tool, api, grant = null) {
   byId("access-check-target").textContent = `${endpoint.id} / ${tool.name}`;
   form.onsubmit = async (event) => {
     event.preventDefault();
+    const request = selectionGeneration;
     output.replaceChildren();
     byId("access-check-run").disabled = true;
     try {
@@ -68,6 +77,7 @@ export function openAccessCheck(endpoint, tool, api, grant = null) {
         method: "POST",
         body: fields.slice(0, -1) + ',"arguments":' + rawArguments + "}",
       });
+      if (request !== selectionGeneration || !dialog.open) return;
       const heading = document.createElement("h3");
       heading.textContent = t(
         {
@@ -91,6 +101,7 @@ export function openAccessCheck(endpoint, tool, api, grant = null) {
       const scopes = document.createElement("p");
       scopes.textContent = `${t("有效 Scope")}：${result.effective_scopes?.join(", ") || "—"}`;
       output.append(scopes);
+	  if (result.group_sources?.length) { const sources = document.createElement("p"); sources.textContent = `${t("权限来源")} · ${result.group_sources.map((s) => s.group.name).join(", ")}`; output.append(sources); }
       if (result.required_approvals) {
         const approval = document.createElement("p");
         approval.textContent =
@@ -99,13 +110,61 @@ export function openAccessCheck(endpoint, tool, api, grant = null) {
         output.append(approval);
       }
     } catch (error) {
+      if (request !== selectionGeneration || !dialog.open) return;
       output.textContent =
         error instanceof SyntaxError
           ? t("调用参数必须是有效 JSON。")
           : error.message;
     } finally {
-      byId("access-check-run").disabled = false;
+      if (request === selectionGeneration) byId("access-check-run").disabled = false;
     }
   };
   dialog.showModal();
+  const selectUser = async () => {
+    current = ++selectionGeneration;
+    const subject = userSelect.value;
+    byId("access-check-subject").value = subject;
+    byId("access-check-grant").value = "";
+    byId("access-check-scopes").value = "";
+    clientSelect.replaceChildren(new Option(t("不指定授权，只检查用户权限"), ""));
+    feedback.textContent = "";
+    byId("access-check-run").disabled = clientSelect.disabled = false;
+    if (!subject) return;
+    const request = current;
+    byId("access-check-run").disabled = clientSelect.disabled = true;
+    try {
+      const [effective, result] = await Promise.all([
+        api(`/identities/${encodeURIComponent(subject)}/effective`),
+        api(`/client-grants?${new URLSearchParams({ subject, endpoint: endpoint.id, status: "active", limit: "100" })}`),
+      ]);
+      if (request !== selectionGeneration || !dialog.open) return;
+      byId("access-check-scopes").value = effective.active ? (effective.permissions.scopes || []).join(" ") : "";
+      for (const item of result.grants || []) {
+        const option = new Option(`${item.client_name} · ${item.grant_id.slice(-8)}`, item.grant_id);
+        option.dataset.scopes = JSON.stringify(item.allowed_scopes || []);
+        clientSelect.append(option);
+      }
+      feedback.textContent = t(effective.active ? "已载入用户当前权限。选择客户端授权可进一步检查其范围；Scope 仍可修改为假设条件。" : "此用户尚未启用或企业身份需要重新验证。");
+      if (result.next_cursor) feedback.textContent += " " + t("仅列出前 100 条有效授权，其他授权可手动填写 ID。");
+    } catch (error) { if (request === selectionGeneration && dialog.open) feedback.textContent = error.message; }
+    finally { if (request === selectionGeneration) byId("access-check-run").disabled = clientSelect.disabled = false; }
+  };
+  userSelect.onchange = selectUser;
+  clientSelect.onchange = () => {
+    byId("access-check-grant").value = clientSelect.value;
+    // Returning to user-only diagnosis must restore the user's current scopes.
+    if (!clientSelect.value) { selectUser(); return; }
+    byId("access-check-scopes").value = JSON.parse(clientSelect.selectedOptions[0].dataset.scopes).join(" ");
+  };
+  api("/identities").then((data) => {
+    if (current !== selectionGeneration || !dialog.open || !data.enabled) return;
+    const providers = new Map((data.providers || []).map((p) => [p.id, p.name]));
+    for (const user of data.identities || []) if (user.kind === "user") userSelect.append(new Option(`${user.name || user.external_id} · ${providers.get(user.provider) || user.provider}`, user.id));
+    byId("access-check-selection").hidden = false;
+    // A supplied grant is deliberately preserved, even when no longer active.
+    if (grant) {
+      userSelect.value = grant.subject;
+      const option = new Option(grant.client_name || grant.grant_id, grant.grant_id); option.dataset.scopes = JSON.stringify(grant.allowed_scopes || []); clientSelect.append(option); clientSelect.value = grant.grant_id;
+    }
+  }).catch((error) => { if (current === selectionGeneration && dialog.open) { byId("access-check-selection").hidden = false; feedback.textContent = error.message; } });
 }

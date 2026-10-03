@@ -1,7 +1,12 @@
+<h2 id="native-oauth">桌面客户端：一个连接访问多个服务</h2>
+<p>使用标准 OAuth 登录，逐个勾选服务、工具、提示词、资源和订阅；写请求默认关闭，启用后仍需逐次审批。当前组权限与每个服务授权共同约束调用，新增工具不会扩大已有授权。可在门户单独撤销服务授权，也可撤销整个连接。</p>
+<pre><code>mcpbridge login --native --server https://hub.example.com/mcp --profile work
+mcpbridge connect --profile work</code></pre>
+<p>本机有浏览器时使用此流程。原生 MCP 客户端由管理员在「运维中心 → OAuth 客户端」注册回调地址，使用 PKCE 和标准 Bearer 凭证，无需自定义授权 Header。远程无浏览器 Agent 继续使用<a href="device-auth.html">设备链接授权</a>，每次设备配对授权一个服务；现有单服务客户端条目仍可使用。</p>
 <p>远程或无浏览器 Agent 优先使用<a href="device-auth.html">Agent 链接授权</a>：在一个网页中登录并选择权限，或使用 --interactive-auth 提供认证工具。以下原有向导仍可使用。</p>
 <p>企业登录可使用 OIDC 或 LDAP。LDAP 用户在授权页的「账号来源」选择 LDAP；首次登录后联系管理员启用账号并分配组权限。</p>
 <h2 id="company-login">用公司账号登录</h2>
-<p>默认部署使用管理员创建的 MCPHub 账号和密码；已启用 MFA 时还需动态验证码。企业登录为可选入口。本地与企业身份分别管理，同名也不共享组权限。个人门户的「我的账号」可修改本地密码和绑定 MFA，修改密码后已有会话退出；忘记密码时联系管理员重置。</p>
+<p>默认部署使用管理员创建的 MCPHub 账号和密码；已启用 MFA 时还需动态验证码。企业登录为可选入口。本地与企业身份分别管理，同名也不共享组权限。个人门户的「我的账号」分别提供修改密码和启用 MFA 的设置。MFA 设置先生成密钥，添加到验证器后在 5 分钟内输入验证码确认；失败保留设置说明，过期可重新开始设置。修改密码或成功绑定 MFA 后已有会话退出；忘记密码时联系管理员重置。</p>
 <p>首次使用建议直接运行 <a href="quickstart.html">接入向导</a>，它会在需要时打开登录页。只想先登录或恢复已保存的 profile 时：</p>
 <pre><code>mcpbridge login --server https://hub.example.com/mcp --client-id mcpbridge --profile work
 mcpbridge status --profile work</code></pre>
@@ -14,7 +19,7 @@ mcpbridge status --profile work</code></pre>
 <p>登录失败或取消会保留原有登录；成功后重启该 profile 的已有 MCP 连接。</p>
 <h2 id="portal">打开个人授权中心</h2>
 <p>在公司 MCPHub 域名下打开 <code>https://hub.example.com/client-auth/</code>，使用公司身份登录，页面标题为「管理账号与客户端授权」。</p>
-<table><thead><tr><th>区域</th><th>用途</th></tr></thead><tbody><tr><td>确认客户端授权</td><td>核对配对码、服务、工具、业务资源条件和有效期，确认或拒绝申请。</td></tr><tr><td>已连接账号</td><td>连接个人服务账号，查看详情、重新连接或断开。</td></tr><tr><td>我的客户端</td><td>查看自己的授权，撤销单个入口或某个 Broker 会话的全部授权。</td></tr></tbody></table>
+<table><thead><tr><th>区域</th><th>用途</th></tr></thead><tbody><tr><td>确认客户端授权</td><td>核对配对码、服务、工具、业务资源条件和有效期，确认或拒绝申请。</td></tr><tr><td>已连接账号</td><td>连接个人服务账号，查看详情、重新连接或断开。</td></tr><tr><td>我的连接</td><td>查看自己的授权，撤销单个入口或某个 Broker 会话的全部授权。</td></tr></tbody></table>
 <p>门户只管理你自己的账号和授权。团队成员权限由管理员配置。</p>
 <h2 id="expired-link">授权链接失效或不属于当前账号</h2>
 <p>检查门户当前用户是否与终端身份一致。链接过期时回到终端重新运行向导或 client authorize，核对新的配对码。失效请求不妨碍管理已有授权。</p>

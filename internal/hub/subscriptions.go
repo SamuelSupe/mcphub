@@ -150,7 +150,7 @@ func (v *view) resolveResource(exposed string, requireListedConcrete bool) (stri
 }
 
 func (v *view) resourceUpdated(backendID, original string) {
-	if v.grant != nil && v.hub.grantStore.ValidateClientGrant(context.Background(), *v.grant) != nil {
+	if g := v.serviceGrant(backendID); g != nil && v.hub.grantStore.ValidateClientGrant(context.Background(), *g) != nil {
 		return
 	}
 

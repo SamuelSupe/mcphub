@@ -13,14 +13,14 @@ Use this page to look up YAML fields, tool policies, management APIs and gateway
 
 ## Choose a configuration and apply changes
 
-This reference targets v2.3.0. Configuration is one YAML document with strict field checking. **Do not paste management API JSON directly into YAML**: YAML `headers` is a map; API `headers` is an object array. A managed backend's API `enabled` field is not a YAML backend field. HTTP tool groups and OpenAPI imports are managed only through the UI/API.
+This reference targets v2.4.0. Configuration is one YAML document with strict field checking. **Do not paste management API JSON directly into YAML**: YAML `headers` is a map; API `headers` is an object array. A managed backend's API `enabled` field is not a YAML backend field. HTTP tool groups and OpenAPI imports are managed only through the UI/API.
 
 | Scenario | Starting point | Prerequisites |
 | --- | --- | --- |
-| Default local console + SQLite | [Default template](../config.example.yaml), [startup steps](admin-guide.md#local-management-ui) | 3 variables: MCP URL, issuer and encryption key; add backends in the UI |
+| Default local console + SQLite | [Default template](../config.example.yaml), [startup steps](admin-guide.md#local-management-ui) | 2 variables: MCP URL and encryption key; add backends in the UI |
 | Advanced YAML-only deployment | [Independent example](../deploy/config.yaml-only.example.yaml) | Fill each backend address and credential in YAML; explicitly publish reviewed read tools |
-| Local administration, SQLite | [Complete configuration](../deploy/config.local.yaml), [startup steps](admin-guide.md#local-management-ui) | MCP URL, issuer, persistent encryption key |
-| Remote team administration | [Deployment examples and variables](../deploy/README.md#environment-variables) | Admin URL, identity clients, SQLite or PostgreSQL, HTTPS proxy |
+| Local administration, SQLite | [Complete configuration](../deploy/config.local.yaml), [startup steps](admin-guide.md#local-management-ui) | MCP URL, persistent encryption key |
+| Remote team administration | [Deployment examples and variables](../deploy/README.md#environment-variables) | Admin URL, SQLite or PostgreSQL, HTTPS proxy; enterprise identity is optional |
 | SSO / Vault personal accounts | [SSO](sso-and-user-management.md), [Vault](vault-accounts.md) | Add the required modules to a managed deployment; Feishu also needs real-tenant acceptance |
 
 | Configuration | Edit in | Takes effect through |
@@ -93,6 +93,9 @@ Default built-in deployments configure LDAP and OIDC on the console’s [Identit
 | `mode` | `builtin` in default templates | Built-in accounts, with optional enterprise login. Advanced external verification uses `external`. |
 | `issuer` | Derived in built-in mode | HTTPS origin of `server.public_url` plus `/sso`; no issuer environment variable. External mode requires a HTTPS issuer. |
 | `sso` | Optional | Add an enterprise `upstream` or extra public clients. MCPBridge, portal and console registrations are provided by default. See [built-in accounts](builtin-accounts.md) and [SSO](sso-and-user-management.md). |
+| `enterprise_membership_max_age` | `24h` | Maximum age of verified enterprise membership, accepting `1m`–`720h`. Expired membership requires sign-in or directory synchronization. Local accounts are unaffected. |
+
+Permission groups in managed storage use `mcphub:permissions`; `source_groups` maps stable LDAP/OIDC organization IDs. The permission-group API's `permissions.scope_mode: derived` compiles a selected-capability scope snapshot when saved; `explicit` retains manual scopes. Manage these permissions through the console or API rather than adding user grants to startup YAML. See [groups and permissions](builtin-accounts.md#groups-and-permissions).
 
 Built-in mode requires managed storage. Hub checks user permissions and sessions; password resets, disabling and MFA enrollment revoke credentials. Ordinary password authentication has no MFA marker. The following discovery/JWKS requirements apply to `external` verification.
 
@@ -432,7 +435,7 @@ Register a **public native OAuth client** at that issuer with authorization-code
 
 ## Starting from the full YAML example
 
-The default [config.example.yaml](../config.example.yaml) is identical in the v2.3.0 server archive and online template. It enables the local console and SQLite with `backends: []`. Only `MCPHUB_PUBLIC_URL` and `MCPHUB_CONFIG_KEY` are required; configure addresses and credentials per service in the UI.
+The default [config.example.yaml](../config.example.yaml) is identical in the v2.4.0 server archive and online template. It enables the local console and SQLite with `backends: []`. Only `MCPHUB_PUBLIC_URL` and `MCPHUB_CONFIG_KEY` are required; configure addresses and credentials per service in the UI.
 
 Download the template into a new private deployment directory, replace the two HTTPS addresses, and start:
 
@@ -529,8 +532,10 @@ When SIGHUP creates an unavailable optional backend, it inherits the previous in
 
 ## Client credentials and connection boundaries
 
-When strict client authorization is enabled, the server requires both the user access token and an opaque `MCPHub-Grant` credential. Effective scopes are their intersection. Issuer, user, resource, endpoint UID, expiry, tool publication, resource rules and live policy are checked on every request. Scope/target changes, disabled or recreated endpoints and changed HTTP tool execution semantics require fresh consent. New tools are never automatically added to an existing grant. No grant or user token is forwarded to upstream systems.
+With strict client authorization, single Bridge/Broker grants use the user token plus an opaque `MCPHub-Grant`. Standard OAuth sessions bind internal service grants server-side and require only the bearer token. Effective scopes are their intersection. Issuer, user, resource, endpoint UID, expiry, tool publication, resource rules and live policy are checked on every request. Scope/target changes, disabled or recreated endpoints and changed HTTP tool execution semantics require fresh consent. New tools are never automatically added to an existing grant. No grant or user token is forwarded to upstream systems.
 
 Private sockets/named pipes, OS peer checks and independent IPC credentials isolate paired entries from other OS users. They do **not** prove application identity or isolate hostile processes running under the same OS account. Release publishing requires the native Windows CLI test suite, including Broker IPC, on x64 and ARM64; macOS/Linux use Unix sockets with OS peer checks. See the [design and validation record](broker-authorization-design.zh-CN.md).
 
 New deployment templates set `client_authorization.require_client_grant: true`: a user token identifies the user; business tools also require a browser-confirmed ClientGrant. The builtin issuer advertises device authorization metadata; its `device_authorization_endpoint` is not an upstream identity endpoint. See the [user manual](user-guide.md#agent-link-authorization).
+
+Register standard OAuth clients in Operations, or set `require_consent: true` and `name` under `auth.sso.clients[]`. See the [administrator guide](admin-guide.md) for multiple service grants, drafts and backup commands.

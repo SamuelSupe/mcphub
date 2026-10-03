@@ -92,7 +92,7 @@ func (v *view) loggingMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 			"capability_name", capabilityForParams(req.GetParams()),
 			"duration_ms", time.Since(started).Milliseconds(),
 		}
-		if g := v.grant; g != nil {
+		if g := ClientGrantFromContext(ctx); g != nil {
 			attributes = append(attributes, "grant_id", g.GrantID, "grant_revision", g.Revision, "client_instance_id", g.ClientID, "broker_session_id", g.SessionID, "endpoint_uid", g.EndpointUID)
 		}
 		if extra := req.GetExtra(); extra != nil {

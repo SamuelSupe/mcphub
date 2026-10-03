@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"time"
 )
 
 type DirectorySnapshot struct {
@@ -111,6 +112,7 @@ func (s *Store) SyncDirectory(ctx context.Context, provider string, snapshot Dir
 			return err
 		}
 		p.Name, p.DirectoryActive = u.Name, u.Active
+		p.VerifiedAt = time.Now().UTC()
 		p.DirectoryManaged = true
 		for _, id := range u.Groups {
 			p.Groups = append(p.Groups, ids["group:"+id])

@@ -4,14 +4,22 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"time"
 )
 
 const LocalIdentityProvider = "mcphub:local"
+const PermissionGroupProvider = "mcphub:permissions"
 const LocalMFAACR = "urn:mcphub:auth:password-totp"
 
 func (a AuthConfig) Builtin() bool { return a.Mode == "builtin" }
 
 func (cfg *Config) configureAuthentication() error {
+	if cfg.Auth.EnterpriseMembershipMaxAge.Duration == 0 {
+		cfg.Auth.EnterpriseMembershipMaxAge.Duration = 24 * time.Hour
+	}
+	if age := cfg.Auth.EnterpriseMembershipMaxAge.Duration; age < time.Minute || age > 30*24*time.Hour {
+		return fmt.Errorf("auth.enterprise_membership_max_age must be between 1m and 720h")
+	}
 	if cfg.Auth.Mode == "" {
 		if cfg.Auth.Issuer == "" {
 			cfg.Auth.Mode = "builtin"
@@ -47,6 +55,7 @@ func (cfg *Config) configureAuthentication() error {
 		cfg.ClientAuthorization.ClientID = "mcphub-portal"
 	}
 	clients := []SSOClient{
+		{ID: "mcpbridge-connection", Name: "MCPBridge", RequireConsent: true, RedirectURIs: []string{"http://127.0.0.1/oauth/callback"}, Resources: []string{cfg.Server.PublicURL}},
 		{ID: "mcpbridge", RedirectURIs: []string{"http://127.0.0.1/oauth/callback"}, Resources: []string{cfg.Server.PublicURL}},
 		{ID: "mcpbridge-admin", RedirectURIs: []string{"http://127.0.0.1/oauth/callback"}, Resources: []string{cfg.Admin.PublicURL}},
 		{ID: cfg.Admin.ClientID, RedirectURIs: []string{cfg.Admin.PublicURL + "/auth/callback"}, Resources: []string{cfg.Admin.PublicURL}},

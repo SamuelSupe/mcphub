@@ -77,6 +77,17 @@ func TestLDAPDirectoryOAuth(t *testing.T) {
 	if err := service.ProbeConnections(ctx, c, "ldap"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := service.TestConnection(ctx, c, "ldap", local.ID, "alice", "wrong-password", "127.0.0.1"); !errors.Is(err, configstore.ErrCredentials) {
+		t.Fatal("LDAP preview accepted a bad user password", err)
+	}
+	preview, err := service.TestConnection(ctx, c, "ldap", local.ID, "alice", "fixture-alice-password", "127.0.0.1")
+	if err != nil || preview.Status != "passed" || preview.Identity.Subject == "" || preview.Identity.Name != "LDAP Alice" || len(preview.Identity.Groups) != 1 {
+		t.Fatal("LDAP preview did not verify the user and group mapping", preview, err)
+	}
+	identitiesBeforeLogin, err := store.Identities(ctx)
+	if err != nil || slices.ContainsFunc(identitiesBeforeLogin, func(p configstore.Identity) bool { return p.Provider == c.LDAP.Namespace() }) {
+		t.Fatal("LDAP preview provisioned identities", err)
+	}
 	startTLS := c
 	startTLS.LDAP.URL = os.Getenv("MCPHUB_TEST_LDAP_STARTTLS_URL")
 	if startTLS.LDAP.URL != "" {

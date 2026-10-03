@@ -47,17 +47,20 @@ func (p IdentityProvider) Namespace() string {
 }
 
 type SSOClient struct {
-	ID           string   `yaml:"id" json:"id"`
-	RedirectURIs []string `yaml:"redirect_uris" json:"redirect_uris"`
-	Resources    []string `yaml:"resources" json:"resources"`
+	RequireConsent bool     `yaml:"require_consent" json:"require_consent"`
+	Name           string   `yaml:"name" json:"name,omitempty"`
+	ID             string   `yaml:"id" json:"id"`
+	RedirectURIs   []string `yaml:"redirect_uris" json:"redirect_uris"`
+	Resources      []string `yaml:"resources" json:"resources"`
 }
 
 // Each access entry is an independent grant. Resource predicates must match
 // within one entry, never combined with the tool list of a different grant.
 type IdentityPermissions struct {
-	Roles  []string         `json:"roles"`
-	Scopes []string         `json:"scopes"`
-	Access []IdentityAccess `json:"access"`
+	ScopeMode string           `json:"scope_mode,omitempty"`
+	Roles     []string         `json:"roles"`
+	Scopes    []string         `json:"scopes"`
+	Access    []IdentityAccess `json:"access"`
 }
 
 type IdentityAccess struct {
@@ -71,6 +74,9 @@ type IdentityAccess struct {
 }
 
 func (p IdentityPermissions) Validate() error {
+	if p.ScopeMode != "" && p.ScopeMode != "derived" && p.ScopeMode != "explicit" {
+		return fmt.Errorf("scope_mode must be derived or explicit")
+	}
 	if len(p.Access) > 256 || len(p.Scopes) > 256 {
 		return fmt.Errorf("too many permissions")
 	}

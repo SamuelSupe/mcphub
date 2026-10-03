@@ -19,17 +19,27 @@ func (h *Hub) AuthorizationOptions(scopes []string, identities ...*configstore.E
 	values := []config.ClientEndpointOption{}
 	for _, id := range ids {
 		g := configstore.ClientGrant{EndpointID: id, AllowWriteRequests: true, Capabilities: configstore.GrantCapabilities{Tools: true}}
-		if h.PrepareClientGrant(&g, scopes, identities...) != nil {
-			continue
-		}
+		toolsAvailable := h.PrepareClientGrant(&g, scopes, identities...) == nil
 		defs := h.backendToolDefinitions(id, false)
 		if len(defs) == 0 {
 			defs = h.httpToolDefinitions(id)
 		}
 		entry := config.ClientEndpointOption{ID: id, Tools: []config.ClientToolOption{}}
 		endpointScopes, _ := h.MissingScopes(id, nil)
+		entry.RequiredScopes = endpointScopes
+		if _, ok := h.cfg.Backend(id); ok {
+			entry.Prompts, entry.Resources, entry.Subscriptions = true, true, true
+			if len(identities) > 0 && identities[0] != nil {
+				p := identities[0].Permissions
+				entry.Prompts, entry.Resources, entry.Subscriptions = p.AllowsCapability(id, "prompts"), p.AllowsCapability(id, "resources"), p.AllowsCapability(id, "subscriptions")
+			}
+		}
+		missing, known := h.MissingScopes(id, scopes)
+		if !known || len(missing) > 0 || (!toolsAvailable && !entry.Prompts && !entry.Resources && !entry.Subscriptions) {
+			continue
+		}
 		for _, d := range defs {
-			if !slices.Contains(g.AllowedTools, d.original) {
+			if !toolsAvailable || !slices.Contains(g.AllowedTools, d.original) {
 				continue
 			}
 			required := slices.Concat(endpointScopes, d.requiredScopes)

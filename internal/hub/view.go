@@ -21,13 +21,16 @@ import (
 type view struct {
 	// Protected by hub.viewsMu, including the gap before the SDK opens a session.
 	activeRequests    int
+	retired           bool
 	lastUsed          time.Time
 	credentialMu      sync.Mutex
 	personalClients   map[string]*personalBackend
 	credentialsClosed bool
 	personalResources resourceRegistry
+	grantResources    map[string]*resourceRegistry
 	identity          *configstore.EffectiveIdentity
 	grant             *configstore.ClientGrant
+	grants            map[string]configstore.ClientGrant
 	hub               *Hub
 	server            *mcp.Server
 	allowed           map[string]struct{}
@@ -190,7 +193,7 @@ func (v *view) allowsHTTPGroup(id string) bool {
 	}
 	if v.dynamicHTTP {
 		ids, _ := v.hub.currentHTTPTools().AllowedProfile(v.granted)
-		return slices.Contains(v.hub.filterGrantEndpoints(ids, v.grant), id)
+		return slices.Contains(v.hub.filterGrantEndpoints(ids, v.grant, v.grants, v.granted), id)
 	}
 	_, ok := v.allowedHTTP[id]
 	return ok
@@ -298,7 +301,7 @@ func (v *view) reconcile() {
 	if v.dynamicHTTP {
 		ids, scopes := v.hub.currentHTTPTools().AllowedProfile(v.granted)
 		httpGroups = make(map[string]struct{}, len(ids))
-		for _, id := range v.hub.filterGrantEndpoints(ids, v.grant) {
+		for _, id := range v.hub.filterGrantEndpoints(ids, v.grant, v.grants, v.granted) {
 			if v.identity != nil && !v.identity.Permissions.AllowsEndpoint(id) {
 				continue
 			}
@@ -329,6 +332,26 @@ func (v *view) reconcile() {
 		if !v.grant.Capabilities.Resources {
 			clear(resourceDefs)
 			clear(templateDefs)
+		}
+	}
+	if v.grants != nil {
+		for name, d := range promptDefs {
+			g := v.serviceGrant(d.backendID)
+			if g == nil || !g.Capabilities.Prompts {
+				delete(promptDefs, name)
+			}
+		}
+		for name, d := range resourceDefs {
+			g := v.serviceGrant(d.backendID)
+			if g == nil || !g.Capabilities.Resources {
+				delete(resourceDefs, name)
+			}
+		}
+		for name, d := range templateDefs {
+			g := v.serviceGrant(d.route.backendID)
+			if g == nil || !g.Capabilities.Resources {
+				delete(templateDefs, name)
+			}
 		}
 	}
 	v.reconcileMu.Lock()

@@ -2,6 +2,7 @@ import { initCredentials, fillCredentials, collectCredentials, showCredentials }
 import { initIdentities, refreshIdentities, renderIdentities } from "./identities.js";
 import { initIdentityProviders, refreshIdentityProviders, renderIdentityProviders } from "./identity-providers.js";
 import { renderOverview } from "./overview.js";
+import { initOnboarding, updateOnboarding, refreshOnboarding } from "./onboarding.js";
 import { fillRateLimit, collectRateLimit } from "./rate-limits.js";
 import { initToolPolicies, updateToolEndpoints, renderToolPolicies } from "./tool-policies.js";
 import { initClientGrants, refreshClientGrants, renderClientGrants } from "./client-grants.js";
@@ -12,6 +13,9 @@ import { apiErrorMessage, getLocale, setLocale, t, translateDOM } from "./i18n.j
 import { initShell, renderPage, renderSummary, renderRefreshState, updateRefreshState } from "./shell.js";
 import { markClean, clearUnsaved, confirmDiscard, initUnsavedChanges, lockForm } from "./unsaved.js";
 import { renderToolSelection } from "./tool-selection.js";
+import { initServices, updateServices, renderServices } from "./service-center.js";
+import { initOperations, refreshOperations, renderOperations as renderOperationsCenter } from "./operations.js";
+import { isConfigurationWrite, finishConfigurationWrite, configurationState } from "./configuration-changes.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -54,12 +58,14 @@ const elements = {
 };
 
 async function api(path, options = {}) {
+	const configurationWrite = isConfigurationWrite(path, options);
   const response = await fetch(`/api/v1${path}`, {
     ...options,
     headers: {
       ...authHeaders(),
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...(options.headers || {}),
+	  ...(configurationWrite ? { "X-MCPHub-Change-Mode": "draft" } : {}),
     },
   });
   if (response.status === 204) return null;
@@ -70,8 +76,10 @@ async function api(path, options = {}) {
     error.code = body.error?.code;
     error.field = body.error?.field;
     error.status = response.status;
+	error.change = body.id && body.state ? body : null;
     throw error;
   }
+	if (configurationWrite && body.id && body.state === "draft") return finishConfigurationWrite(body, api);
   if (response.status === 202 && body.pending_approval) {
     clearUnsaved();
     sessionStorage.setItem("mcphub.approval", body.approval_id);
@@ -95,9 +103,11 @@ async function refresh() {
     state.overview = overview;
     renderSummary(overview);
     renderOverview(overview, state.backends, openInspector);
+    updateOnboarding(overview, state.backends, state.groups);
     updateRefreshState();
     renderBackends();
     renderToolGroups();
+	updateServices(state.backends, state.groups);
     renderEvents(state.events);
     updateToolEndpoints(state.backends, state.groups);
     }
@@ -110,10 +120,13 @@ async function refresh() {
 
 async function refreshManagementPage() {
   if (!canManage() || !isAuthenticated()) return;
+  if (!location.hash || location.hash === "#overview") await refreshOnboarding();
   if (location.hash === "#identities") await refreshIdentities();
   if (location.hash === "#identity-providers") await refreshIdentityProviders();
   if (location.hash === "#client-grants") await refreshClientGrants();
   if (location.hash === "#requests") await refreshRequestDiagnostics();
+	if (location.hash === "#services") renderServices();
+	if (location.hash === "#operations") await refreshOperations();
 }
 
 async function refreshAll() {
@@ -246,10 +259,12 @@ function eventCopy(event) {
     approval_revoked: "已撤销", approval_cancelled: "已取消", approval_expired: "已过期", approval_investigated: "已记录人工核查",
     identity_login: "用户登录同步", identity_permissions_updated: "已更新用户或组织权限", identity_discovered: "已发现组织", directory_synced: "目录同步完成",
     identity_connections_updated: "已更新身份服务", identity_provider_changed: "身份服务变更，已撤销用户会话",
+    oauth_clients_updated: "已更新 OAuth 客户端", backup_restored_security_revoked: "已恢复数据库并撤销原有授权",
     group_created: "已创建用户组", group_name_synced: "已同步组名称", local_account_created: "已创建本地账号",
     local_password_changed: "已更新密码并撤销会话", local_mfa_enabled: "已启用 MFA 并撤销会话",
   };
-  return `${event.source_id || event.backend_id || t("系统")} · ${t(actions[event.action] || event.action)}${event.success ? "" : t("失败")}`;
+  const label = event.action.startsWith("configuration_") ? `${t("配置变更")} · ${configurationState(event.action.slice("configuration_".length))}` : t(actions[event.action] || event.action);
+  return `${event.source_id || event.backend_id || t("系统")} · ${label}${event.success ? "" : t("失败")}`;
 }
 
 function relativeTime(value) {
@@ -279,7 +294,7 @@ function openInspector(backend = null) {
   $("#revision-label").textContent = backend ? `Revision ${backend.revision}` : "";
   elements.remove.hidden = !backend;
   elements.copy.hidden = !backend;
-  elements.save.textContent = backend ? t("保存并应用") : t("保存后端");
+  elements.save.textContent = t("保存并检查变更");
   elements.inspector.hidden = false;
   elements.scrim.hidden = false;
   $(".app-shell").inert = true;
@@ -306,7 +321,7 @@ function copyCurrent() {
   $("#revision-label").textContent = t("Secret 需重新填写");
   elements.remove.hidden = true;
   elements.copy.hidden = true;
-  elements.save.textContent = t("保存后端");
+  elements.save.textContent = t("保存并检查变更");
   for (const row of $$(".header-row", $("#headers-list"))) {
     row.dataset.configured = "false";
     const value = $(".header-value", row);
@@ -640,10 +655,10 @@ function setBusy(value, operation = "") {
   elements.probe.disabled = value;
   elements.remove.disabled = value;
   elements.copy.disabled = value;
-  if (value && operation === "save") elements.save.textContent = t("正在应用…");
+  if (value && operation === "save") elements.save.textContent = t("正在保存草稿…");
   else if (value && operation === "probe") elements.probe.textContent = t("正在测试…");
   else {
-    elements.save.textContent = state.editing ? t("保存并应用") : t("保存后端");
+    elements.save.textContent = t("保存并检查变更");
     elements.probe.textContent = t("测试连接");
   }
 }
@@ -907,7 +922,7 @@ async function openGroupDialog(group = null) {
   $("#group-detail").hidden = !group;
   $("#delete-group").hidden = !group;
   $("#probe-group").hidden = !group;
-  $("#save-group").textContent = group ? t("保存并应用") : t("创建 HTTP 工具组");
+  $("#save-group").textContent = t("保存并检查变更");
   $("#group-dialog-title").textContent = group ? group.id : t("新建 HTTP 工具组");
   fillRateLimit("group", group?.rate_limit);
   if (group) {
@@ -1046,7 +1061,7 @@ function addParameterRow(parameter = {}) {
 
 function openToolDialog(tool = null) {
 	  state.toolEditing = tool; $("#tool-form").reset(); $("#parameter-list").replaceChildren(); $("#tool-error").hidden = true;
-  $("#tool-name").disabled = Boolean(tool); $("#delete-tool").hidden = !tool; $("#save-tool").textContent = tool ? t("保存并应用") : t("添加 HTTP 接口");
+  $("#tool-name").disabled = Boolean(tool); $("#delete-tool").hidden = !tool; $("#save-tool").textContent = t("保存并检查变更");
   $("#tool-dialog-title").textContent = tool ? `${t("编辑")} ${tool.name}` : t("添加 HTTP 接口");
 	  if (tool) { $("#tool-name").value = tool.name; $("#tool-method").value = tool.method; $("#tool-path").value = tool.path; $("#tool-description").value = tool.description; $("#tool-enabled").checked = tool.enabled; $("#tool-body-required").checked = tool.body_required; $("#tool-body-schema").value = tool.body_schema ? JSON.stringify(tool.body_schema, null, 2) : ""; $("#tool-output-schema").value = tool.output_schema ? JSON.stringify(tool.output_schema, null, 2) : ""; for (const parameter of tool.parameters || []) addParameterRow(parameter); if ([tool.body_schema, tool.output_schema, ...(tool.parameters || []).map((item) => item.schema)].some(hasUnsafeJSONNumber)) showDialogError("tool", t("Schema 含超出浏览器安全整数范围的数值；请使用管理 API 编辑，页面不会覆盖该配置。")); }
 	  renderToolRequestPreview();
@@ -1241,17 +1256,17 @@ function updateOpenEditorsForLocale() {
   if (!elements.inspector.hidden) {
     $("#inspector-kicker").textContent = state.editing ? t("编辑配置") : t("新建配置");
     $("#inspector-title").textContent = state.editing?.id || t("添加 MCP 后端");
-    elements.save.textContent = state.editing ? t("保存并应用") : t("保存后端");
+    elements.save.textContent = t("保存并检查变更");
     elements.probe.textContent = t("测试连接");
   }
   if ($("#group-dialog").open) {
     $("#group-dialog-title").textContent = state.groupEditing?.id || t("新建 HTTP 工具组");
-    $("#save-group").textContent = state.groupEditing ? t("保存并应用") : t("创建 HTTP 工具组");
+    $("#save-group").textContent = t("保存并检查变更");
     if (state.groupEditing) $("#group-public-prefix").textContent = `${t("公开命名空间：")}${state.groupEditing.id}.*`;
   }
   if ($("#tool-dialog").open) {
     $("#tool-dialog-title").textContent = state.toolEditing ? `${t("编辑")} ${state.toolEditing.name}` : t("添加 HTTP 接口");
-    $("#save-tool").textContent = state.toolEditing ? t("保存并应用") : t("添加 HTTP 接口");
+    $("#save-tool").textContent = t("保存并检查变更");
   }
 }
 
@@ -1277,6 +1292,9 @@ async function changeLanguage() {
   renderClientGrants();
   renderIdentities();
   renderIdentityProviders();
+	renderServices();
+	renderOperationsCenter();
+  await refreshOnboarding();
   renderRequestDiagnostics();
   if (state.groupEditing && $("#group-dialog").open) await refreshGroupChildren(state.groupEditing.id);
   announce(getLocale() === "en" ? "Language changed to English" : "语言已切换为中文");
@@ -1293,7 +1311,10 @@ initToolPolicies({ api, refresh, backendInput: inputFromBackend, editEndpoint: (
 initClientGrants(api);
 initIdentities(api);
 initIdentityProviders(api);
+initOnboarding(api);
 initRequestDiagnostics(api);
+initServices({ api, edit: (kind, value) => kind === "mcp" ? openInspector(value) : openGroupDialog(value) });
+initOperations(api);
 window.addEventListener("hashchange", refreshManagementPage);
 initializeAuth(() => { renderPage(); return refreshAll(); });
 setInterval(() => { if (!state.busy) refresh(); }, 5000);

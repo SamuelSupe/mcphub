@@ -4,6 +4,7 @@ import { resourceRow } from "./tool-policy-editor.js";
 import { editAccountCredentials } from "./local-account.js";
 import { markClean, confirmDiscard, lockForm } from "./unsaved.js";
 import { renderToolSelection } from "./tool-selection.js";
+import { scopeAssistant, showEffectivePermissions } from "./identity-permissions.js";
 
 const byId = (id) => document.getElementById(id);
 const values = (raw) => [...new Set(raw.split(/[\s,]+/).filter(Boolean))];
@@ -13,7 +14,7 @@ let api,
   page = 0;
 let renderedFilters = { query: "", kind: "", page: 0 };
 
-const providerName = (id) => snapshot?.providers?.find((source) => source.id === id)?.name || id;
+const providerName = (id) => id === "mcphub:permissions" ? t("权限组") : snapshot?.providers?.find((source) => source.id === id)?.name || id;
 
 export function initIdentities(request) {
   api = request;
@@ -41,34 +42,37 @@ export function initIdentities(request) {
 function showCreateGroup() {
   const dialog = element("dialog", "", "local-account-dialog");
   const form = element("form", "", "identity-form");
-  form.append(element("h2", t("创建组")));
+  form.append(element("h2", t("创建权限组")));
   const name = field(form, "组名称", "input");
   name.required = true;
   name.maxLength = 128;
-  const provider = field(form, "身份来源", "select");
-  for (const source of snapshot.providers || [])
-    provider.append(new Option(source.name, source.id));
+  form.append(element("p", t("权限组独立于身份源，可直接添加用户，或映射 LDAP/OIDC 组织组。"), "field-note"));
   const feedback = element("p", "");
   feedback.setAttribute("role", "status");
   const actions = element("div", "", "identity-form-actions");
   button(actions, "取消", async () => { if (await confirmDiscard(form)) dialog.close(); });
-  const save = element("button", t("创建组"), "primary");
+  const save = element("button", t("创建权限组"), "primary");
   save.type = "submit";
   actions.append(save);
   form.append(feedback, actions);
   form.onsubmit = async (event) => {
     event.preventDefault();
-    const input = { name: name.value.trim(), provider: provider.value };
+    const input = { name: name.value.trim(), provider: "mcphub:permissions" };
     const unlock = lockForm(form);
     try {
-      await api("/identities/groups", {
+      const created = await api("/identities/groups", {
         method: "POST",
         body: JSON.stringify(input),
       });
       markClean(form);
       unlock();
       dialog.close();
+      byId("identity-search").value = created.name;
+      byId("identity-kind").value = "permission_group";
+      page = 0;
       await refreshIdentities();
+      const record = byId("identity-list").querySelector(`[data-identity-id="${CSS.escape(created.id)}"]`);
+      if (record) { record.open = true; record.querySelector("summary").focus(); record.scrollIntoView({ block: "nearest" }); }
     } catch (error) {
       feedback.textContent = error.message;
     } finally {
@@ -182,7 +186,7 @@ function accessEntry(parent, access = {}) {
   );
   for (const rule of access.resource_rules || []) resourceRow(rule, rules);
   button(box, "添加资源条件", () => resourceRow({}, rules));
-  button(box, "删除此授权", () => box.remove());
+  button(box, "删除此授权", () => { box.remove(); parent.dispatchEvent(new Event("change", { bubbles: true })); });
   box.collect = () => ({
     endpoint_id: endpoint.value.trim(),
     tools: values(tools.value),
@@ -218,7 +222,7 @@ export async function renderIdentities() {
   const kind = byId("identity-kind").value;
   const items = (snapshot.identities || []).filter(
     (p) =>
-      (!kind || p.kind === kind) &&
+      (!kind || (kind === "permission_group" ? p.kind !== "user" && p.managed_locally : kind === "organization_group" ? p.kind !== "user" && !p.managed_locally : p.kind === kind)) &&
       `${p.name} ${p.external_id} ${p.id} ${providerName(p.provider)}`.toLowerCase().includes(query),
   );
   page = Math.max(0, Math.min(page, Math.ceil(items.length / 30) - 1));
@@ -258,13 +262,13 @@ export async function renderIdentities() {
     avatar.setAttribute("aria-hidden", "true");
     const labels = element("span", "");
     const kind = t(
-      { user: "用户", group: "用户组", department: "部门" }[identity.kind],
+      identity.kind === "user" ? "用户" : identity.managed_locally ? "权限组" : identity.kind === "department" ? "部门" : "组织组",
     );
     labels.append(
       element("strong", identity.name || identity.external_id),
       element(
         "small",
-        `${kind} · ${providerName(identity.provider)}`,
+        identity.provider === "mcphub:permissions" ? kind : `${kind} · ${providerName(identity.provider)}`,
       ),
     );
     title.append(avatar, labels);
@@ -279,13 +283,14 @@ export async function renderIdentities() {
       status,
       element(
         "span",
-        t(identity.kind === "user" ? "编辑组成员关系" : "编辑组权限"),
+        t(identity.kind === "user" ? "编辑组成员关系" : identity.managed_locally ? "编辑组权限" : "管理组织组状态"),
         "identity-edit",
       ),
     );
     const body = element("div", "", "identity-detail");
-    body.append(element("p", `MCPHub ID · ${identity.id}`, "identity-id"));
-    body.append(element("p", `${t("外部身份 ID")} · ${identity.external_id}`, "identity-id"));
+    const identifiers = element("details", "", "service-technical");
+    identifiers.append(element("summary", t("技术详情")), element("p", `MCPHub ID · ${identity.id}`, "identity-id"), element("p", `${t("外部身份 ID")} · ${identity.external_id}`, "identity-id"));
+    body.append(identifiers);
     body.append(
       element(
         "p",
@@ -314,13 +319,14 @@ export async function renderIdentities() {
     }
     card.append(header, body);
     if (identity.kind === "user") {
+      button(body, "查看有效权限", () => showEffectivePermissions(identity, snapshot, api));
       const memberships = (identity.groups || [])
         .map((id) => snapshot.identities.find((p) => p.id === id))
         .filter(Boolean);
       body.append(
         element(
           "p",
-          t("继承自") +
+          t("所属组") +
             ": " +
             (memberships
               .map(
@@ -336,17 +342,17 @@ export async function renderIdentities() {
     account.append(
       element(
         "legend",
-        t(identity.kind === "user" ? "账户状态" : "组状态与角色"),
+        t(identity.kind === "user" ? "账户状态" : identity.managed_locally ? "组状态与角色" : "组状态"),
       ),
     );
     const enabled = checkbox(account, "在 MCPHub 启用", identity.enabled);
     form.append(account);
-    let collect;
+    let collect, scopeHelp;
     if (identity.kind === "user") {
       const groups = element("fieldset", "", "identity-memberships");
       groups.append(element("legend", t("所属组")));
       const available = snapshot.identities.filter(
-        (g) => g.kind !== "user" && g.provider === identity.provider,
+        (g) => g.kind !== "user" && (g.provider === identity.provider || g.provider === "mcphub:permissions"),
       );
       const inputs = available.map((g) => {
         const input = checkbox(
@@ -378,7 +384,18 @@ export async function renderIdentities() {
       collect = () => ({
         groups: inputs.filter(([, input]) => input.checked).map(([id]) => id),
       });
+    } else if (!identity.managed_locally) {
+      form.append(element("p", t("组织组由身份源同步。请在权限组中映射此组并配置访问权限。"), "field-note"));
+      collect = () => ({ permissions: identity.permissions });
     } else {
+      let mappingInputs = [];
+      if (identity.provider === "mcphub:permissions") {
+        const mappings = element("fieldset", "", "identity-memberships");
+        mappings.append(element("legend", t("组织组映射")), element("p", t("任一有效组织组匹配时继承本权限组；撤销成员关系或停用组后立即失效。"), "field-note"));
+        mappingInputs = snapshot.identities.filter((g) => g.kind !== "user" && !g.managed_locally).map((g) => [g.id, checkbox(mappings, `${providerName(g.provider)} · ${g.name || g.external_id}`, identity.source_groups?.includes(g.id))]);
+        if (!mappingInputs.length) mappings.append(element("p", t("尚未发现组织组。企业用户登录或目录同步后，可在这里建立映射。"), "field-note"));
+        form.append(mappings);
+      }
       const roleInputs = [
         ["admin", "管理员"],
         ["approver", "审批员"],
@@ -404,21 +421,23 @@ export async function renderIdentities() {
       form.append(entries);
       for (const access of identity.permissions.access || [])
         accessEntry(entries, access);
-      button(form, "添加服务授权", () => accessEntry(entries));
+      button(form, "添加服务授权", () => { accessEntry(entries); scopeHelp.render(); });
       const members = snapshot.identities.filter(
         (p) => p.kind === "user" && p.groups?.includes(identity.id),
       );
       body.append(
         element(
           "p",
-          t("组成员") +
+          t("直接成员") +
             ": " +
             (members.map((p) => p.name || p.external_id).join(", ") || "—"),
           "field-note",
         ),
       );
       collect = () => ({
+        ...(identity.provider === "mcphub:permissions" ? { source_groups: mappingInputs.filter(([, input]) => input.checked).map(([id]) => id) } : {}),
         permissions: {
+          scope_mode: scopeHelp?.mode() || identity.permissions.scope_mode || (identity.provider === "mcphub:permissions" ? "derived" : "explicit"),
           roles: roleInputs
             .filter(([, input]) => input.checked)
             .map(([role]) => role),
@@ -426,6 +445,7 @@ export async function renderIdentities() {
           access: [...entries.children].map((entry) => entry.collect()),
         },
       });
+      scopeHelp = scopeAssistant(form, scopes, collect, snapshot);
     }
     const save = element("button", t("保存"), "primary");
     save.type = "submit";
@@ -438,6 +458,11 @@ export async function renderIdentities() {
       event.preventDefault();
       if (!await confirmDiscard(list, form)) return;
       const input = { enabled: enabled.checked, ...collect() };
+      if (input.enabled && scopeHelp?.missing().length) {
+        feedback.textContent = t("请补齐所选工具所需 Scope，或取消对应工具授权，再保存启用的组。");
+        scopesFocus(form);
+        return;
+      }
       const unlock = lockForm(form);
       feedback.textContent = "";
       try {
@@ -466,4 +491,9 @@ export async function renderIdentities() {
     list.append(card);
     markClean(form);
   }
+}
+
+function scopesFocus(form) {
+  form.querySelector(".scope-assistant")?.scrollIntoView({ block: "center" });
+  form.querySelector(".scope-assistant button")?.focus();
 }

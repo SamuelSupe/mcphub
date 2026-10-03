@@ -52,6 +52,12 @@ func (a *App) serveMCP(w http.ResponseWriter, req *http.Request, rt *runtime) {
 			writeGrantError(w, configstore.ErrGrantInvalid)
 			return
 		}
+		var nativeErr error
+		req, nativeErr = a.nativeGrantContext(req)
+		if nativeErr != nil {
+			writeGrantError(w, nativeErr)
+			return
+		}
 		if secret := req.Header.Get(configstore.GrantHeader); secret != "" {
 			if a.store == nil || !rt.cfg.ClientAuthorization.Enabled {
 				writeGrantError(w, configstore.ErrGrantInvalid)
@@ -182,7 +188,7 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 		}
 	})
 	for _, id := range envelope.backendIDs {
-		if req.Header.Get(configstore.GrantHeader) == "" && rt.hub.RequiresClientGrant(id) {
+		if hub.ClientGrantsFromContext(req.Context()) == nil && req.Header.Get(configstore.GrantHeader) == "" && rt.hub.RequiresClientGrant(id) {
 			writeGrantError(w, configstore.ErrGrantRequired)
 			return envelope, false
 		}
@@ -216,6 +222,23 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 		}
 	}
 	if len(missingSet) == 0 {
+		if grants := hub.ClientGrantsFromContext(req.Context()); grants != nil {
+			for _, id := range envelope.backendIDs {
+				grant, ok := grants[id]
+				if !ok {
+					writeNativeGrantDenial(w, req, envelope, configstore.ErrGrantInsufficient)
+					return envelope, false
+				}
+				if err := rt.hub.CheckClientGrantRequest(grant, envelope.Method, envelope.Params, scopes); err != nil {
+					_ = a.store.RecordClientGrantDenial(req.Context(), grant, "client_scope_or_resource_denied")
+					writeNativeGrantDenial(w, req, envelope, err)
+					return envelope, false
+				}
+				if len(envelope.backendIDs) == 1 {
+					diagnostics.Update(req.Context(), func(r *diagnostics.Record) { r.ClientID, r.GrantID = grant.ClientID, grant.GrantID })
+				}
+			}
+		}
 		if grant := hub.ClientGrantFromContext(req.Context()); grant != nil {
 			for _, id := range envelope.backendIDs {
 				if !strings.EqualFold(id, grant.EndpointID) {
@@ -245,6 +268,17 @@ func (a *App) authorizeMCPRequest(w http.ResponseWriter, req *http.Request, rt *
 	))
 	http.Error(w, "insufficient scope", http.StatusForbidden)
 	return envelope, false
+}
+
+// Service consent is narrower than authentication. An RPC denial keeps the
+// authenticated transport alive for the other independently authorized services.
+func writeNativeGrantDenial(w http.ResponseWriter, req *http.Request, envelope rpcEnvelope, err error) {
+	diagnostics.Outcome(req.Context(), "grant_denied", "client_scope_or_resource_denied")
+	if len(envelope.ID) == 0 {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": envelope.ID, "error": map[string]any{"code": -32003, "message": err.Error()}})
 }
 
 type rpcEnvelope struct {

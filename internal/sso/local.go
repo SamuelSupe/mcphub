@@ -2,7 +2,6 @@ package sso
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/subtle"
 	"errors"
 	"html/template"
@@ -137,7 +136,10 @@ func (s *Server) renderLocalLogin(w http.ResponseWriter, state string, query url
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	s.mu.Lock()
+	callback := s.pending[state].downstream.Redirect
+	s.mu.Unlock()
+	w.Header().Set("Content-Security-Policy", browserFormPolicy(callback))
 	_ = loginPage.Execute(w, data)
 }
 
@@ -232,11 +234,9 @@ func (s *Server) localLogin(w http.ResponseWriter, r *http.Request) {
 	if mfa {
 		code.ACR = config.LocalMFAACR
 	}
-	raw := rand.Text() + rand.Text()
-	s.codes[configstore.SecretHash(raw)] = code
 	s.mu.Unlock()
 	http.SetCookie(w, &http.Cookie{Name: "__Host-mcphub-sso-" + state, Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
-	s.redirectResult(w, r, code, raw, "")
+	s.finishAuthorization(w, r, code)
 }
 
 func (s *Server) reservePasswordAttempt(address, account string) (func(), error) {

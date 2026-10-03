@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/backend"
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
@@ -41,11 +42,12 @@ func (v *view) backendClient(ctx context.Context, id string) (*backend.Client, e
 	if !v.personalEndpoint(id) {
 		return shared, nil
 	}
-	if v.hub.credentials == nil || v.grant == nil {
+	g := v.serviceGrant(id)
+	if v.hub.credentials == nil || g == nil {
 		return nil, upstream.ErrConnect
 	}
 	e := credentialEndpoint(shared.Config())
-	b, err := v.hub.credentials.Binding(ctx, e, v.grant.Issuer, v.grant.Subject)
+	b, err := v.hub.credentials.Binding(ctx, e, g.Issuer, g.Subject)
 	if err != nil {
 		return nil, err
 	}
@@ -69,8 +71,8 @@ func (v *view) backendClient(ctx context.Context, id string) (*backend.Client, e
 	if parent == nil {
 		parent = context.Background()
 	}
-	sessionCtx, cancel := context.WithDeadline(parent, v.grant.ExpiresAt)
-	sessionCtx, releaseGrant, err := v.admitGrant(sessionCtx)
+	sessionCtx, cancel := context.WithDeadline(parent, g.ExpiresAt)
+	sessionCtx, releaseGrant, err := v.admitGrant(WithClientGrant(sessionCtx, *g))
 	if err != nil {
 		cancel()
 		return nil, err
@@ -91,7 +93,7 @@ func (v *view) backendClient(ctx context.Context, id string) (*backend.Client, e
 		if sessionCtx.Err() != nil {
 			return nil, upstream.ErrReconnect
 		}
-		if err := v.hub.grantStore.ValidateClientGrant(ctx, *v.grant); err != nil {
+		if err := v.hub.grantStore.ValidateClientGrant(ctx, *g); err != nil {
 			return nil, upstream.ErrReconnect
 		}
 		return authorize(ctx)
@@ -155,8 +157,13 @@ func (h *Hub) CloseCredentialViews(issuer, subject, endpoint string) {
 	h.viewsMu.Lock()
 	var removed []*view
 	for key, v := range h.views {
-		if v.grant != nil && v.grant.Issuer == issuer && v.grant.Subject == subject && v.grant.EndpointID == endpoint {
+		if g := v.serviceGrant(endpoint); g != nil && g.Issuer == issuer && g.Subject == subject {
 			delete(h.views, key)
+			delete(h.grantResources, g.GrantID)
+			if v.grants != nil && v.activeRequests > 0 {
+				v.retired = true
+				continue
+			}
 			removed = append(removed, v)
 		}
 	}
@@ -193,7 +200,48 @@ func (v *view) accountRequired(id string, err error) *mcp.CallToolResult {
 
 func (v *view) resourceRegistryFor(id string) *resourceRegistry {
 	if v.personalEndpoint(id) {
+		if registry := v.grantResources[id]; registry != nil {
+			return registry
+		}
 		return &v.personalResources
 	}
 	return &v.hub.resourceRegistry
+}
+
+// Personal resource capabilities belong to the service grant. Replacing a
+// connection view after revoking another service must retain these capabilities.
+type grantResourceHistory struct {
+	registry  *resourceRegistry
+	expiresAt time.Time
+}
+
+func (v *view) prepareGrantResources() bool {
+	if v.grants == nil {
+		return true
+	}
+	h := v.hub
+	h.viewsMu.Lock()
+	defer h.viewsMu.Unlock()
+	now := time.Now()
+	for id, history := range h.grantResources {
+		if !now.Before(history.expiresAt) {
+			delete(h.grantResources, id)
+		}
+	}
+	v.grantResources = map[string]*resourceRegistry{}
+	for id, grant := range v.grants {
+		if !v.personalEndpoint(id) || !grant.Capabilities.Resources {
+			continue
+		}
+		history, ok := h.grantResources[grant.GrantID]
+		if !ok {
+			if len(h.grantResources) >= maxCachedViews*16 {
+				return false
+			}
+			history = grantResourceHistory{registry: &resourceRegistry{issuedResources: map[string]*issuedResourceSet{}}, expiresAt: grant.ExpiresAt}
+			h.grantResources[grant.GrantID] = history
+		}
+		v.grantResources[id] = history.registry
+	}
+	return true
 }

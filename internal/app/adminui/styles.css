@@ -267,6 +267,8 @@ main { grid-column: 2; min-width: 0; outline: none; }
 .local-account-dialog button { margin:12px 8px 0 0; }
 .local-account-dialog::backdrop { background:#10213b66; }
 .local-account-dialog h2 { margin: 0 0 12px; }
+.local-account-dialog .account-security { margin:18px 0; padding:16px 0; border-top:1px solid #e2e7ef; }
+.local-account-dialog .account-security > summary { cursor:pointer; font-weight:600; }
 .local-account-dialog p { margin: 8px 0; color: var(--muted); line-height: 1.6; }
 .auth-role-options { text-align: left; }
 .auth-role-options summary { cursor: pointer; padding: 8px 0; color: var(--muted); }

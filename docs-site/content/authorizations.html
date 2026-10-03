@@ -1,3 +1,8 @@
+<h2 id="native-oauth">桌面客户端：一个连接访问多个服务</h2>
+<p>使用标准 OAuth 登录，逐个勾选服务、工具、提示词、资源和订阅；写请求默认关闭，启用后仍需逐次审批。当前组权限与每个服务授权共同约束调用，新增工具不会扩大已有授权。可在门户单独撤销服务授权，也可撤销整个连接。</p>
+<pre><code>mcpbridge login --native --server https://hub.example.com/mcp --profile work
+mcpbridge connect --profile work</code></pre>
+<p>本机有浏览器时使用此流程。原生 MCP 客户端由管理员在「运维中心 → OAuth 客户端」注册回调地址，使用 PKCE 和标准 Bearer 凭证，无需自定义授权 Header。远程无浏览器 Agent 继续使用<a href="device-auth.html">设备链接授权</a>，每次设备配对授权一个服务；现有单服务客户端条目仍可使用。</p>
 <h2 id="view">查看授权</h2>
 <p>门户「我的客户端」显示名称、服务、Scope、工具、资源条件、能力、到期时间和状态。本机可运行：</p>
 <pre><code>mcpbridge client list --profile work</code></pre>
@@ -17,3 +22,5 @@
 <p>「撤销此会话全部授权」会影响该 Broker 会话下所有入口，先确认目标。撤销立即阻止后续接纳并取消相关活动流；已被上游接受的副作用不会回滚。</p>
 <h2 id="names">不同客户端单独授权</h2>
 <p>使用可辨认的名称，如 codex-project-a-read 或 claude-tasks。名称方便管理但不证明应用身份，同一系统账号下其他程序可能使用该入口，保持电脑访问控制。</p>
+
+<p>个人授权中心优先显示有效连接，同一连接的服务归在一起，历史记录默认折叠。撤销单个服务保留其他服务；撤销整个连接前会确认影响范围。展开技术详情可查看 ID 和 Scope。</p>

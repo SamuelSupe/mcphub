@@ -77,8 +77,10 @@ func run(args []string) error {
 	}
 	var callbackPort *int
 	var admin *bool
+	var native *bool
 	var scopes scopeFlags
 	if command == "login" {
+		native = flags.Bool("native", false, "authorize multiple services with standard OAuth consent")
 		admin = flags.Bool("admin", false, "log in to the remote administration origin")
 		server = flags.String("server", "", "HTTPS MCP endpoint or admin origin with --admin (reuses this profile when omitted)")
 		clientID = flags.String("client-id", "", "preregistered public OAuth client ID")
@@ -102,6 +104,14 @@ func run(args []string) error {
 	defer stop()
 	switch command {
 	case "login":
+		if *native {
+			if *admin {
+				return fmt.Errorf("--native cannot be combined with --admin")
+			}
+			if *clientID == "" {
+				*clientID = "mcpbridge-connection"
+			}
+		}
 		if *server == "" || *clientID == "" {
 			status, err := store.Status(ctx, *profile)
 			if err != nil {
@@ -116,6 +126,9 @@ func run(args []string) error {
 			if *clientID == "" {
 				*clientID = status.ClientID
 			}
+		}
+		if *native && *admin {
+			return fmt.Errorf("--native requires a user profile; choose another --profile")
 		}
 		return client.Login(ctx, store, client.LoginOptions{Admin: *admin, ServerURL: *server, ClientID: *clientID, Profile: *profile, Scopes: scopes, CallbackPort: *callbackPort, Output: os.Stderr})
 	case "connect":

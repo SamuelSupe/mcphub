@@ -1,10 +1,10 @@
 # MCPHub 用户手册
 
-> 本指南用于 v2.3.0 全新部署。内建账号与 Agent 设备授权需要 v2.3.0，v2.2.2 不包含这些功能。
+> 本指南用于 v2.4.0 全新部署。请使用配套的 MCPHub 与 MCPBridge 发行包；不包含迁移流程。
 
 [English](user-guide.md) · [文档导航](README.zh-CN.md) · [项目首页](../README.zh-CN.md)
 
-面向在 Codex、Claude Code 或其他 MCP 客户端中使用公司工具的用户。本手册对应 v2.3.0。只需在自己的电脑安装 `mcpbridge`；服务器、身份服务和 Vault 由管理员配置。
+面向在 Codex、Claude Code 或其他 MCP 客户端中使用公司工具的用户。本手册对应 v2.4.0。只需在自己的电脑安装 `mcpbridge`；服务器、身份服务和 Vault 由管理员配置。
 
 首次接入按 **安装 CLI → 运行接入向导 → 确认授权 → 将配置加入客户端** 完成。服务要求个人上游账号时，先在门户连接账号，再完成连接检查。
 
@@ -36,9 +36,24 @@ Agent 没有命令执行能力时，将 stdio 连接参数设为：
 
 会话立即初始化，仅开放 `mcpbridge_auth_start` 与 `mcpbridge_auth_status`。前者复用同一个未过期申请；后者可能领取、保存凭证并检查连接，按结果的 `interval` 调用。ready 后刷新工具列表；不支持 `notifications/tools/list_changed` 时改用返回的 `connect --profile … --client …` 重新连接。失败的业务调用不会排队或自动重试，撤销或到期后需明确重新授权。
 
+配对页面切换中英文时会保留所选服务、工具、授权时长和资源条件；仅在允许申请且存在可授权的写工具时显示写权限选项。配对码无效或过期时，在 Agent 重新发起申请后，可在当前页面输入新的配对码。资源条件错误不会结束申请，修正表单后可再次提交。
+
 每次配对只授权一个服务及工具能力；提示词、资源 URI 或订阅使用原有向导。权限受当前组和已确认范围共同约束，新工具不会自动扩权。所有私有凭证留在 MCPBridge，禁止复制 Token 给 Agent。失败不会覆盖原有可用 profile；换用户或服务器需另建 profile。纯外部签发者继续使用 PKCE 登录与 setup。
 
 领取时申请、已确认授权和 Broker 会话都必须仍然有效；过期后请明确重新配对。取消尚未完成的申请会清理其未交付凭证；已完成配对不能再用旧申请取消登录会话，撤销客户端请使用客户端授权管理。MCPHub 会在每次业务请求时检查当前权限，撤销立即生效，无需等待 Agent 刷新状态。
+
+### 标准 OAuth 与多服务连接
+
+桌面上需要一个 Agent 连接访问多个服务时，可使用标准 OAuth 授权：
+
+```sh
+mcpbridge login --native --server https://hub.example.com/mcp --profile work
+mcpbridge connect --profile work
+```
+
+浏览器登录后分别选择每个服务的工具、提示词、资源、订阅、资源条件与有效期。工具默认不选，写申请默认关闭；写操作仍需审批。工具参数条件不能与提示词或资源能力混用。一个连接包含多个独立服务授权，可单项撤销，也可在管理台撤销整个连接；撤销某项后其他有效服务仍可调用。服务目录新增工具不会自动进入原授权。
+
+支持标准 OAuth 的原生 MCP 客户端可由管理员在「运维中心 → OAuth 客户端注册」登记 Client ID 与精确回调，使用 PKCE S256 登录。凭证只通过标准 `Authorization: Bearer` 发送，由服务器绑定内部服务授权，不需要额外 `MCPHub-Grant` Header。修改或删除客户端注册会撤销该客户端的会话与授权。远程无浏览器 Agent 继续使用已有的设备链接配对；一次设备配对仍选择一个服务。
 
 ## 接入前准备
 
@@ -55,26 +70,26 @@ Agent 没有命令执行能力时，将 stdio 连接参数设为：
 
 ## 安装 CLI
 
-从 [v2.3.0 发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0) 下载与电脑匹配的 MCPBridge 包和 `SHA256SUMS`，包名如下：
+从 [v2.4.0 发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v2.4.0) 下载与电脑匹配的 MCPBridge 包和 `SHA256SUMS`，包名如下：
 
 | 平台 | CLI 下载 |
 | --- | --- |
-| macOS Intel | `mcpbridge_v2.3.0_darwin_amd64.tar.gz` |
-| macOS Apple Silicon | `mcpbridge_v2.3.0_darwin_arm64.tar.gz` |
-| Linux amd64 | `mcpbridge_v2.3.0_linux_amd64.tar.gz` |
-| Linux arm64 | `mcpbridge_v2.3.0_linux_arm64.tar.gz` |
-| Windows x64 | `mcpbridge_v2.3.0_windows_amd64.zip` |
-| Windows ARM64 | `mcpbridge_v2.3.0_windows_arm64.zip` |
+| macOS Intel | `mcpbridge_v2.4.0_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `mcpbridge_v2.4.0_darwin_arm64.tar.gz` |
+| Linux amd64 | `mcpbridge_v2.4.0_linux_amd64.tar.gz` |
+| Linux arm64 | `mcpbridge_v2.4.0_linux_arm64.tar.gz` |
+| Windows x64 | `mcpbridge_v2.4.0_windows_amd64.zip` |
+| Windows ARM64 | `mcpbridge_v2.4.0_windows_arm64.zip` |
 
 下载后与 `SHA256SUMS` 核对 SHA-256，解压并将可执行文件放入 PATH。Windows 需要 10 或更新版本；Intel/AMD 电脑选 x64，Windows on Arm 选 ARM64。
 
 macOS/Linux 安装示例（以下为 Linux arm64，替换文件名；macOS 用 `shasum -a 256` 校验）：
 
 ```bash
-sha256sum mcpbridge_v2.3.0_linux_arm64.tar.gz
+sha256sum mcpbridge_v2.4.0_linux_arm64.tar.gz
 # 与 SHA256SUMS 中同名条目逐字核对，一致后再解压。
 mkdir -p mcpbridge-release "$HOME/.local/bin"
-tar -xzf mcpbridge_v2.3.0_linux_arm64.tar.gz -C mcpbridge-release
+tar -xzf mcpbridge_v2.4.0_linux_arm64.tar.gz -C mcpbridge-release
 install -m 755 mcpbridge-release/mcpbridge "$HOME/.local/bin/mcpbridge"
 export PATH="$HOME/.local/bin:$PATH"
 mcpbridge --version
@@ -86,8 +101,8 @@ mcpbridge setup --help
 Windows PowerShell 示例（文件名按实际架构替换）：
 
 ```powershell
-Get-FileHash .\mcpbridge_v2.3.0_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcpbridge_v2.3.0_windows_amd64.zip -DestinationPath .\mcpbridge
+Get-FileHash .\mcpbridge_v2.4.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcpbridge_v2.4.0_windows_amd64.zip -DestinationPath .\mcpbridge
 ```
 
 未添加 PATH 时，将后续命令中的 `mcpbridge` 替换为 `.\mcpbridge\mcpbridge.exe`。
@@ -95,7 +110,7 @@ Expand-Archive .\mcpbridge_v2.3.0_windows_amd64.zip -DestinationPath .\mcpbridge
 已安装 Go 1.26.8 的用户也可执行：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.3.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.4.0
 ```
 
 Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`，也需要加入 PATH。源码构建的文件需用 `./mcpbridge` 运行，或按上面的 `install` 步骤安装。
@@ -165,7 +180,7 @@ mcpbridge setup --profile work > mcphub-mcp.json
 
 ## 管理客户端授权
 
-可在 `https://hub.example.com/client-auth/` 查看、拒绝或撤销自己的授权和会话。一个客户端入口对应一个服务（endpoint）；不同 Agent 或服务分别授权，便于独立撤销。
+可在 `https://hub.example.com/client-auth/` 查看、拒绝或撤销自己的授权。门户优先显示有效连接，同一连接的多个服务归在一起，历史授权折叠显示。「撤销此服务授权」只影响该服务；「撤销整个连接」影响此连接的全部服务，确认框会说明范围。技术详情可展开查看 ID 和 Scope。传统客户端入口对应一个 endpoint；原生 OAuth 连接可一次授权多个服务。授权页支持中英文切换，显示分钟或小时的有效期，切换语言或修正资源条件错误时保留已选范围。
 
 需要明确指定工具和资源时，可手动操作：
 

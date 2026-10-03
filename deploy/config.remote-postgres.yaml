@@ -13,6 +13,9 @@ server:
   public_url: ${MCPHUB_PUBLIC_URL}
 auth:
   mode: builtin
+  # Enterprise membership must be reverified within this interval.
+  # 企业成员关系需在此期限内重新验证。
+  enterprise_membership_max_age: 24h
 admin:
   enabled: true
   mode: remote

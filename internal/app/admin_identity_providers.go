@@ -3,14 +3,17 @@ package app
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
 	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
 )
 
 type identityProvidersInput struct {
-	Source string `json:"source,omitempty"`
-	OIDC   struct {
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+	Source   string `json:"source,omitempty"`
+	OIDC     struct {
 		Enabled      bool                    `json:"enabled"`
 		Provider     config.IdentityProvider `json:"provider"`
 		ClientSecret *string                 `json:"client_secret,omitempty"`
@@ -34,32 +37,47 @@ func identityProvidersView(c config.EnterpriseConnections, issuer string, manage
 	}
 	c.OIDC.Provider.ClientSecretEnv = ""
 	return struct {
-		Revision    int64    `json:"revision"`
-		CallbackURL string   `json:"callback_url"`
-		Managed     bool     `json:"managed"`
-		OIDC        oidcView `json:"oidc"`
-		LDAP        ldapView `json:"ldap"`
-	}{c.Revision, issuer + "/callback", managed,
+		Revision    int64             `json:"revision"`
+		CallbackURL string            `json:"callback_url"`
+		Managed     bool              `json:"managed"`
+		ProviderIDs map[string]string `json:"provider_ids"`
+		OIDC        oidcView          `json:"oidc"`
+		LDAP        ldapView          `json:"ldap"`
+	}{c.Revision, issuer + "/callback", managed, map[string]string{"oidc": c.OIDC.Provider.Namespace(), "ldap": c.LDAP.Namespace()},
 		oidcView{c.OIDC.Enabled, c.OIDC.Provider, c.OIDC.ClientSecret != ""},
 		ldapView{LDAPConnection: c.LDAP, BindPasswordConfigured: c.LDAP.BindPassword != ""}}
 }
 
-func (a *App) serveIdentityProviders(w http.ResponseWriter, r *http.Request, probe bool) {
+func (a *App) serveIdentityProviders(w http.ResponseWriter, r *http.Request, suffix string) {
 	if a.sso == nil {
 		writeAPIError(w, 409, "identity_storage_required", "请启用内建认证与管理存储后配置身份服务。", "")
 		return
 	}
-	if !probe && r.Method == http.MethodGet {
+	if suffix == "" && r.Method == http.MethodGet {
 		c := a.sso.Connections()
 		w.Header().Set("ETag", revisionETag(c.Revision))
 		writeJSON(w, 200, identityProvidersView(c, a.currentConfig().Auth.Issuer, a.sso.Builtin()))
+		return
+	}
+	if strings.HasPrefix(suffix, "/tests/") && r.Method == http.MethodGet {
+		result, err := a.sso.ConnectionTest(configstore.Actor(r.Context()), strings.TrimPrefix(suffix, "/tests/"))
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, 200, result)
+		return
+	}
+	probe, test := suffix == "/probe", suffix == "/test"
+	if suffix != "" && !probe && !test {
+		http.NotFound(w, r)
 		return
 	}
 	if !a.sso.Builtin() {
 		writeAPIError(w, 409, "builtin_required", "UI 身份服务配置需要内建认证，并保留本地恢复管理员。", "")
 		return
 	}
-	if (!probe && r.Method != http.MethodPut) || (probe && r.Method != http.MethodPost) {
+	if (!probe && !test && r.Method != http.MethodPut) || ((probe || test) && r.Method != http.MethodPost) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -81,6 +99,16 @@ func (a *App) serveIdentityProviders(w http.ResponseWriter, r *http.Request, pro
 	}
 	if input.LDAP.BindPassword != nil {
 		next.LDAP.BindPassword = *input.LDAP.BindPassword
+	}
+	if test {
+		next.Revision = previous.Revision
+		result, err := a.sso.TestConnection(r.Context(), next, input.Source, configstore.Actor(r.Context()), input.Username, input.Password, r.RemoteAddr)
+		if err != nil {
+			writeAPIError(w, 400, "identity_test_failed", err.Error(), input.Source)
+			return
+		}
+		writeJSON(w, 200, result)
+		return
 	}
 	if probe {
 		if err := a.sso.ProbeConnections(r.Context(), next, input.Source); err != nil {

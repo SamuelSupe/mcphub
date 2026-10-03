@@ -1,10 +1,11 @@
-<p>适用于 v2.3.0 与配套 MCPBridge。MCPHub 必须使用内建签发者并开启客户端授权。可用本地账号、LDAP 或 OIDC 登录；账号需要已启用并拥有组权限。</p>
+<p>适用于 v2.4.0 与配套 MCPBridge。MCPHub 必须使用内建签发者并开启客户端授权。可用本地账号、LDAP 或 OIDC 登录；账号需要已启用并拥有组权限。</p>
 <h2 id="pair">通过链接完成接入</h2>
 <pre><code>mcpbridge pair start --server https://hub.example.com/mcp --profile work --name "项目助手" --json</code></pre>
 <ol><li>将返回的 <code>verification_uri_complete</code> 和 <code>user_code</code> 展示给用户。链接只带公开配对码。</li><li>用户在自己的浏览器打开链接，登录并核对配对码。名称由请求方填写，不代表经过验证的应用。</li><li>选择服务和具体工具，按需收窄资源范围与期限。工具默认不勾选，默认不申请写权限。</li><li>点击确认授权，回到 Agent 领取并检查连接。</li></ol>
 <pre><code>mcpbridge pair finish --request pr_example --wait --json
 mcpbridge connect --profile work --client ci_example</code></pre>
 <p>用实际返回的请求 ID 和客户端 ID 替换示例。省略 <code>--wait</code> 时只检查一次。<code>pending_user</code> 表示仍需用户确认；<code>ready</code> 表示凭证已私下保存且 MCP 连接检查通过。拒绝、过期或领取失败后需要明确重新开始。不要向 Agent 复制密码或 Token。</p>
+<p>切换中英文会保留已选服务、工具、授权时长和资源条件。仅在允许申请且存在可授权的写工具时显示写权限选项。配对码无效或过期时，在 Agent 重新发起申请后，可在当前页面输入新码。资源条件错误不会结束申请，修正后可再次提交。</p>
 <h2 id="interactive">没有命令执行能力的 Agent</h2>
 <p>在客户端的 stdio 配置中使用 MCPBridge 的实际绝对路径，参数如下：</p>
 <pre><code>["connect", "--server", "https://hub.example.com/mcp", "--profile", "work", "--name", "项目助手", "--interactive-auth"]</code></pre>

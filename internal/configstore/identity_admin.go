@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/config"
 )
@@ -21,6 +22,10 @@ func (s *Store) ConfigureIdentityProtection(auth config.AuthConfig, admin config
 	s.identityMu.Lock()
 	defer s.identityMu.Unlock()
 	s.identityAdmin = nil
+	s.identityMaxAge = auth.EnterpriseMembershipMaxAge.Duration
+	if s.identityMaxAge == 0 && (auth.Builtin() || auth.SSO != nil) {
+		s.identityMaxAge = 24 * time.Hour
+	}
 	if auth.Builtin() {
 		s.identityAdmin = &identityAdminPolicy{config.LocalIdentityProvider, false, admin}
 	} else if auth.SSO != nil && admin.Remote() {
@@ -33,10 +38,10 @@ func (s *Store) ConfigureIdentityProtection(auth config.AuthConfig, admin config
 // Authoritative directory revocations still take effect; recovery is local-only.
 func (s *Store) checkLastAdministrator(ctx context.Context, tx *transaction, replacement Identity) error {
 	policy := s.identityAdmin
-	if policy == nil || replacement.Provider != policy.provider {
+	if policy == nil || (replacement.Provider != policy.provider && replacement.Provider != config.PermissionGroupProvider) {
 		return nil
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT data FROM identities WHERE provider=?", policy.provider)
+	rows, err := tx.QueryContext(ctx, "SELECT data FROM identities WHERE provider=? OR provider=?", policy.provider, config.PermissionGroupProvider)
 	if err != nil {
 		return err
 	}
@@ -70,13 +75,25 @@ func (s *Store) checkLastAdministrator(ctx context.Context, tx *transaction, rep
 func (p *identityAdminPolicy) administratorCount(identities map[string]Identity) int {
 	count := 0
 	for _, user := range identities {
-		if user.Kind != "user" || !user.Enabled || !user.DirectoryActive || (p.directory && !user.DirectoryManaged) {
+		if user.Kind != "user" || user.Provider != p.provider || !user.Enabled || !user.DirectoryActive || (p.directory && !user.DirectoryManaged) {
 			continue
 		}
 		permissions := config.IdentityPermissions{}
 		for _, id := range user.Groups {
 			group, ok := identities[id]
 			if ok && group.Kind != "user" && group.Enabled && group.DirectoryActive {
+				permissions.Roles = append(permissions.Roles, group.Permissions.Roles...)
+				permissions.Scopes = append(permissions.Scopes, group.Permissions.Scopes...)
+			}
+		}
+		for _, group := range identities {
+			if group.Provider != config.PermissionGroupProvider || !group.Enabled || !group.DirectoryActive || slices.Contains(user.Groups, group.ID) {
+				continue
+			}
+			if slices.ContainsFunc(group.SourceGroups, func(id string) bool {
+				source, ok := identities[id]
+				return ok && source.Enabled && source.DirectoryActive && slices.Contains(user.Groups, id)
+			}) {
 				permissions.Roles = append(permissions.Roles, group.Permissions.Roles...)
 				permissions.Scopes = append(permissions.Scopes, group.Permissions.Scopes...)
 			}

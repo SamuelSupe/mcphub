@@ -13,7 +13,7 @@
 
 ## 选择配置与生效方式
 
-本参考对应 v2.3.0。YAML 只允许一个文档，未知字段会被拒绝。**不要把管理 API 的 JSON 对象直接粘贴为 YAML**：例如 YAML 的 `headers` 是键值映射，API 的 `headers` 是对象数组；`enabled` 是托管 backend 的 API 字段，不是 YAML backend 字段。HTTP 工具组及 OpenAPI 导入只能通过控制台/API 管理。
+本参考对应 v2.4.0。YAML 只允许一个文档，未知字段会被拒绝。**不要把管理 API 的 JSON 对象直接粘贴为 YAML**：例如 YAML 的 `headers` 是键值映射，API 的 `headers` 是对象数组；`enabled` 是托管 backend 的 API 字段，不是 YAML backend 字段。HTTP 工具组及 OpenAPI 导入只能通过控制台/API 管理。
 
 | 场景 | 从哪里开始 | 需要准备 |
 | --- | --- | --- |
@@ -93,6 +93,9 @@ duration 使用 Go `time.ParseDuration` 语法，例如 `500ms`、`60s`、`5m`�
 | `mode` | `builtin`（默认模板） | 内建账号；企业身份源可选。高级外部验证使用 `external`。 |
 | `issuer` | 内建模式自动推导 | 从 `server.public_url` 的 HTTPS origin 推导为 `/sso`；不要求 issuer 环境变量。外部模式必须配置 HTTPS issuer。 |
 | `sso` | 可选 | 内建模式可添加 `upstream` 企业身份源或额外公开客户端；默认注册 MCPBridge、门户和管理台。见[内建账号](builtin-accounts.zh-CN.md)与 [SSO](sso-and-user-management.zh-CN.md)。 |
+| `enterprise_membership_max_age` | `24h` | 企业组关系的最长验证有效期，范围 `1m`–`720h`；过期要求重新登录或同步目录。本地账号不受此期限影响。 |
+
+管理数据库中的权限组来源为 `mcphub:permissions`，`source_groups` 映射稳定的 LDAP/OIDC 组织组 ID。权限组 API 的 `permissions.scope_mode: derived` 在保存时编译所选能力的 Scope 快照，`explicit` 保留手动配置。通过管理台或 API 配置这些权限，不在启动 YAML 中添加用户授权。见[组与权限](builtin-accounts.zh-CN.md#组与权限)。
 
 内建模式要求管理存储。账号权限与会话由 Hub 检查，密码重置、停用和 MFA 绑定会撤销凭证。普通密码认证没有 MFA 标记。以下 discovery/JWKS 要求针对 `external` 验证模式。
 
@@ -434,7 +437,7 @@ Backend ID 的唯一性按大小写不敏感检查。tool/prompt 名称保留配
 
 ## 从完整 YAML 示例启动
 
-默认 [config.example.yaml](../config.example.yaml) 与 v2.3.0 服务端发行包、在线模板一致：本地管理台、SQLite、`backends: []`。它只要求 `MCPHUB_PUBLIC_URL` 和 `MCPHUB_CONFIG_KEY`，后端地址与认证凭证在 UI 中按服务配置。
+默认 [config.example.yaml](../config.example.yaml) 与 v2.4.0 服务端发行包、在线模板一致：本地管理台、SQLite、`backends: []`。它只要求 `MCPHUB_PUBLIC_URL` 和 `MCPHUB_CONFIG_KEY`，后端地址与认证凭证在 UI 中按服务配置。
 
 在新的私有部署目录中下载模板并启动，替换两个 HTTPS 地址：
 
@@ -531,8 +534,10 @@ SIGHUP 创建 unavailable optional backend 时，只有目录来源身份未变�
 
 ## 客户端凭证与连接边界
 
-严格客户端授权启用时，服务端同时检查 OIDC Token 与不透明 `MCPHub-Grant` 凭证，有效 scope 是二者交集。每次请求校验 issuer、用户、resource、endpoint UID、期限、工具发布状态、资源条件和当前策略。修改 scope/目标、停用或同名重建 endpoint、改变 HTTP 工具执行语义后需重新确认。新工具不会自动进入旧授权；用户 Token 与 Grant 均不转发上游。
+严格客户端授权中，Bridge/Broker 单项授权使用用户 Token 加不透明 `MCPHub-Grant`；标准 OAuth 会话由服务端绑定内部服务授权，只需 Bearer Token。有效 Scope 仍是当前 Token 与单项授权的交集。每次请求校验 issuer、用户、resource、endpoint UID、期限、工具发布状态、资源条件和当前策略。修改 scope/目标、停用或同名重建 endpoint、改变 HTTP 工具执行语义后需重新确认。新工具不会自动进入旧授权；用户 Token 与 Grant 均不转发上游。
 
 私有 socket/named pipe、OS 对端检查和独立 IPC 凭证限制其他系统用户接入，但不能证明应用身份，也不能隔离同一系统账户下的恶意进程。发布流程要求 Windows x64、ARM64 的原生 CLI 测试（含 Broker IPC）通过；macOS/Linux 使用 Unix socket 与 OS 对端校验。完整边界及验证记录见[方案文档](broker-authorization-design.zh-CN.md)。
 
 新部署模板默认设置 `client_authorization.require_client_grant: true`：用户 Token 只完成身份验证，业务工具还需经网页确认的 ClientGrant。内建签发者发布设备授权元数据；服务端 `device_authorization_endpoint` 不是上游身份源的端点。详见[用户手册](user-guide.zh-CN.md#agent-链接授权)。
+
+标准 OAuth 客户端在运维中心登记，或在 `auth.sso.clients[]` 设置 `require_consent: true` 与 `name`。多服务授权、草稿和备份见[管理员手册](admin-guide.zh-CN.md)。

@@ -81,13 +81,22 @@ export function renderClientGrants() {
       : t("没有符合条件的授权");
   byId("grant-prev").disabled = cursors.length < 2;
   byId("grant-next").disabled = !snapshot.next_cursor;
+	const connections = new Set();
   for (const grant of snapshot.grants) {
+	if (!connections.has(grant.broker_session_id)) {
+		connections.add(grant.broker_session_id);
+		const connection = element("header", "", "overview-panel"), stop = element("button", t("撤销整个连接"), "secondary"); stop.type="button";
+		connection.append(element("h3", `${t("Agent 连接")} · ${grant.client_name}`), element("p", t("每个服务单独授权。此页可能只显示连接的一部分授权。"), "field-note"));
+        const technical = element("details", "", "service-technical"); technical.append(element("summary", t("技术详情")), element("p", grant.broker_session_id)); connection.append(technical);
+		stop.onclick = async () => { if (!confirm(t("撤销此连接的全部服务授权？此操作不能撤回已执行的调用。"))) return; stop.disabled=true; try { await api(`/client-grants/sessions/${encodeURIComponent(grant.broker_session_id)}/revoke`,{method:"POST",body:JSON.stringify({subject:grant.subject})}); await refreshClientGrants(); } catch(error) { byId("grant-feedback").textContent=error.message; } finally { stop.disabled=false; } };
+		connection.append(stop); list.append(connection);
+	}
     const card = element("article", "", "policy-card");
     const header = element("header", "");
     const status = element("span", t(statuses[grant.status] || grant.status), "policy-tag");
     status.dataset.tone = grant.status === "active" ? "success" : ["pending", "confirmed", "reconfirmation_required"].includes(grant.status) ? "warning" : "neutral";
     header.append(
-      element("h3", grant.client_name),
+      element("h3", `${grant.client_name} · ${grant.endpoint_id}`),
       status,
     );
     const fields = element("dl", "");

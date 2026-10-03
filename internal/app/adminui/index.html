@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/tool-policies.css">
   <link rel="stylesheet" href="/overview.css">
   <link rel="stylesheet" href="/identities.css">
+  <link rel="stylesheet" href="/operations.css">
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -48,6 +49,7 @@
         <div class="nav-group"><p class="nav-section-label">总览</p>
         <a class="nav-item active" href="#overview" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg><span>概览</span></a>
         </div><div class="nav-group"><p class="nav-section-label">服务接入</p>
+        <a class="nav-item" href="#services"><svg class="icon"><use href="#i-network"/></svg><span>服务</span></a>
         <a class="nav-item" href="#backends"><svg class="icon"><use href="#i-server"/></svg><span>MCP 后端</span><span class="nav-count" id="nav-backend-count">—</span></a>
         <a class="nav-item" href="#tool-groups"><svg class="icon"><use href="#i-braces"/></svg><span>HTTP 工具组</span><span class="nav-count" id="nav-group-count">—</span></a>
         </div><div class="nav-group"><p class="nav-section-label">访问控制</p>
@@ -56,6 +58,7 @@
         <a class="nav-item" href="#identity-providers"><svg class="icon"><use href="#i-network"/></svg><span>身份服务</span></a>
         <a class="nav-item" href="#client-grants"><svg class="icon"><use href="#i-monitor"/></svg><span>客户端授权</span></a>
         </div><div class="nav-group"><p class="nav-section-label">治理与审计</p>
+        <a class="nav-item" href="#operations"><svg class="icon"><use href="#i-server"/></svg><span>运维中心</span></a>
         <a class="nav-item" href="#approvals"><svg class="icon"><use href="#i-checklist"/></svg><span>审批中心</span></a>
         <a class="nav-item" href="#requests"><svg class="icon"><use href="#i-pulse"/></svg><span>请求诊断</span></a>
         <a class="nav-item" href="#activity"><svg class="icon"><use href="#i-clock"/></svg><span>变更记录</span></a>
@@ -80,16 +83,19 @@
             <a href="#tool-groups"><svg class="icon"><use href="#i-grid"/></svg><span>可用 HTTP 工具</span><strong id="metric-tools">—</strong></a>
           </div>
           <section class="overview-panel setup-steps">
-            <h2>配置顺序</h2>
-            <ol>
-              <li><a href="#backends">1. 接入服务并测试连接</a><p>已有 MCP 服务添加后端；REST API 创建 HTTP 工具组。</p></li>
-              <li><a href="#tool-policies">2. 发布工具并设置读写规则</a><p>只发布需要的工具，未分类工具需要审批。</p></li>
-              <li><a href="#identities">3. 创建用户组并分配权限</a><p>在组上授权工具与 Scope，再添加用户。</p></li>
-            </ol>
+            <div class="section-inline"><h2>首次接入验收</h2><button id="setup-refresh" class="secondary" type="button">重新检查</button></div>
+            <div class="form-grid setup-selectors">
+              <label class="field">目标服务<select id="setup-service"></select></label>
+              <label class="field">验收工具<select id="setup-tool"></select></label>
+              <label class="field">验收用户<select id="setup-user"></select></label>
+            </div>
+            <p id="setup-feedback" class="field-note" role="status">选择服务、工具与验收用户，检查这一次接入。</p>
+            <ol id="setup-progress"></ol>
+            <div class="setup-actions"><button id="setup-check" class="secondary" type="button" disabled>检查所选用户权限</button><label class="field">在 Agent 终端开始配对<input id="setup-command" readonly></label></div>
           </section>
           <div class="overview-grid">
             <section class="overview-panel services-panel" aria-labelledby="services-title">
-              <div class="section-inline"><h2 id="services-title">服务状态</h2><a href="#backends">管理服务<svg class="icon"><use href="#i-arrow"/></svg></a></div>
+              <div class="section-inline"><h2 id="services-title">服务状态</h2><a href="#services">管理服务<svg class="icon"><use href="#i-arrow"/></svg></a></div>
               <p id="service-summary" class="section-description">检查连接状态与已发布能力。</p>
               <div class="service-table-wrap"><table class="service-table"><thead><tr><th scope="col">名称</th><th scope="col">类型</th><th scope="col">状态</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead><tbody id="service-status-list"></tbody></table></div>
               <div class="empty-state" id="overview-empty" hidden><span class="empty-symbol"><svg class="icon"><use href="#i-network"/></svg></span><h3>接入第一个 MCP 服务</h3><p>添加 MCP 后端或 HTTP 工具组，再发布工具并配置访问权限。</p><button class="primary" data-create="backend" type="button">添加 MCP 后端</button></div>
@@ -103,6 +109,22 @@
           </div>
           <section class="overview-panel recent-panel"><div class="section-inline"><h2>最近变更</h2><a href="#activity">查看全部<svg class="icon"><use href="#i-arrow"/></svg></a></div><ol class="event-list compact-events" id="recent-event-list"><li class="event-empty">正在读取配置…</li></ol></section>
           <section class="overview-panel onboarding-band"><div><h2>接入新的服务</h2><p>添加 MCP 后端或创建工具组，开始统一管理。</p></div><div class="page-actions"><button class="primary" data-create="backend" type="button"><svg class="icon"><use href="#i-plus"/></svg><span>添加 MCP 后端</span></button><button class="secondary" data-create="group" type="button">创建 HTTP 工具组</button></div></section>
+        </section>
+
+        <section data-page="services" aria-label="服务" hidden>
+          <div class="list-toolbar"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="service-search" type="search" placeholder="名称或地址" aria-label="搜索服务"></label><label class="filter"><span>服务类型</span><select id="service-kind"><option value="">全部</option><option value="mcp">MCP</option><option value="http">HTTP</option></select></label><span id="service-count"></span></div>
+          <div class="page-actions service-create-actions"><label class="field">接入方式<select id="new-service-kind"><option value="mcp">MCP 服务</option><option value="http">HTTP / OpenAPI</option></select></label><button id="add-service" type="button" class="primary">添加服务</button></div>
+          <div class="service-center"><div id="service-list" class="service-catalog"></div><section id="service-detail-panel" class="overview-panel" hidden><h2 id="service-detail-title"></h2><nav class="service-tabs" aria-label="服务配置"><button type="button" data-service-tab="connection">连接与账号</button><button type="button" data-service-tab="capabilities">能力发布</button><button type="button" data-service-tab="access">访问控制</button><button type="button" data-service-tab="runtime">运行与诊断</button></nav><div id="service-details"></div></section></div>
+        </section>
+
+        <section data-page="operations" aria-label="运维中心" hidden>
+          <div class="section-inline"><h2>配置与恢复状态</h2><button id="operations-refresh" class="secondary" type="button">刷新状态</button></div><p id="operations-feedback" role="status"></p><section id="operations-status" class="operations-status"></section>
+
+          <section class="overview-panel"><h2>配置变更</h2><p class="field-note">草稿 → 校验 → 应用或审批。回退创建新草稿，并重新校验当前版本。最多保留 200 条记录，可移除已完成记录。</p><div id="configuration-change-list" class="policy-list"></div></section>
+          <details class="overview-panel operation-help"><summary>部署配置与备份操作</summary><p>YAML 与环境变量管理监听地址、公开地址、存储和认证默认值，修改后校验并重启。数据库管理服务、工具策略、权限组、身份连接和 OAuth 客户端，应用后立即生效。YAML 后端只在空数据库首次启动时导入。</p><p>当前采用单实例部署。备份保存数据库一致性快照、版本、校验和与密钥标识；加密密钥应独立保管。</p><h3>备份与隔离恢复检查</h3><pre>mcphub backup --config config.yaml --output ./backup-20261003
+mcphub verify-backup --config config.yaml --backup ./backup-20261003
+mcphub restore --config config.yaml --backup ./backup-20261003 --into ./recovery/config.db</pre><p>恢复只允许空目标。原有会话、服务授权和未完成审批会撤销。隔离检查验证数据库恢复和读取；生产切换前仍需在隔离实例检查登录与工具调用。</p></details>
+          <section class="overview-panel"><h2>OAuth 客户端注册</h2><p>为支持标准 OAuth 的 MCP 客户端登记名称、Client ID 和精确回调地址。每次登录都会选择服务授权范围，不需要客户端携带额外 Grant Header。需要 PKCE；HTTPS 或 loopback HTTP 回调。</p><p id="oauth-client-built-in" class="field-note"></p><form id="oauth-client-form"><div id="oauth-client-rows"></div><div class="page-actions"><button id="oauth-client-add" class="secondary" type="button">添加客户端</button><button id="oauth-client-save" class="primary" type="submit">保存客户端</button></div></form></section>
         </section>
 
         <section data-page="backends" aria-label="MCP 后端" hidden>
@@ -133,10 +155,10 @@
         </section>
 
         <section data-page="identities" aria-label="用户与组" hidden>
-          <p class="field-note">先创建组并分配角色、工具和 Scope，再将用户加入组。内建账号与企业身份的组分别管理；写操作仍需审批。</p>
-          <div class="identity-create-actions"><button id="create-local-user" class="primary" type="button" hidden>创建用户</button><button id="create-group" class="secondary" type="button" hidden>创建组</button></div><div class="policy-toolbar">
+          <p class="field-note">创建权限组并选择服务与工具，再添加本地用户或映射 LDAP / OIDC 组织组。不同身份源按稳定 ID 隔离，不按名称或邮箱合并；写操作仍需审批。</p>
+          <div class="identity-create-actions"><button id="create-group" class="primary" type="button" hidden>创建权限组</button><button id="create-local-user" class="secondary" type="button" hidden>创建用户</button></div><div class="policy-toolbar">
             <label class="field">搜索用户或组<input id="identity-search" type="search"></label>
-            <label class="field">类型<select id="identity-kind"><option value="">全部</option><option value="user">用户</option><option value="group">用户组</option><option value="department">部门</option></select></label>
+            <label class="field">类型<select id="identity-kind"><option value="">全部</option><option value="user">用户</option><option value="permission_group">权限组</option><option value="organization_group">组织组与部门</option></select></label>
           </div>
           <p id="identity-feedback" role="status"></p>
           <datalist id="identity-endpoints"></datalist>
@@ -150,7 +172,7 @@
           <form id="identity-provider-form" class="identity-provider-form">
             <section class="overview-panel">
               <div class="section-inline"><h2>OIDC</h2><label class="checkbox-field"><input name="oidc_enabled" type="checkbox">启用 OIDC</label></div>
-              <p class="field-note">在身份服务中注册以下回调地址。连接测试检查发现文档与签名密钥；客户端密钥须通过实际登录验证。</p>
+              <p class="field-note">在身份服务中注册以下回调地址。保存前验证草稿配置的登录、客户端密钥与身份映射。</p>
               <label class="field">回调地址<input id="identity-provider-callback" readonly></label>
               <div class="form-grid">
                 <label class="field">Issuer URL<input name="oidc_issuer" type="url" placeholder="https://id.example.com"></label>
@@ -165,8 +187,9 @@
                 <label class="field">租户 Claim（可选）<input name="oidc_tenant_claim"></label>
                 <label class="field">允许的租户值<input name="oidc_tenant_value"></label>
               </div></details>
-              <p class="field-note">Subject 固定使用 sub。OIDC、本地账号与 LDAP 的组分别授权，不按名称合并。</p>
-              <button class="secondary" type="button" data-probe-identity="oidc">测试 OIDC 连接</button>
+              <p class="field-note">Subject 固定使用 sub。不同身份源的组织组不按名称合并；请通过独立权限组显式映射。</p>
+              <div class="page-actions"><button class="secondary" type="button" data-probe-identity="oidc">检查基础连接</button><button class="primary" type="button" data-test-identity="oidc">验证 OIDC 登录与映射</button></div>
+              <div id="oidc-test-result" class="connection-test-result"></div>
             </section>
             <section class="overview-panel">
               <div class="section-inline"><h2>LDAP</h2><label class="checkbox-field"><input name="ldap_enabled" type="checkbox">启用 LDAP</label></div>
@@ -186,7 +209,8 @@
               </div>
               <label class="field">自定义 CA 证书（PEM，可选）<textarea name="ldap_root_ca_pem" rows="5" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
               <p class="field-note">用户过滤器使用 {{username}}；组过滤器使用 {{dn}} 或 {{username}}。输入会转义。组关系在登录时刷新，不支持嵌套组；LDAP 密码登录不等于 MFA。</p>
-              <button class="secondary" type="button" data-probe-identity="ldap">测试 LDAP 连接</button>
+              <div class="page-actions"><button class="secondary" type="button" data-probe-identity="ldap">检查基础连接</button><button class="primary" type="button" data-test-identity="ldap">验证 LDAP 登录与映射</button></div>
+              <div id="ldap-test-result" class="connection-test-result"></div>
             </section>
             <div class="provider-save-bar"><p class="field-note">密钥加密保存，留空保留原值。保存立即生效，并撤销发生变更的身份服务会话。</p><button class="primary" id="save-identity-providers" type="submit">保存身份服务</button></div>
           </form>
@@ -323,10 +347,10 @@
           <label class="switch-row"><input id="field-required" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>设为关键后端</strong><small>连接失败会使网关未就绪；普通后端会在后台重连。</small></span></label>
           <label class="switch-row"><input id="field-insecure" type="checkbox"><span class="switch" aria-hidden="true"></span><span><strong>允许本地 HTTP</strong><small>仅限 localhost 或回环 IP 的开发服务。</small></span></label>
         </div></details>
-        <p class="form-hint">新接入的服务请先测试连接，再保存配置。</p>
+        <p class="form-hint">新接入的服务请先测试连接。保存后先检查草稿，校验通过后再应用或提交审批。</p>
         <div class="probe-result" id="probe-result" role="status" aria-live="polite" hidden></div><div class="form-error" id="form-error" role="alert" hidden></div>
       </div>
-      <footer class="form-actions"><button class="danger text-button" id="delete-button" type="button" hidden>删除</button><button class="text-button" id="copy-button" type="button" hidden>复制配置</button><span class="action-spacer"></span><button class="secondary" id="probe-button" type="button">测试连接</button><button class="primary" id="save-button" type="submit">保存后端</button></footer>
+      <footer class="form-actions"><button class="danger text-button" id="delete-button" type="button" hidden>删除</button><button class="text-button" id="copy-button" type="button" hidden>复制配置</button><span class="action-spacer"></span><button class="secondary" id="probe-button" type="button">测试连接</button><button class="primary" id="save-button" type="submit">保存并检查变更</button></footer>
     </form>
   </section>
 
@@ -382,10 +406,10 @@
         </details>
         <details class="advanced"><summary><span>高级连接设置</span><small>超时与响应上限</small></summary><div class="field-grid"><label class="field"><span>请求超时</span><input id="group-timeout" value="60s"></label><label class="field"><span>最大响应字节</span><input id="group-response-limit" type="number" min="65536" max="16777216" value="1048576"><small>默认 1 MiB，可设置 64 KiB 至 16 MiB。</small></label></div></details>
         </details>
-        <p class="form-hint" id="group-create-help">创建工具组后，继续添加接口或导入 OpenAPI 文档。</p>
+        <p class="form-hint" id="group-create-help">保存后先检查草稿，校验通过后再应用或提交审批。创建工具组后，继续添加接口或导入 OpenAPI 文档。</p>
         <div class="form-error" id="group-error" role="alert" hidden></div>
       </div>
-      <footer><button class="danger text-button" id="delete-group" type="button" hidden>删除工具组</button><span class="action-spacer"></span><button class="secondary" id="probe-group" type="button" hidden>测试已保存连接</button><button class="primary" id="save-group" type="submit">创建 HTTP 工具组</button></footer>
+      <footer><button class="danger text-button" id="delete-group" type="button" hidden>删除工具组</button><span class="action-spacer"></span><button class="secondary" id="probe-group" type="button" hidden>测试已保存连接</button><button class="primary" id="save-group" type="submit">保存并检查变更</button></footer>
     </form>
   </dialog>
 
@@ -408,7 +432,7 @@
         <label class="field full"><span>JSON Output Schema（可选）</span><textarea id="tool-output-schema" rows="5" spellcheck="false"></textarea></label>
         <div class="form-error" id="tool-error" role="alert" hidden></div>
       </div>
-      <footer><button class="danger text-button" id="delete-tool" type="button" hidden>删除</button><span class="action-spacer"></span><button class="primary pressable" id="save-tool" type="submit">添加 Tool</button></footer>
+      <footer><button class="danger text-button" id="delete-tool" type="button" hidden>删除</button><span class="action-spacer"></span><button class="primary pressable" id="save-tool" type="submit">保存并检查变更</button></footer>
     </form>
   </dialog>
 
@@ -428,7 +452,7 @@
         <div class="operation-list" id="operation-list"></div>
         <div class="form-error" id="import-error" role="alert" hidden></div>
       </div>
-      <footer><span class="action-spacer"></span><button class="primary pressable" id="save-import" type="submit" disabled>导入选中接口</button></footer>
+      <footer><span class="action-spacer"></span><button class="primary pressable" id="save-import" type="submit" disabled>检查导入变更</button></footer>
     </form>
   </dialog>
 
@@ -464,9 +488,13 @@
       <header><h2 id="access-check-title">权限检查</h2><button class="icon-button" type="button" data-policy-close aria-label="关闭">×</button></header>
       <div class="policy-dialog-body">
         <p id="access-check-target"></p>
-        <p class="context-note">输入的 Scope 是管理员假设条件，不代表已验证的用户权限。检查不执行工具，也不创建审批或占用执行额度。</p>
+        <p class="context-note">选择用户载入当前权限，也可手动填写假设 Scope。检查不执行工具，不创建审批或占用执行额度。</p>
+        <div id="access-check-selection" hidden>
+          <div class="field-grid"><label class="field"><span>验收用户</span><select id="access-check-user"></select></label><label class="field"><span>客户端授权</span><select id="access-check-client"></select></label></div>
+          <p class="field-note" id="access-check-selection-feedback" role="status"></p>
+        </div>
         <label class="field"><span>假设调用者拥有的 Scope</span><textarea id="access-check-scopes" rows="2" placeholder="多个 Scope 用空格或逗号分隔"></textarea></label>
-        <div class="field-grid"><label class="field"><span>用户 Subject（检查 Grant 时必填）</span><input id="access-check-subject" maxlength="1024"></label><p class="field-note">SSO 模式需填写用户与组页面中的 MCPHub 用户 ID。</p><label class="field"><span>Grant ID（可选）</span><input id="access-check-grant" maxlength="128"></label></div>
+        <details class="advanced"><summary>手动填写用户与授权 ID</summary><div class="field-grid"><label class="field"><span>用户 Subject（检查 Grant 时必填）</span><input id="access-check-subject" maxlength="1024"></label><p class="field-note">SSO 模式需填写用户与组页面中的 MCPHub 用户 ID。</p><label class="field"><span>Grant ID（可选）</span><input id="access-check-grant" maxlength="128"></label></div></details>
         <label class="field"><span>工具调用参数（JSON）</span><textarea id="access-check-arguments" rows="5" spellcheck="false">{}</textarea></label>
         <p class="field-note">结果仅代表当前配置下的检查，不授予执行权。参数 Schema、实时限流、预览、资源版本和上游权限仍在实际执行时检查。</p>
         <div id="access-check-result" aria-live="polite"></div>

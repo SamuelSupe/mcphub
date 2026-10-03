@@ -1,12 +1,12 @@
 # Remote administration and database deployment
 
-> This guide covers v2.3.0 fresh deployments. Built-in accounts and Agent device authorization require v2.3.0; v2.2.2 does not include these features.
+> This guide covers v2.4.0 fresh deployments. Use matching MCPHub and MCPBridge packages; no migration workflow is included.
 
 [中文](README.zh-CN.md) · [Administrator manual](../docs/admin-guide.md) · [Documentation](../docs/README.md)
 
-MCPHub v2.3.0 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes.
+MCPHub v2.4.0 supports **one MCPHub instance with SQLite or PostgreSQL**. PostgreSQL provides a separately operated, durable configuration database; it does not enable multiple gateways to synchronize their in-memory runtimes.
 
-This guide covers fresh v2.3.0 deployments. The default enables a local console and SQLite; team administration uses the remote templates here with an HTTPS admin origin and registered administrator identity. Start the console, add each backend with its own credentials, test the connection, then publish tools. See optional [Vault](../docs/vault-accounts.md) and [SSO](../docs/sso-and-user-management.md) configuration.
+This guide covers fresh v2.4.0 deployments. The default enables a local console and SQLite; team administration uses the remote templates here with an HTTPS admin origin and registered administrator identity. Start the console, add each backend with its own credentials, test the connection, then publish tools. See optional [Vault](../docs/vault-accounts.md) and [SSO](../docs/sso-and-user-management.md) configuration.
 
 Completed MCP POST requests are retained for 30 days by default. Set `admin.request_retention` between `24h` and `8760h` to match operational needs. The administrator's request diagnostics page supports time filters and NDJSON export; see the [history contract and privacy boundaries](../docs/admin-guide.md#grant-and-request-diagnostics). Protect database backups and exports: arguments, results and tokens are excluded, but identity/routing indexes are readable database metadata.
 
@@ -17,7 +17,7 @@ Completed MCP POST requests are retained for 30 days by default. Set `admin.requ
 | HTTPS remote administration + PostgreSQL | [config.remote-postgres.yaml](config.remote-postgres.yaml), [Compose](compose.postgres.yaml) |
 | Feishu SSO + Vault + personal MCP accounts (integration example) | [config.feishu-vault.example.yaml](config.feishu-vault.example.yaml); requires real-tenant acceptance |
 
-The v2.3.0 server archive includes these same templates; the links provide identical files. A binary-only installation can save the selected YAML as `config.yaml` and use `--config config.yaml`, without a source checkout. The `deploy/...` paths below assume the complete repository root as the working directory.
+The v2.4.0 server archive includes these same templates; the links provide identical files. A binary-only installation can save the selected YAML as `config.yaml` and use `--config config.yaml`, without a source checkout. The `deploy/...` paths below assume the complete repository root as the working directory.
 
 ## Identity provider
 

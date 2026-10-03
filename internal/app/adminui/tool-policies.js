@@ -197,7 +197,7 @@ export function renderToolPolicies() {
       [
         "客户端授权",
         t(
-          endpoint.require_client_grant ? "必须携带有效 Grant" : "兼容普通连接",
+          endpoint.require_client_grant ? "需要有效客户端授权" : "兼容普通连接",
         ),
       ],
     ])

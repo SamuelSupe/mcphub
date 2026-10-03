@@ -39,8 +39,9 @@ type Hub struct {
 	httpToolsGeneration uint64
 	logger              *slog.Logger
 
-	viewsMu sync.RWMutex
-	views   map[string]*view
+	viewsMu        sync.RWMutex
+	views          map[string]*view
+	grantResources map[string]grantResourceHistory
 
 	toolDefinitionsMu    sync.Mutex
 	toolDefinitionCaches map[string]*toolDefinitionCache
@@ -62,6 +63,7 @@ func NewWithHTTPTools(cfg *config.Config, manager *backend.Manager, httpTools *h
 		httpToolsGeneration:  1,
 		logger:               logger,
 		views:                make(map[string]*view),
+		grantResources:       make(map[string]grantResourceHistory),
 		toolDefinitionCaches: make(map[string]*toolDefinitionCache),
 		resourceRegistry:     resourceRegistry{issuedResources: make(map[string]*issuedResourceSet)},
 	}
@@ -84,13 +86,14 @@ func (h *Hub) acquireView(req *http.Request) *view {
 		scopes = token.Scopes
 	}
 	grant, _ := req.Context().Value(clientGrantKey{}).(*configstore.ClientGrant)
+	collection := ClientGrantsFromContext(req.Context())
 	if grant != nil {
 		scopes = grant.EffectiveScopes(scopes)
 	}
 	backendIDs, backendToolScopes := h.manager.AllowedProfile(scopes)
 	groupIDs, groupToolScopes := h.currentHTTPTools().AllowedProfile(scopes)
-	backendIDs = h.filterGrantEndpoints(backendIDs, grant)
-	groupIDs = h.filterGrantEndpoints(groupIDs, grant)
+	backendIDs = h.filterGrantEndpoints(backendIDs, grant, collection, scopes)
+	groupIDs = h.filterGrantEndpoints(groupIDs, grant, collection, scopes)
 	if identity != nil {
 		backendIDs = filterIdentityEndpoints(backendIDs, identity)
 		groupIDs = filterIdentityEndpoints(groupIDs, identity)
@@ -108,6 +111,13 @@ func (h *Hub) acquireView(req *http.Request) *view {
 	if grant != nil {
 		key += "|" + grant.Issuer + "|" + grant.Subject + "|" + grant.GrantID + "|" + strconv.FormatInt(grant.Revision, 10)
 	}
+	if collection != nil {
+		key += "|collection|"
+		for _, id := range sortedKeys(collection) {
+			g := collection[id]
+			key += "|" + g.GrantID + "|" + strconv.FormatInt(g.Revision, 10)
+		}
+	}
 	if identity != nil {
 		key += "|identity|" + identity.ID + "|" + identity.Version
 	}
@@ -124,7 +134,11 @@ func (h *Hub) acquireView(req *http.Request) *view {
 
 	candidate := newViewWithHTTP(h, backendIDs, groupIDs, toolScopes, scopes)
 	candidate.grant = grant
+	candidate.grants = collection
 	candidate.identity = identity
+	if !candidate.prepareGrantResources() {
+		return nil
+	}
 	candidate.preparePersonalClients(req.Context())
 	if identity != nil {
 		for _, id := range backendIDs {
@@ -136,6 +150,14 @@ func (h *Hub) acquireView(req *http.Request) *view {
 	if grant != nil && !grant.Capabilities.Resources {
 		for name := range candidate.internalTemplates {
 			candidate.server.RemoveResourceTemplates(name)
+		}
+	}
+	if collection != nil {
+		for _, id := range backendIDs {
+			g := candidate.serviceGrant(id)
+			if g == nil || !g.Capabilities.Resources {
+				candidate.server.RemoveResourceTemplates(issuedResourceTemplate(id))
+			}
 		}
 	}
 	candidate.reconcile()

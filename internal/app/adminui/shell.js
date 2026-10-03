@@ -2,6 +2,8 @@ import { confirmDiscard } from "./unsaved.js";
 import { getLocale, t, translateDOM } from "./i18n.js";
 
 const pages = {
+ services: ["服务", "统一接入 MCP 与 HTTP 服务，管理连接、能力、访问和运行状态。"],
+ operations: ["运维中心", "检查配置来源、变更状态、目录验证、备份与恢复演练。"],
   "identity-providers": ["身份服务", "配置 LDAP 与 OIDC 登录，在组上统一管理企业用户权限。"],
   identities: ["用户与组", "维护用户状态与组成员关系，在组上配置角色、Scope 和工具权限。"],
   "client-grants": ["客户端授权", "按用户、客户端和服务查看授权范围，检查权限或撤销授权。"],
@@ -24,7 +26,7 @@ export function renderPage() {
   document.querySelector("#page-description").textContent = t(description);
   document.querySelector("#breadcrumb-page").textContent = t(title);
   document.querySelector("#breadcrumb-group").textContent = t(
-    page === "overview" ? "总览" : ["backends", "tool-groups"].includes(page) ? "服务接入"
+    page === "overview" ? "总览" : ["services", "backends", "tool-groups"].includes(page) ? "服务接入"
       : ["tool-policies", "identities", "identity-providers", "client-grants"].includes(page) ? "访问控制" : "治理与审计",
   );
   document.title = `${t(title)} · MCPHub`;

@@ -20,6 +20,7 @@ import (
 // Proposals contain resolved configuration, including encrypted credentials and
 // the exact imported document. Approval never fetches a new remote definition.
 type configurationChange struct {
+	DraftID       string                           `json:"draft_id,omitempty"`
 	Kind          string                           `json:"kind"`
 	Revision      int64                            `json:"revision"`
 	GroupRevision int64                            `json:"group_revision,omitempty"`
@@ -45,6 +46,15 @@ func (c configurationChange) target() string {
 }
 
 func (a *App) stageConfigurationChange(w http.ResponseWriter, req *http.Request, change configurationChange, before, after any) bool {
+	if req.Header.Get("X-MCPHub-Change-Mode") == "draft" {
+		draft, err := a.newConfigurationDraft(a.adminMutationContext(req), change, before, after)
+		if err != nil {
+			writeStoreError(w, err)
+			return true
+		}
+		writeJSON(w, 201, draft)
+		return true
+	}
 	if !a.currentConfig().Admin.Approvals.PolicyChanges.Enabled {
 		return false
 	}
@@ -139,6 +149,19 @@ func (a *App) applyConfigurationApproval(ctx context.Context, value configstore.
 		return err
 	}
 	err := a.commitConfigurationChange(ctx, change)
+	if change.DraftID != "" {
+		if draft, e := a.store.ConfigurationDraft(ctx, change.DraftID); e == nil {
+			draft.State = "applied"
+			if err != nil {
+				draft.State = "failed"
+				draft.Error = "Configuration was not applied; inspect the current revision"
+			}
+			_, e = a.store.SaveConfigurationDraft(context.WithoutCancel(ctx), draft, draft.Revision)
+			if e != nil && err == nil {
+				err = e
+			}
+		}
+	}
 	status, message := "succeeded", "Configuration applied"
 	if err != nil {
 		status, message = "unknown", "Configuration outcome is uncertain; inspect the current configuration before proposing another change"
@@ -183,6 +206,10 @@ func (a *App) commitConfigurationChange(ctx context.Context, change configuratio
 		candidate, previous, err := a.buildCandidate(cfg)
 		if err != nil {
 			return err
+		}
+		if validatingConfiguration(ctx) {
+			candidate.close()
+			return nil
 		}
 		return a.commitAdminCandidate(candidate, previous, func() error {
 			if change.Revision == 0 {
@@ -302,6 +329,10 @@ func (a *App) commitConfigurationChange(ctx context.Context, change configuratio
 	candidate, err := httptool.NewManager(previous.ctx, desired, a.logger)
 	if err != nil {
 		return err
+	}
+	if validatingConfiguration(ctx) {
+		candidate.Close()
+		return nil
 	}
 	return a.commitHTTPToolCandidate(candidate, previous, commit)
 }

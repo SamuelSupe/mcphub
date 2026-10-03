@@ -32,6 +32,7 @@ type toolGroupInput struct {
 }
 
 type toolGroupView struct {
+	EndpointUID          string            `json:"endpoint_uid"`
 	RequireClientGrant   bool              `json:"require_client_grant"`
 	RateLimit            ratelimit.Config  `json:"rate_limit"`
 	ID                   string            `json:"id"`
@@ -221,7 +222,7 @@ func (a *App) updateAdminToolGroup(w http.ResponseWriter, req *http.Request, id 
 			desired[index] = group
 		}
 	}
-	if !groupDisableOnly(current.Config, group) && a.stageConfigurationChange(w, req, configurationChange{Kind: "tool_group", Revision: expected, Group: &configstore.ToolGroupRecord{Config: group}}, a.makeToolGroupView(current), a.makeToolGroupView(configstore.ToolGroupRecord{Config: group})) {
+	if (req.Header.Get("X-MCPHub-Change-Mode") == "draft" || !groupDisableOnly(current.Config, group)) && a.stageConfigurationChange(w, req, configurationChange{Kind: "tool_group", Revision: expected, Group: &configstore.ToolGroupRecord{Config: group}}, a.makeToolGroupView(current), a.makeToolGroupView(configstore.ToolGroupRecord{Config: group})) {
 		return
 	}
 	candidate, previous, ok := a.prepareToolGroupCandidate(w, desired)
@@ -427,7 +428,7 @@ func (a *App) updateAdminHTTPTool(w http.ResponseWriter, req *http.Request, grou
 		writeToolStoreError(w, err, "工具组不存在")
 		return
 	}
-	if !toolDisableOnly(current.Config, tool) && a.stageConfigurationChange(w, req, configurationChange{Kind: "http_tool", Revision: expected, GroupRevision: group.Revision, Tool: &configstore.HTTPToolRecord{GroupID: current.GroupID, Config: tool}}, makeHTTPToolView(current), makeHTTPToolView(configstore.HTTPToolRecord{GroupID: current.GroupID, Config: tool})) {
+	if (req.Header.Get("X-MCPHub-Change-Mode") == "draft" || !toolDisableOnly(current.Config, tool)) && a.stageConfigurationChange(w, req, configurationChange{Kind: "http_tool", Revision: expected, GroupRevision: group.Revision, Tool: &configstore.HTTPToolRecord{GroupID: current.GroupID, Config: tool}}, makeHTTPToolView(current), makeHTTPToolView(configstore.HTTPToolRecord{GroupID: current.GroupID, Config: tool})) {
 		return
 	}
 	a.applyHTTPToolUpdate(w, req, current.GroupID, tool, expected)
@@ -665,6 +666,7 @@ func (a *App) probeAdminToolGroup(w http.ResponseWriter, req *http.Request, id s
 
 func (a *App) makeToolGroupView(record configstore.ToolGroupRecord) toolGroupView {
 	view := toolGroupView{
+		EndpointUID:        record.Config.EndpointUID,
 		RequireClientGrant: record.Config.RequireClientGrant,
 		RateLimit:          record.Config.RateLimit,
 		ID:                 record.Config.ID, BaseURL: record.Config.BaseURL, Enabled: record.Config.Enabled,

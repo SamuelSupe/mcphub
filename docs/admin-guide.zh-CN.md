@@ -1,12 +1,12 @@
 # MCPHub 管理员手册
 
-> 本指南用于 v2.3.0 全新部署。内建账号与 Agent 设备授权需要 v2.3.0，v2.2.2 不包含这些功能。
+> 本指南用于 v2.4.0 全新部署。请使用配套的 MCPHub 与 MCPBridge 发行包；不包含迁移流程。
 
 [English](admin-guide.md) · [文档导航](README.zh-CN.md) · [项目首页](../README.zh-CN.md)
 
 [在线阅读：管理员文档站](https://samuelsupe.github.io/mcphub/admin/) · [在线用户指南](https://samuelsupe.github.io/mcphub/)
 
-面向负责部署、服务接入、权限策略、审批及运行维护的管理员，对应 v2.3.0。员工电脑的安装与接入步骤见[用户手册](user-guide.zh-CN.md)。
+面向负责部署、服务接入、权限策略、审批及运行维护的管理员，对应 v2.4.0。员工电脑的安装与接入步骤见[用户手册](user-guide.zh-CN.md)。
 
 推荐顺序：**启动管理台 → 添加后端 → 测试连接 → 发布工具 → 配置组权限 → 验证实际调用**。
 
@@ -30,33 +30,33 @@
 
 | 平台 | 服务端下载 |
 | --- | --- |
-| macOS Intel | `mcphub_v2.3.0_darwin_amd64.tar.gz` |
-| macOS Apple Silicon | `mcphub_v2.3.0_darwin_arm64.tar.gz` |
-| Linux amd64 | `mcphub_v2.3.0_linux_amd64.tar.gz` |
-| Linux arm64 | `mcphub_v2.3.0_linux_arm64.tar.gz` |
+| macOS Intel | `mcphub_v2.4.0_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `mcphub_v2.4.0_darwin_arm64.tar.gz` |
+| Linux amd64 | `mcphub_v2.4.0_linux_amd64.tar.gz` |
+| Linux arm64 | `mcphub_v2.4.0_linux_arm64.tar.gz` |
 
-从 [v2.3.0 发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0) 下载服务端包和 `SHA256SUMS`，核对校验值后解压。以下为 Linux arm64 的安装示例；按上表替换文件名，macOS 校验命令为 `shasum -a 256`：
+从 [v2.4.0 发行页面](https://github.com/SamuelSupe/mcphub/releases/tag/v2.4.0) 下载服务端包和 `SHA256SUMS`，核对校验值后解压。以下为 Linux arm64 的安装示例；按上表替换文件名，macOS 校验命令为 `shasum -a 256`：
 
 ```bash
-sha256sum mcphub_v2.3.0_linux_arm64.tar.gz
+sha256sum mcphub_v2.4.0_linux_arm64.tar.gz
 # 与 SHA256SUMS 中同名条目逐字核对，一致后再解压。
 mkdir -p mcphub-release "$HOME/.local/bin"
-tar -xzf mcphub_v2.3.0_linux_arm64.tar.gz -C mcphub-release
+tar -xzf mcphub_v2.4.0_linux_arm64.tar.gz -C mcphub-release
 install -m 755 mcphub-release/mcphub "$HOME/.local/bin/mcphub"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-安装后运行 `mcphub --version`，应显示 `mcphub 2.3.0 (server)`。`validate`、`serve` 是服务端命令；`mcpbridge` 是用户连接器，供用户连接 Agent，不能启动或校验网关。源码更新不会自动替换目录里的旧二进制；要使用刚安装的程序路径。
+安装后运行 `mcphub --version`，应显示 `mcphub 2.4.0 (server)`。`validate`、`serve` 是服务端命令；`mcpbridge` 是用户连接器，供用户连接 Agent，不能启动或校验网关。源码更新不会自动替换目录里的旧二进制；要使用刚安装的程序路径。
 
 此 PATH 设置用于当前终端；后续可直接运行 `"$HOME/.local/bin/mcphub"`，或将工具目录加入服务环境。已安装 Go 1.26.8 时也可执行：
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.3.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.4.0
 ```
 
 Go 安装路径是 `go env GOBIN`，为空时是 `$(go env GOPATH)/bin`；该目录也需要加入 PATH。
 
-**v2.3.0 服务端包与指南包含相同模板。** 默认 `config.example.yaml` 启用本地管理台、SQLite 和 `backends: []`，只需要网关地址和配置加密密钥。启动管理台后，逐个添加服务，分别填写凭证、测试连接，再发布已审核的工具并配置权限。团队远程管理使用远程模板；不启用控制台时选择独立的[高级纯 YAML 示例](../deploy/config.yaml-only.example.yaml)。
+**v2.4.0 服务端包与指南包含相同模板。** 默认 `config.example.yaml` 启用本地管理台、SQLite 和 `backends: []`，只需要网关地址和配置加密密钥。启动管理台后，逐个添加服务，分别填写凭证、测试连接，再发布已审核的工具并配置权限。团队远程管理使用远程模板；不启用控制台时选择独立的[高级纯 YAML 示例](../deploy/config.yaml-only.example.yaml)。
 
 `validate --config PATH` 校验配置，不创建 SQLite 数据库；`serve --config PATH` 初始化新数据库并启动服务，JSON 日志写到 stderr。
 
@@ -119,11 +119,13 @@ mcpbridge admin --profile ops get /events
 
 字段和 API 见[后端配置](configuration.zh-CN.md#backends)、[HTTP 工具组](configuration.zh-CN.md#工具组与托管-http-api-tool)、[发布与资源规则](configuration.zh-CN.md#显式发布与资源范围)、[限流](configuration.zh-CN.md#endpoint-限流)。
 
+概览中的 **首次接入验收** 按选定的服务、工具和用户检查：服务可供调用 → 发布只读工具 → 组授权齐全 → 客户端授权 → 真实调用。最后一步只读取最近 24 小时内该用户对该工具的成功 `tools/call`；目录读取和权限模拟不算调用成功。点击 **检查所选用户权限** 可填写资源参数并核对当前策略，不执行业务工具。让用户完成 Agent 配对与只读调用后点击 **重新检查**。HTTP 工具组是否连通以真实调用为准，历史成功也不证明当前凭证仍有效。
+
 ## 用户与组
 
 默认使用[内建账号](builtin-accounts.zh-CN.md)。在「用户与组」先创建组，为组分配管理员、审批人、安全审核角色，以及服务、工具、Scope 和业务资源权限，再把用户加入组。新建本地账号可以登录，但未授权工具不能调用。
 
-企业 LDAP/OIDC 可选，在管理台的 [身份服务](enterprise-login.zh-CN.md) 页面同时配置。企业身份和本地账号分别授权，不按姓名自动合并；新企业用户默认待授权。`auth.sso.upstream` 保留为高级 YAML 初始连接方式。
+企业 LDAP/OIDC 可选，在管理台的 [身份服务](enterprise-login.zh-CN.md) 页面同时配置。企业身份与本地账号保持隔离，不按姓名自动合并；独立权限组通过明确成员关系或组织组映射共享访问策略；新企业用户默认待授权。`auth.sso.upstream` 保留为高级 YAML 初始连接方式。
 
 ## 区分登录客户端与上游凭证
 
@@ -185,6 +187,16 @@ client_authorization:
 
 ## 控制台导航
 
+「服务」统一列出 MCP 与 HTTP 服务，提供连接与账号、能力发布、访问控制、运行与诊断入口。协议编辑器继续负责各自连接配置；HTTP 使用共享 Header/OAuth，个人 Vault 账号仍仅支持 MCP。服务拥有稳定 endpoint UID，创建后不能改 ID，删除重建生成新 UID。
+
+控制台点击「保存并检查变更」或「检查导入变更」时，先生成加密保存的草稿，配置此时尚未生效。「校验草稿」检查当前版本与候选运行状态，再展示脱敏差异、凭证变化及可能受影响的权限组、用户、会话和授权数量；这些是影响估计，不表示所有会话都会撤销。验证不执行工具，应用会重新验证，并拒绝覆盖并发修改。运维中心按运行配置、身份审计、备份恢复展示状态；配置变更列表显示草稿、已校验、等待审批、已应用、失败与已丢弃状态。部署与备份命令可展开查看。
+
+回退使用历史变更前快照创建新草稿，以当前版本校验并增加版本号，不回退会话、撤销记录或审批执行结果。新建记录没有旧配置；删除仍是直接操作。最多保留 200 条记录，可以移除已完成记录，移除前建议备份。
+
+原有创建/更新 API 支持 `X-MCPHub-Change-Mode: draft`，返回 `201` 草稿且不生效。`GET /api/v1/configuration-changes` 列出记录；`POST /api/v1/configuration-changes/{id}/validate|apply|discard|rollback` 需要草稿 `If-Match`；DELETE 仅移除已完成记录。普通 API 写入仍遵守原有立即应用/安全审批契约。`GET /api/v1/services` 是统一服务清单，`GET /api/v1/operations` 返回版本、配置来源、企业组验证、备份/演练、请求记录写入失败和外部审计投递状态。
+
+YAML/环境变量拥有部署监听、公开地址、存储和认证默认值；数据库拥有管理配置。YAML 后端只在空数据库首次启动时导入。运行模型为单实例，部署参数和密钥由运维管理。
+
 控制台按日常管理工作分为四组，功能入口如下。导航只显示当前账号有权使用的页面；仅审批角色直接进入审批中心。
 
 | 分组 | 页面 | 主要用途 |
@@ -196,7 +208,7 @@ client_authorization:
 | 访问控制 | 用户与组 | 创建用户和组，管理账号状态与组成员关系；在组／部门上配置角色、Scope、工具与资源权限。身份源维护的企业成员关系只读。 |
 | 访问控制 | 身份服务 | 同时配置 LDAP 与 OIDC，验证连接、替换加密凭证及启停企业登录；本地管理员保留。 |
 | 访问控制 | 客户端授权 | 按用户、客户端、endpoint 与状态筛选授权；查看完整范围、关联请求，或撤销授权。 |
-| 治理与审计 | 审批中心 | 按权限审核写操作与配置变更，核对预览、审批进度、执行结果与审计记录。 |
+| 治理与审计 | 审批中心 | 按权限审核写操作与配置变更，核对预览、审批进度、执行结果与审计记录。审批编号、签发者和客户端绑定 ID 可展开技术详情查看；申请人、目标和完整请求保留供核对。 |
 | 治理与审计 | 请求诊断 | 查看近期调用结果、拒绝原因和耗时；展开请求详情，直接定位对应的工具权限。 |
 | 治理与审计 | 变更记录 | 查看最近 50 条管理变更及操作者；敏感凭证不会展示。 |
 
@@ -206,7 +218,7 @@ client_authorization:
 
 测试 MCP 连接后，在**已发布工具**中勾选审核通过的工具。编辑已有后端时读取当前目录；目录暂时不可用不会移除已保存的工具名。高级输入可手动填写原始工具名，发现新工具不会自动发布。连接地址、认证或超时变更后，新后端和关键后端必须重新测试；只调整工具发布范围不需要重测。列表分别显示发布与发现数量。工具级规则可在「工具权限」逐个编辑，或使用高级 JSON；未分类工具仍需审批。HTTP 工具组的「测试已保存连接」检查持久化配置，修改连接后应先保存。
 
-在「用户与组」编辑组权限时，选择目标服务并勾选其已发布工具，追加所需 Scope 和资源条件，再分配组成员。切换目标服务会清空当前授权条目的工具选择，避免将同名工具意外带到另一个服务。工具名手动输入保留在高级选项中。编辑已有凭证时，值留空会保留原值；删除 Header 行会移除对应凭证。
+在「用户与组」可分别筛选用户、权限组、组织组与部门。新建权限组后会直接展开该组，继续配置授权与组织组映射。在「用户与组」编辑组权限时，选择目标服务并勾选其已发布工具及资源条件；默认生成所需 Scope 快照，高级显式模式需自行补齐，再分配组成员。切换目标服务会清空当前授权条目的工具选择，避免将同名工具意外带到另一个服务。工具名手动输入保留在高级选项中。编辑已有凭证时，值留空会保留原值；删除 Header 行会移除对应凭证。
 
 导入 OpenAPI 时，选择文档地址或上传规格文件，解析后勾选需要导入的接口。更换来源会清空原预览和选择，需重新解析后才能导入；只导入勾选的接口。
 
@@ -222,7 +234,7 @@ client_authorization:
 
 **编辑工具规则** 修改当前工具的精确名称规则；MCP 后端的发布状态在同一版本中保存。其他匹配规则继续生效，精确 `read` 不能覆盖通配 `write` 或审批规则。表单支持 Scope、JSON Pointer 资源允许值、审批人 Subject、审批人数和加强认证，并保留已有高级审批字段。HTTP 工具发布仍通过现有工具／工具组或 OpenAPI 导入编辑器管理。保存沿用现有版本冲突检查；启用配置审批时，仍须经过审批才生效。
 
-**权限检查** 逐项解释发布、就绪状态、Scope、资源、客户端 Grant 和审批条件，不调用工具、不运行预览、不创建审批、不占用执行额度。输入的 Scope 是管理员的假设条件。检查已保存 Grant 时，还需填写 Grant ID 和对应用户的精确 Subject，有效 Scope 取其授权交集。检查通过不授予执行权：参数 Schema、实时限流、资源版本、预览和上游权限仍在实际执行时校验。仅配置管理员可访问 `GET /api/v1/tool-policies?endpoint=<id>` 与 `POST /api/v1/access-check`，后者请求示例：
+**权限检查** 逐项解释发布、就绪状态、Scope、资源、客户端 Grant 和审批条件，不调用工具、不运行预览、不创建审批、不占用执行额度。可以选择验收用户，自动载入其当前有效 Scope，再选择该用户在当前服务的有效客户端授权。用户停用或企业组验证过期会给出提示。Scope 仍可手动修改为假设条件；高级选项保留精确 Subject 和 Grant ID 输入。有效 Scope 取用户与授权交集。检查通过不授予执行权：参数 Schema、实时限流、资源版本、预览和上游权限仍在实际执行时校验。仅配置管理员可访问 `GET /api/v1/tool-policies?endpoint=<id>` 与 `POST /api/v1/access-check`，后者请求示例：
 
 ```json
 {"endpoint":"projects","tool":"get_project","scopes":["projects:read"],"arguments":{"project":"work"}}
@@ -249,11 +261,21 @@ mcpbridge admin --profile ops get '/requests?endpoint=database-prod&outcome=scop
 
 ## 备份与恢复
 
-全新部署初始化 SQLite 或 PostgreSQL 后，分别保管数据库备份和匹配的 `MCPHUB_CONFIG_KEY`。SQLite 使用一致性备份方式，PostgreSQL 使用数据库原生备份工具；启用 Vault 时协调其数据备份。
+使用内建命令为 SQLite 或 PostgreSQL 创建同一读取事务内的一致性快照。备份目录需尚不存在；`manifest.json` 包含格式、schema、程序版本、数据库引擎、部署文件 SHA256、数据校验和与密钥标识，`database.jsonl` 保存数据库行。文件权限为 `0600`，目录为 `0700`。部署 YAML、环境变量和 Vault 数据需独立保管；加密密钥不要放入备份目录。
 
-恢复演练在隔离环境使用同版本程序、备份数据库及匹配密钥。检查后端地址、凭证、工具发布、用户权限和撤销记录，再验证实际调用。不要删除数据库来重新导入 YAML；管理台中的服务配置以数据库为准。
+```sh
+mcphub backup --config config.yaml --output ./backup-20261003
+mcphub verify-backup --config config.yaml --backup ./backup-20261003
+mcphub restore --config config.yaml --backup ./backup-20261003 --into ./recovery/config.db
+```
+
+`verify-backup` 校验校验和和密钥，并在临时 SQLite 数据库中恢复、读取配置与用户，记录演练结果。PostgreSQL 需要用 `--into MCPHUB_DRILL_DSN` 指向专用空数据库；DSN 值只在该环境变量中保存。恢复必须使用同一数据库引擎、当前 schema 和匹配密钥，SQLite 目标路径必须不存在，PostgreSQL 目标必须为空。
+
+恢复事务会撤销原有登录及刷新会话、Broker/服务授权、设备待授权和未完成审批，并轮换签名密钥。不会恢复旧 Token 的可用性；用户需要重新登录和授权。恢复不会修改源数据库。将恢复副本接到隔离实例，检查登录、服务目录、凭证和实际只读调用，再安排切换。「运维中心」展示最近备份和数据库恢复检查；数据库读取检查不等于完成业务恢复验收。这里只说明新部署的灾难恢复，不提供旧配置或数据库迁移。
 
 ## 运行维护
+
+关停会取消后台连接，等待旧配置运行实例完成排空后再关闭共享存储；请求仍遵循配置的排空超时。
 
 - 以 `/healthz` 检查进程存活，以 `/readyz` 检查身份验证器和 required 后端就绪；两者含义不同。详见[HTTP 端点](configuration.zh-CN.md#http-端点与-rfc-9728)。
 - YAML 可热改字段使用 SIGHUP；监听器、身份地址、管理配置以及 Vault/门户等静态设置变化需重启。已初始化的托管数据库是后端配置来源，之后修改 YAML backends 不生效。详见[热重载与关停](configuration.zh-CN.md#sighup-热重载与关停)。
@@ -340,5 +362,7 @@ Agent 没有命令执行能力时，将 stdio 连接参数设为：
 ```
 
 会话立即初始化，仅开放 `mcpbridge_auth_start` 与 `mcpbridge_auth_status`。前者复用同一个未过期申请；后者可能领取、保存凭证并检查连接，按结果的 `interval` 调用。ready 后刷新工具列表；不支持 `notifications/tools/list_changed` 时改用返回的 `connect --profile … --client …` 重新连接。失败的业务调用不会排队或自动重试，撤销或到期后需明确重新授权。
+
+配对页面切换中英文时会保留所选服务、工具、授权时长和资源条件；仅在允许申请且存在可授权的写工具时显示写权限选项。配对码无效或过期时，在 Agent 重新发起申请后，可在当前页面输入新的配对码。资源条件错误不会结束申请，修正表单后可再次提交。
 
 每次配对只授权一个服务及工具能力；提示词、资源 URI 或订阅使用原有向导。权限受当前组和已确认范围共同约束，新工具不会自动扩权。所有私有凭证留在 MCPBridge，禁止复制 Token 给 Agent。失败不会覆盖原有可用 profile；换用户或服务器需另建 profile。纯外部签发者继续使用 PKCE 登录与 setup。

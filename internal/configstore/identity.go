@@ -16,8 +16,11 @@ import (
 )
 
 var ErrIdentityDenied = errors.New("user is pending, disabled, or permissions changed; contact the MCPHub administrator")
+var ErrIdentityStale = fmt.Errorf("%w: enterprise membership is stale; sign in again or refresh the directory snapshot", ErrIdentityDenied)
 
 type Identity struct {
+	SourceGroups      []string                   `json:"source_groups,omitempty"`
+	VerifiedAt        time.Time                  `json:"verified_at,omitempty"`
 	CredentialVersion int64                      `json:"credential_version,omitempty"`
 	ID                string                     `json:"id"`
 	Provider          string                     `json:"provider"`
@@ -35,6 +38,7 @@ type Identity struct {
 }
 
 type EffectiveIdentity struct {
+	Groups            []PermissionSource         `json:"groups,omitempty"`
 	Name              string                     `json:"name,omitempty"`
 	CredentialVersion int64                      `json:"credential_version,omitempty"`
 	ID                string                     `json:"id"`
@@ -51,8 +55,19 @@ type identityCall struct {
 }
 
 func saveSyncedIdentity(ctx context.Context, tx *transaction, p, previous Identity, action string) (Identity, error) {
-	if p.Revision > 0 && reflect.DeepEqual(p, previous) {
-		return p, nil
+	if p.Revision > 0 {
+		comparison := p
+		comparison.VerifiedAt = previous.VerifiedAt
+		if reflect.DeepEqual(comparison, previous) {
+			if p.VerifiedAt.Equal(previous.VerifiedAt) {
+				return p, nil
+			}
+			data, err := json.Marshal(p)
+			if err == nil {
+				_, err = tx.ExecContext(ctx, "UPDATE identities SET data=? WHERE id=?", data, p.ID)
+			}
+			return p, err
+		}
 	}
 	return saveIdentity(ctx, tx, p, action)
 }
@@ -131,6 +146,14 @@ func (s *Store) UpdateIdentity(ctx context.Context, id string, revision int64, e
 }
 
 func (s *Store) updateIdentity(ctx context.Context, id string, revision int64, enabled bool, permissions config.IdentityPermissions, groups *[]string) (Identity, error) {
+	return s.updateIdentityWithMapping(ctx, id, revision, enabled, permissions, groups, nil)
+}
+
+func (s *Store) updateIdentityMapping(ctx context.Context, id string, revision int64, enabled bool, permissions config.IdentityPermissions, sourceGroups *[]string) (Identity, error) {
+	return s.updateIdentityWithMapping(ctx, id, revision, enabled, permissions, nil, sourceGroups)
+}
+
+func (s *Store) updateIdentityWithMapping(ctx context.Context, id string, revision int64, enabled bool, permissions config.IdentityPermissions, groups, sourceGroups *[]string) (Identity, error) {
 	if err := permissions.Validate(); err != nil {
 		return Identity{}, err
 	}
@@ -150,6 +173,21 @@ func (s *Store) updateIdentity(ctx context.Context, id string, revision int64, e
 	}
 	if p.Kind == "user" && (len(permissions.Roles)+len(permissions.Scopes)+len(permissions.Access) > 0) {
 		return p, ErrUserPermissions
+	}
+	if sourceGroups != nil {
+		if p.Kind == "user" || p.Provider != config.PermissionGroupProvider || len(*sourceGroups) > 256 {
+			return p, ErrGroupMembership
+		}
+		ids := slices.Clone(*sourceGroups)
+		slices.Sort(ids)
+		ids = slices.Compact(ids)
+		for _, gid := range ids {
+			group, err := readIdentity(ctx, tx, "id=?", gid)
+			if err != nil || group.Kind == "user" || group.ManagedLocally || group.Provider == config.PermissionGroupProvider {
+				return p, ErrGroupMembership
+			}
+		}
+		p.SourceGroups = ids
 	}
 	if groups != nil {
 		if err := replaceUserGroups(ctx, tx, &p, *groups); err != nil {
@@ -207,6 +245,7 @@ func (s *Store) SyncIdentity(ctx context.Context, provider, subject, name string
 		}
 	}
 	p.Name = name
+	p.VerifiedAt = time.Now().UTC()
 	if !directory {
 		p.Groups, err = locallyManagedGroups(ctx, tx, p.Groups)
 		if err != nil {
@@ -265,6 +304,9 @@ func (s *Store) effectiveIdentityFrom(ctx context.Context, db identityReader, id
 	if p.Kind != "user" || !p.Enabled || !p.DirectoryActive {
 		return EffectiveIdentity{}, ErrIdentityDenied
 	}
+	if p.Provider != config.LocalIdentityProvider && s.identityMaxAge > 0 && (p.VerifiedAt.IsZero() || time.Since(p.VerifiedAt) > s.identityMaxAge) {
+		return EffectiveIdentity{}, ErrIdentityStale
+	}
 	permissions := config.IdentityPermissions{}
 	groups := map[string]Identity{}
 	if len(p.Groups) > 0 {
@@ -280,14 +322,12 @@ func (s *Store) effectiveIdentityFrom(ctx context.Context, db identityReader, id
 			groups[g.ID] = g
 		}
 	}
-	for _, gid := range p.Groups {
-		g, ok := groups[gid]
-		if !ok {
-			return EffectiveIdentity{}, ErrNotFound
-		}
-		if g.Kind == "user" || g.Provider != p.Provider || !g.Enabled || !g.DirectoryActive {
-			continue
-		}
+	sources, err := permissionSources(ctx, db, p, groups)
+	if err != nil {
+		return EffectiveIdentity{}, err
+	}
+	for _, source := range sources {
+		g := source.Identity
 		permissions.Roles = append(permissions.Roles, g.Permissions.Roles...)
 		permissions.Scopes = append(permissions.Scopes, g.Permissions.Scopes...)
 		permissions.Access = append(permissions.Access, g.Permissions.Access...)
@@ -300,7 +340,7 @@ func (s *Store) effectiveIdentityFrom(ctx context.Context, db identityReader, id
 		Permissions config.IdentityPermissions
 		Credentials int64
 	}{permissions, p.CredentialVersion})
-	return EffectiveIdentity{ID: id, Name: p.Name, Provider: p.Provider, CredentialVersion: p.CredentialVersion, DirectoryManaged: p.DirectoryManaged, Version: SecretHash(string(data)), Permissions: permissions}, nil
+	return EffectiveIdentity{ID: id, Name: p.Name, Provider: p.Provider, CredentialVersion: p.CredentialVersion, DirectoryManaged: p.DirectoryManaged, Version: SecretHash(string(data)), Permissions: permissions, Groups: sources}, nil
 }
 
 // Admission and changes share a lock: a cached MCP view cannot start another
@@ -316,6 +356,15 @@ func (s *Store) AdmitIdentity(ctx context.Context, p EffectiveIdentity) (context
 		return nil, nil, ErrIdentityDenied
 	}
 	call, cancel := context.WithCancel(ctx)
+	identity, identityErr := s.Identity(ctx, p.ID)
+	if identityErr != nil {
+		cancel()
+		return nil, nil, identityErr
+	}
+	if identity.Provider != config.LocalIdentityProvider && s.identityMaxAge > 0 {
+		cancel()
+		call, cancel = context.WithDeadline(ctx, identity.VerifiedAt.Add(s.identityMaxAge))
+	}
 	key := rand.Text()
 	if s.identityCalls == nil {
 		s.identityCalls = map[string]identityCall{}

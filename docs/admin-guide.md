@@ -1,12 +1,12 @@
 # MCPHub administrator manual
 
-> This guide covers v2.3.0 fresh deployments. Built-in accounts and Agent device authorization require v2.3.0; v2.2.2 does not include these features.
+> This guide covers v2.4.0 fresh deployments. Use matching MCPHub and MCPBridge packages; no migration workflow is included.
 
 [中文](admin-guide.zh-CN.md) · [Documentation](README.md) · [Project home](../README.md)
 
 [Read the online administrator manual](https://samuelsupe.github.io/mcphub/en/admin/)
 
-For administrators responsible for deployment, service connections, access policies, approval and operations. This manual covers v2.3.0. Installation and access on employee computers are covered by the [user manual](user-guide.md).
+For administrators responsible for deployment, service connections, access policies, approval and operations. This manual covers v2.4.0. Installation and access on employee computers are covered by the [user manual](user-guide.md).
 
 Recommended sequence: **start the console → add backends → test connections → publish tools → assign group permissions → verify a real call**.
 
@@ -30,33 +30,33 @@ Install `mcphub` on the gateway host and `mcpbridge` on user computers. Administ
 
 | Platform | Server download |
 | --- | --- |
-| macOS Intel | `mcphub_v2.3.0_darwin_amd64.tar.gz` |
-| macOS Apple Silicon | `mcphub_v2.3.0_darwin_arm64.tar.gz` |
-| Linux amd64 | `mcphub_v2.3.0_linux_amd64.tar.gz` |
-| Linux arm64 | `mcphub_v2.3.0_linux_arm64.tar.gz` |
+| macOS Intel | `mcphub_v2.4.0_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `mcphub_v2.4.0_darwin_arm64.tar.gz` |
+| Linux amd64 | `mcphub_v2.4.0_linux_amd64.tar.gz` |
+| Linux arm64 | `mcphub_v2.4.0_linux_arm64.tar.gz` |
 
-Download the server archive and `SHA256SUMS` from [the v2.3.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0). The following installs Linux arm64; change the filename for your platform and use `shasum -a 256` on macOS:
+Download the server archive and `SHA256SUMS` from [the v2.4.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.4.0). The following installs Linux arm64; change the filename for your platform and use `shasum -a 256` on macOS:
 
 ```bash
-sha256sum mcphub_v2.3.0_linux_arm64.tar.gz
+sha256sum mcphub_v2.4.0_linux_arm64.tar.gz
 # Compare exactly with the same filename in SHA256SUMS before extracting.
 mkdir -p mcphub-release "$HOME/.local/bin"
-tar -xzf mcphub_v2.3.0_linux_arm64.tar.gz -C mcphub-release
+tar -xzf mcphub_v2.4.0_linux_arm64.tar.gz -C mcphub-release
 install -m 755 mcphub-release/mcphub "$HOME/.local/bin/mcphub"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-After installation, run `mcphub --version`; expect `mcphub 2.3.0 (server)`. `validate` and `serve` are server commands. The renamed client `mcpbridge` connects Agents and cannot start or validate the gateway. Updating source does not replace an existing binary in the directory; use the path of the executable you just installed.
+After installation, run `mcphub --version`; expect `mcphub 2.4.0 (server)`. `validate` and `serve` are server commands. The renamed client `mcpbridge` connects Agents and cannot start or validate the gateway. Updating source does not replace an existing binary in the directory; use the path of the executable you just installed.
 
 This PATH setting applies to the current terminal. For later runs, use `"$HOME/.local/bin/mcphub"` directly or add the tools directory to your service environment. With Go 1.26.8 installed:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.3.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcphub@v2.4.0
 ```
 
 Go installs into `go env GOBIN`, or `$(go env GOPATH)/bin` when GOBIN is empty. Add that directory to PATH too.
 
-**The v2.3.0 server archive includes the same templates as the online guide.** Its default `config.example.yaml` enables local administration and SQLite with `backends: []`; only the MCP URL and configuration encryption key are required. Start the console, add each service with its own credentials, test the connection, then publish reviewed tools and configure access. Use the remote templates for team administration, or the independent [advanced YAML-only example](../deploy/config.yaml-only.example.yaml) for deployments without a console.
+**The v2.4.0 server archive includes the same templates as the online guide.** Its default `config.example.yaml` enables local administration and SQLite with `backends: []`; only the MCP URL and configuration encryption key are required. Start the console, add each service with its own credentials, test the connection, then publish reviewed tools and configure access. Use the remote templates for team administration, or the independent [advanced YAML-only example](../deploy/config.yaml-only.example.yaml) for deployments without a console.
 
 `validate --config PATH` checks configuration without creating a SQLite database. `serve --config PATH` initializes fresh storage and starts the service, writing JSON logs to stderr.
 
@@ -119,11 +119,13 @@ Upstream headers/OAuth authenticate Hub to the business service; client scopes a
 
 See [backend fields](configuration.md#backends), [HTTP tool groups](configuration.md#tool-groups-and-managed-http-api-tools), [publication and resources](configuration.md#explicit-publication-and-resource-limits), and [rate limits](configuration.md#endpoint-rate-limits).
 
+The overview’s **Verify your first integration** checks the selected service, tool and user: service availability → published read-only tool → group access → client authorization → actual execution. The final step reads successful `tools/call` requests for that user and tool in the last 24 hours; catalog reads and simulations do not count. **Check selected user access** lets you enter resource arguments and inspect current policies without executing a business tool. Have the user pair their Agent and complete a read-only call, then select **Check again**. Verify HTTP group connectivity with actual calls; past success does not prove current credentials are valid.
+
 ## Users and groups
 
 Use [built-in accounts](builtin-accounts.md) by default. Create groups in **Users & groups**, assign administration, reviewer or security roles and specific services, tools, scopes and resource access to the groups, then add users as members. New local users can sign in, but cannot call tools before authorization.
 
-Enterprise LDAP/OIDC is optional. Configure both in the console’s [Identity services page](enterprise-login.md); enterprise identities and local accounts keep separate permissions and never merge by name. Enterprise users start pending. YAML `auth.sso.upstream` remains an advanced initial connection.
+Enterprise LDAP/OIDC is optional. Configure both in the console’s [Identity services page](enterprise-login.md); enterprise identities and local accounts remain isolated and never merge by name. Independent permission groups share access policy through explicit memberships or organization mappings. Enterprise users start pending. YAML `auth.sso.upstream` remains an advanced initial connection.
 
 ## Distinguish login clients and upstream credentials
 
@@ -185,6 +187,16 @@ See [one-time write approval](configuration.md#one-time-write-approval), [govern
 
 ## Console navigation
 
+**Services** unifies MCP and HTTP connections with connection/accounts, capabilities, access and runtime/diagnostics entry points. Existing protocol editors retain their behavior. HTTP uses shared headers/OAuth; personal Vault accounts remain limited to MCP. Services have stable endpoint UIDs. IDs cannot change; delete/recreate assigns a new UID.
+
+**Save and review changes** and **Review import changes** create encrypted drafts; the configuration is not yet active. **Validate draft** checks the current revision and candidate runtime, then shows a redacted diff, credential-change marker and estimated affected groups, users, sessions and grants. Estimates do not mean every session will be revoked. Validation never calls tools. Application revalidates and cannot overwrite concurrent updates. Operations groups status into runtime/configuration, identity/audit and backup/recovery. The change list shows draft, validated, awaiting approval, applied, failed and discarded states. Expand deployment and backup commands when needed.
+
+Rollback uses a historical before snapshot to create a new draft, validates the current revision and increments it. It does not roll back sessions, revocations or approval outcomes. Create records have no previous configuration; deletion remains direct. Up to 200 records are retained; completed records can be removed, preferably after a backup.
+
+Existing creation/update APIs accept `X-MCPHub-Change-Mode: draft`, returning a `201` draft without applying. `GET /api/v1/configuration-changes` lists records. `POST /api/v1/configuration-changes/{id}/validate|apply|discard|rollback` requires draft `If-Match`; DELETE removes completed records only. Ordinary writes retain immediate-apply/security-approval contracts. `GET /api/v1/services` provides the unified inventory. `GET /api/v1/operations` returns versions, sources, enterprise verification, backup/drill results, request-record failures and external audit delivery.
+
+YAML/environment owns deployment listeners, public URLs, storage and authentication defaults; the database owns managed configuration. YAML backends are imported once into an empty database. Runtime remains one instance. Deployment parameters and encryption keys remain operator-managed.
+
 The console groups daily operations into four areas. Navigation shows only pages available to the current role; reviewers without configuration access land directly in the approval center.
 
 | Area | Page | What to do |
@@ -196,7 +208,7 @@ The console groups daily operations into four areas. Navigation shows only pages
 | Access control | Users & groups | Create users and groups, manage account state and membership, and assign roles, scopes, tools and resources to groups. Enterprise memberships from the identity source are read-only. |
 | Access control | Identity services | Configure and test LDAP and OIDC together, replace encrypted credentials and enable/disable enterprise login; retain the local administrator. |
 | Access control | Client authorization | Filter grants by user, client, endpoint and status; inspect full scope, navigate to related requests or revoke a grant. |
-| Governance & audit | Approval center | Review permitted write operations and configuration changes, including previews, approval progress, execution outcomes and audit history. |
+| Governance & audit | Approval center | Review permitted write operations and configuration changes, including previews, approval progress, execution outcomes and audit history. Request IDs, issuer and client binding IDs are expandable under Technical details; the applicant, target and complete request remain available for review. |
 | Governance & audit | Request diagnostics | Inspect recent outcomes, denial reasons and latency; expand request details and navigate directly to the relevant tool policy. |
 | Governance & audit | Activity | Review the latest 50 management changes and their actors, without exposing credentials. |
 
@@ -206,7 +218,7 @@ Both editors follow **connection → upstream credentials → client access**. N
 
 After testing the MCP connection, select approved tools in **Published tools**. Existing backend editors load the current catalog; unavailable discovery does not remove saved names. Advanced input accepts original tool names, and discovery never publishes new tools automatically. New and required backends need another test after their connection URL, authentication or timeout changes; publication changes alone do not invalidate the test. Lists show published and discovered counts separately. Edit individual rules in **Tool permissions**, or use advanced JSON; unclassified tools still require approval. An HTTP tool group's **Test saved connection** checks persisted configuration; save connection edits first.
 
-In **Users & groups**, choose the service and select its published tools, add required scopes and resource conditions, then assign group memberships. Changing a service clears the tools in that access entry so identical names do not carry over to another service. Advanced manual tool-name input remains available. Leave an existing secret blank to retain it; removing its Header row removes that credential.
+**Users & groups** filters users, permission groups and organization groups/departments separately. Creating a permission group opens its editor so you can continue configuring access and organization mappings. In the group editor, choose the service and select its published tools and resource conditions; derived mode saves required scopes as a snapshot, while advanced explicit mode requires complete scopes, then assign group memberships. Changing a service clears the tools in that access entry so identical names do not carry over to another service. Advanced manual tool-name input remains available. Leave an existing secret blank to retain it; removing its Header row removes that credential.
 
 For OpenAPI, choose a URL or upload a specification, parse it, then select the interfaces to import. Changing the source clears its previous preview and selection; parse the new source before importing. Imported tools are limited to the selected interfaces.
 
@@ -222,7 +234,7 @@ Configuration administrators can open **Tool permissions** in the administration
 
 **Edit tool policy** edits an exact-name rule and, for MCP backends, publication in the same revision. Other matching rules continue to apply: an exact `read` rule cannot override a wildcard `write` or approval rule. The form supports scopes, JSON Pointer resource allowlists, reviewer subjects, quorum and step-up authentication; advanced approval fields are preserved. HTTP publication remains in the existing tool/group or OpenAPI import editor. All saves use the existing revision checks and configuration-approval workflow when enabled.
 
-**Access check** explains publication, readiness, scope, resource, client Grant and approval gates without calling a tool, running previews, creating approvals or acquiring execution quotas. Supplied scopes are administrator assumptions. To inspect a saved Grant, provide its ID and exact user subject; effective scopes are intersected with that Grant. A successful check is not execution authorization: argument schema, live quotas, resource versions, previews and upstream ACLs are still enforced during execution. The admin-only APIs are `GET /api/v1/tool-policies?endpoint=<id>` and `POST /api/v1/access-check`:
+**Access check** explains publication, readiness, scope, resource, client Grant and approval gates without calling a tool, running previews, creating approvals or acquiring execution quotas. Select a test user to load their current effective scopes, then select an active client grant for this service. Disabled users and expired enterprise verification are highlighted. Scopes remain editable for hypothetical checks; advanced fields accept exact subject and grant IDs. Effective scopes are intersected with the grant. A successful check is not execution authorization: argument schema, live quotas, resource versions, previews and upstream ACLs are still enforced during execution. The admin-only APIs are `GET /api/v1/tool-policies?endpoint=<id>` and `POST /api/v1/access-check`:
 
 ```json
 {"endpoint":"projects","tool":"get_project","scopes":["projects:read"],"arguments":{"project":"work"}}
@@ -249,11 +261,21 @@ Both return `next_cursor`; pass it back as `cursor` with unchanged filters and, 
 
 ## Backups and recovery
 
-After initializing a fresh SQLite or PostgreSQL deployment, keep a consistent database backup and its matching `MCPHUB_CONFIG_KEY` separately. Use SQLite-consistent backup methods or native PostgreSQL backup tools; coordinate Vault backups when enabled.
+Use built-in commands for SQLite or PostgreSQL snapshots taken in one read transaction. The output directory must not exist. `manifest.json` records format, schema, application version, database engine, deployment-file SHA256, data checksum and key ID. `database.jsonl` contains logical rows. Files use `0600`; directories use `0700`. Keep YAML, environment values and Vault data separately, with the encryption key outside the backup directory.
 
-Practice recovery in an isolated environment with the same program version, database backup and matching key. Inspect backend addresses, credentials, tool publication, user permissions and revocation records, then make a real call. Do not delete the database to reimport YAML: managed service configuration comes from the database.
+```sh
+mcphub backup --config config.yaml --output ./backup-20261003
+mcphub verify-backup --config config.yaml --backup ./backup-20261003
+mcphub restore --config config.yaml --backup ./backup-20261003 --into ./recovery/config.db
+```
+
+`verify-backup` checks checksum and key, restores into a temporary SQLite database, reads configuration and identities, and records the drill. PostgreSQL requires `--into MCPHUB_DRILL_DSN` pointing to a dedicated empty database, with its DSN stored in that environment variable. Restore requires the same engine, current schema and matching key. The SQLite destination must not exist; PostgreSQL must be empty.
+
+Restore revokes old login/refresh sessions, Broker/service grants, unfinished device authorizations and approvals, and rotates signing keys in the same transaction. Users must log in and consent again. The source database is unaffected. Start the recovered copy in isolation and verify login, catalogs, credentials and actual read calls before switching production. Operations shows the latest backup and database restore check. Database reads alone do not establish successful business recovery. This is disaster recovery for new deployments, without old-configuration or database migration instructions.
 
 ## Operations
+
+Shutdown cancels background connections and waits for retired configuration runtimes to finish draining before closing shared storage. Requests still follow the configured drain timeout.
 
 - Use `/healthz` for process liveness and `/readyz` for verifier/required-backend readiness. See [HTTP endpoints](configuration.md#http-endpoints-and-rfc-9728).
 - Use SIGHUP for reloadable YAML fields. Listener, identity, administration, Vault/portal and other static settings require restart. Once initialized, managed storage supplies backend configuration; YAML backends no longer apply. See [reload and shutdown](configuration.md#sighup-reload-and-shutdown).
@@ -340,5 +362,7 @@ For Agents without command execution, use these stdio arguments:
 ```
 
 The session initializes immediately with only `mcpbridge_auth_start` and `mcpbridge_auth_status`. Start reuses the same unexpired request; status may collect and save credentials and check connectivity. Respect the returned `interval`. Refresh tools after ready. If the Agent does not support `notifications/tools/list_changed`, reconnect using the returned `connect --profile … --client …` command. Failed business calls are never queued or retried automatically. Reauthorization after expiry or revocation is explicit.
+
+The pairing page preserves your service, tools, duration and resource restrictions when switching languages. Only eligible write access is shown. If a code is invalid or expired, start a fresh request in your Agent and enter its new code on the same page. Invalid resource restrictions do not end the request; correct the form and submit again.
 
 Each pairing grants one service and tool capability; use existing setup for prompts, resource URIs or subscriptions. Current groups and the confirmed grant both restrict access, and new tools never expand old grants. Private credentials remain inside MCPBridge. Never copy tokens to an Agent. Failure preserves an existing working profile; choose a new profile for another user or server. Pure external issuers retain PKCE login and setup.

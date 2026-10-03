@@ -57,6 +57,7 @@ type oauthInput struct {
 }
 
 type backendView struct {
+	EndpointUID        string                   `json:"endpoint_uid"`
 	Credentials        *config.CredentialConfig `json:"credentials,omitempty"`
 	RequireClientGrant bool                     `json:"require_client_grant"`
 	RateLimit          ratelimit.Config         `json:"rate_limit"`
@@ -138,8 +139,16 @@ func (a *App) serveAdmin(w http.ResponseWriter, req *http.Request) {
 	}
 	path := strings.TrimPrefix(req.URL.Path, "/api/v1/")
 	switch {
-	case path == "identity-providers" || path == "identity-providers/probe":
-		a.serveIdentityProviders(w, req, path == "identity-providers/probe")
+	case path == "services":
+		a.serveServices(w, req)
+	case path == "operations":
+		a.serveOperations(w, req)
+	case path == "configuration-changes" || strings.HasPrefix(path, "configuration-changes/"):
+		a.serveConfigurationDrafts(w, req, strings.TrimPrefix(path, "configuration-changes"))
+	case path == "oauth-clients":
+		a.serveOAuthClients(w, req)
+	case path == "identity-providers" || strings.HasPrefix(path, "identity-providers/"):
+		a.serveIdentityProviders(w, req, strings.TrimPrefix(path, "identity-providers"))
 	case path == "vault":
 		a.serveVault(w, req)
 	case path == "requests":
@@ -213,7 +222,8 @@ func (a *App) serveAdminOverview(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"total": len(records), "enabled": enabled, "ready": ready,
+		"public_url": a.currentConfig().Server.PublicURL,
+		"total":      len(records), "enabled": enabled, "ready": ready,
 		"required": required, "optional": enabled - required,
 		"unavailable": unavailable, "version": version.Value,
 		"tool_groups": len(groups), "tool_groups_enabled": groupEnabled, "http_tools": httpTools,
@@ -382,7 +392,7 @@ func (a *App) updateAdminBackend(w http.ResponseWriter, req *http.Request, id st
 		writeAPIError(w, http.StatusNotFound, "not_found", "后端不存在", "")
 		return
 	}
-	if !backendDisableOnly(current, backendConfig, enabled) && a.stageConfigurationChange(w, req, configurationChange{Kind: "backend", Revision: expected, Backend: &configstore.Record{Config: backendConfig, Enabled: enabled}}, makeBackendView(current, nil), makeBackendView(configstore.Record{Config: backendConfig, Enabled: enabled}, nil)) {
+	if (req.Header.Get("X-MCPHub-Change-Mode") == "draft" || !backendDisableOnly(current, backendConfig, enabled)) && a.stageConfigurationChange(w, req, configurationChange{Kind: "backend", Revision: expected, Backend: &configstore.Record{Config: backendConfig, Enabled: enabled}}, makeBackendView(current, nil), makeBackendView(configstore.Record{Config: backendConfig, Enabled: enabled}, nil)) {
 		return
 	}
 	candidate, previous, ok := a.prepareAdminCandidate(w, req, records, id, "update")
@@ -475,7 +485,7 @@ func (a *App) commitAdminCandidate(candidate, previous *runtime, commit func() e
 	}
 	a.installRuntimeLocked(candidate, previous)
 	a.runtimeMu.Unlock()
-	go previous.drain(previous.cfg.Server.DrainTimeout.Duration)
+	go a.drainRuntime(previous)
 	return nil
 }
 
@@ -624,6 +634,7 @@ func headerValue(headers map[string]string, name string) (string, bool) {
 
 func makeBackendView(record configstore.Record, details map[string]backend.StatusDetail) backendView {
 	view := backendView{
+		EndpointUID:        record.Config.EndpointUID,
 		Credentials:        config.CloneCredentials(record.Config.Credentials),
 		RequireClientGrant: record.Config.RequireClientGrant,
 		RateLimit:          record.Config.RateLimit,

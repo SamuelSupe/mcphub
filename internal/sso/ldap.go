@@ -70,28 +70,41 @@ func ldapSubject(entry *ldap.Entry, attribute string) (string, error) {
 }
 
 func (s *Server) authenticateLDAP(ctx context.Context, p config.LDAPConnection, username, password, address string) (configstore.Identity, error) {
+	identity, err := s.verifyLDAPIdentity(ctx, p, username, password, address)
+	if err != nil {
+		return configstore.Identity{}, err
+	}
+	ctx = configstore.WithActor(ctx, "ldap-login")
+	user, err := s.store.SyncIdentity(ctx, identity.Provider, identity.Subject, identity.Name, identity.Groups, nil, false, false)
+	if err == nil {
+		err = s.store.SyncGroupNames(ctx, identity.Provider, identity.GroupNames)
+	}
+	return user, err
+}
+
+func (s *Server) verifyLDAPIdentity(ctx context.Context, p config.LDAPConnection, username, password, address string) (ConnectionIdentity, error) {
 	if !p.Enabled || username == "" || len(username) > 256 || password == "" || len(password) > 1024 || strings.ContainsRune(username, '\x00') {
-		return configstore.Identity{}, configstore.ErrCredentials
+		return ConnectionIdentity{}, configstore.ErrCredentials
 	}
 	release, err := s.reservePasswordAttempt(address, "ldap:"+strings.ToLower(username))
 	if err != nil {
-		return configstore.Identity{}, err
+		return ConnectionIdentity{}, err
 	}
 	defer release()
 	conn, err := connectLDAP(ctx, p)
 	if err != nil {
-		return configstore.Identity{}, err
+		return ConnectionIdentity{}, err
 	}
 	defer conn.Close()
 	filter := strings.ReplaceAll(p.UserFilter, "{{username}}", ldap.EscapeFilter(username))
 	result, err := conn.Search(ldap.NewSearchRequest(p.UserBaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 2, 5, false, filter, []string{p.UserIDAttribute, p.NameAttribute}, nil))
 	if err != nil || len(result.Entries) != 1 || result.Entries[0].DN == "" {
-		return configstore.Identity{}, configstore.ErrCredentials
+		return ConnectionIdentity{}, configstore.ErrCredentials
 	}
 	entry := result.Entries[0]
 	subject, err := ldapSubject(entry, p.UserIDAttribute)
 	if err != nil {
-		return configstore.Identity{}, err
+		return ConnectionIdentity{}, err
 	}
 	groups := []string{}
 	groupNames := map[string]string{}
@@ -99,28 +112,26 @@ func (s *Server) authenticateLDAP(ctx context.Context, p config.LDAPConnection, 
 		filter := strings.NewReplacer("{{dn}}", ldap.EscapeFilter(entry.DN), "{{username}}", ldap.EscapeFilter(username)).Replace(p.GroupFilter)
 		result, err := conn.Search(ldap.NewSearchRequest(p.GroupBaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 256, 5, false, filter, []string{p.GroupIDAttribute, p.GroupNameAttribute}, nil))
 		if err != nil || len(result.Entries) > 256 {
-			return configstore.Identity{}, errors.New("LDAP group search failed or exceeded its limit")
+			return ConnectionIdentity{}, errors.New("LDAP group search failed or exceeded its limit")
 		}
 		for _, group := range result.Entries {
 			id, err := ldapSubject(group, p.GroupIDAttribute)
 			if err != nil {
-				return configstore.Identity{}, err
+				return ConnectionIdentity{}, err
 			}
 			groups = append(groups, id)
 			groupNames[id] = group.GetAttributeValue(p.GroupNameAttribute)
 		}
 	}
 	if conn.Bind(entry.DN, password) != nil {
-		return configstore.Identity{}, configstore.ErrCredentials
+		return ConnectionIdentity{}, configstore.ErrCredentials
 	}
 	name := entry.GetAttributeValue(p.NameAttribute)
 	if name == "" {
 		name = username
 	}
-	ctx = configstore.WithActor(ctx, "ldap-login")
-	user, err := s.store.SyncIdentity(ctx, p.Namespace(), subject, name, groups, nil, false, false)
-	if err == nil {
-		err = s.store.SyncGroupNames(ctx, p.Namespace(), groupNames)
+	if len(name) > 512 {
+		return ConnectionIdentity{}, errors.New("invalid upstream identity")
 	}
-	return user, err
+	return ConnectionIdentity{Provider: p.Namespace(), Subject: subject, Name: name, Groups: groups, GroupNames: groupNames}, nil
 }

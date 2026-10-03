@@ -1,6 +1,7 @@
 package sso
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/SamuelSupe/mcphub/v2/internal/authn"
+	"github.com/SamuelSupe/mcphub/v2/internal/config"
 	"github.com/SamuelSupe/mcphub/v2/internal/configstore"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -41,38 +43,48 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		s.beginLocalLogin(w, r, state, p)
 		return
 	}
-	upstream := c.OIDC.Provider
-	p.upstream = upstream
 	if !c.OIDC.Enabled {
 		http.Error(w, "enterprise login is not configured", 404)
 		return
 	}
+	if err := s.configureUpstreamLogin(r.Context(), &p, c.OIDC); err != nil {
+		http.Error(w, "SSO discovery or identity verifier unavailable", 503)
+		return
+	}
+	s.redirectUpstreamLogin(w, r, state, p, q)
+}
+
+func (s *Server) configureUpstreamLogin(ctx context.Context, p *login, c config.OIDCConnection) error {
+	upstream := c.Provider
+	p.upstream = upstream
 	endpoint := oauth2.Endpoint{AuthURL: upstream.AuthorizationURL, TokenURL: upstream.TokenURL, AuthStyle: oauth2.AuthStyleInParams}
 	if upstream.TokenAuthMethod == "client_secret_basic" {
 		endpoint.AuthStyle = oauth2.AuthStyleInHeader
 	}
 	scopes := slices.Clone(upstream.Scopes)
 	if upstream.Protocol == "oidc" {
-		metadata, err := authn.LoginMetadata(r.Context(), upstream.Issuer, s.client, false)
+		metadata, err := authn.LoginMetadata(ctx, upstream.Issuer, s.client, false)
 		if err != nil {
-			http.Error(w, "SSO discovery unavailable", 503)
-			return
+			return err
 		}
 		p.issuerRequired = metadata.AuthorizationResponseIssParameterSupported
 		endpoint.AuthURL, endpoint.TokenURL = metadata.AuthorizationEndpoint, metadata.TokenEndpoint
-		p.idVerifier, err = authn.LoginIDVerifier(r.Context(), upstream.Issuer, upstream.ClientID, s.client)
+		p.idVerifier, err = authn.LoginIDVerifier(ctx, upstream.Issuer, upstream.ClientID, s.client)
 		if err != nil {
-			http.Error(w, "SSO identity verifier unavailable", 503)
-			return
+			return err
 		}
 		if !slices.Contains(scopes, "openid") {
 			scopes = append(scopes, "openid")
 		}
 	}
-	p.oauth = oauth2.Config{ClientID: upstream.ClientID, ClientSecret: c.OIDC.ClientSecret, RedirectURL: s.cfg.Auth.Issuer + "/callback", Endpoint: endpoint, Scopes: scopes}
-	options := []oauth2.AuthCodeOption{oauth2.S256ChallengeOption(verifier)}
-	if upstream.Protocol == "oidc" {
-		options = append(options, oauth2.SetAuthURLParam("nonce", nonce))
+	p.oauth = oauth2.Config{ClientID: upstream.ClientID, ClientSecret: c.ClientSecret, RedirectURL: s.cfg.Auth.Issuer + "/callback", Endpoint: endpoint, Scopes: scopes}
+	return nil
+}
+
+func (s *Server) redirectUpstreamLogin(w http.ResponseWriter, r *http.Request, state string, p login, q url.Values) {
+	options := []oauth2.AuthCodeOption{oauth2.S256ChallengeOption(p.verifier)}
+	if p.upstream.Protocol == "oidc" {
+		options = append(options, oauth2.SetAuthURLParam("nonce", p.nonce))
 		for _, name := range []string{"prompt", "max_age", "acr_values"} {
 			if q.Get(name) != "" {
 				options = append(options, oauth2.SetAuthURLParam(name, q.Get(name)))
@@ -91,7 +103,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	s.pending[state] = p
 	s.mu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: "__Host-mcphub-sso-" + state, Value: browser, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode, MaxAge: 300})
+	http.SetCookie(w, &http.Cookie{Name: "__Host-mcphub-sso-" + state, Value: p.browser, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode, MaxAge: 300})
 	http.Redirect(w, r, p.oauth.AuthCodeURL(state, options...), http.StatusFound)
 }
 
@@ -108,6 +120,14 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.pending[state]
 	delete(s.pending, state)
 	s.mu.Unlock()
+	testCompleted := false
+	if p.connectionTestID != "" {
+		defer func() {
+			if !testCompleted {
+				s.finishConnectionTest(p.connectionTestID, nil, "OIDC sign-in failed; check the client secret, callback URL, tenant and claim types")
+			}
+		}()
+	}
 	cookie, err := r.Cookie("__Host-mcphub-sso-" + state)
 	if !ok || !time.Now().Before(p.expires) || err != nil || subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(p.browser)) != 1 {
 		http.Error(w, "SSO callback validation failed", 400)
@@ -120,6 +140,10 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if q.Get("error") != "" {
+		if p.connectionTestID != "" {
+			http.Error(w, "OIDC test sign-in was declined; return to the administration console", 400)
+			return
+		}
 		s.redirectResult(w, r, p.downstream, "", "access_denied")
 		return
 	}
@@ -163,6 +187,26 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid department claim", 401)
 		return
 	}
+	if len(subject) > 512 || len(name) > 512 || len(groups)+len(departments) > 256 {
+		http.Error(w, "invalid upstream identity", 401)
+		return
+	}
+	if p.connectionTestID != "" {
+		preview := &ConnectionIdentity{Provider: upstream.Namespace(), Subject: subject, Name: name, Groups: groups, Departments: departments}
+		for _, path := range []string{upstream.NameClaim, upstream.GroupsClaim, upstream.DepartmentsClaim} {
+			if path != "" && claimValue(claims, path) == nil {
+				preview.MissingClaims = append(preview.MissingClaims, path)
+			}
+		}
+		testCompleted = s.finishConnectionTest(p.connectionTestID, preview, "")
+		if !testCompleted {
+			http.Error(w, "connection test expired or configuration changed; restart from the administration console", 409)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("登录测试已完成，请返回管理台查看结果。\nSign-in test finished. Return to the administration console for the result."))
+		return
+	}
 	if current := s.Connections(); !current.OIDC.Enabled || current.Revision != p.connectionsRevision {
 		http.Error(w, "identity source changed; restart login", 400)
 		return
@@ -185,7 +229,6 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 			code.AuthTime, _ = value.Int64()
 		}
 	}
-	raw := rand.Text() + rand.Text()
 	s.mu.Lock()
 	s.cleanupLocked()
 	if s.connections.Revision != p.connectionsRevision {
@@ -198,9 +241,8 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "too many pending authorization codes", 429)
 		return
 	}
-	s.codes[configstore.SecretHash(raw)] = code
 	s.mu.Unlock()
-	s.redirectResult(w, r, code, raw, "")
+	s.finishAuthorization(w, r, code)
 }
 
 func (s *Server) redirectResult(w http.ResponseWriter, r *http.Request, p authorizationCode, code, err string) {

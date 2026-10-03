@@ -13,7 +13,7 @@ import (
 
 var (
 	ErrUserPermissions = errors.New("assign permissions to groups, not users")
-	ErrGroupMembership = errors.New("invalid group membership; groups must belong to the same identity provider and enterprise memberships are managed by the identity source")
+	ErrGroupMembership = errors.New("invalid group membership or mapping; enterprise memberships are managed by the identity source")
 )
 
 func createGroup(ctx context.Context, tx *transaction, provider, name string, permissions config.IdentityPermissions) (Identity, error) {
@@ -78,7 +78,7 @@ func replaceUserGroups(ctx context.Context, tx *transaction, user *Identity, gro
 	var external []string
 	for _, id := range groups {
 		group, err := readIdentity(ctx, tx, "id=?", id)
-		if err != nil || group.Kind == "user" || group.Provider != user.Provider {
+		if err != nil || group.Kind == "user" || (group.Provider != user.Provider && group.Provider != config.PermissionGroupProvider) {
 			return ErrGroupMembership
 		}
 		if !group.ManagedLocally {

@@ -28,14 +28,15 @@ type accessCheckStep struct {
 }
 
 type accessCheckResult struct {
-	Simulated         bool              `json:"simulated"`
-	Outcome           string            `json:"outcome"`
-	EndpointRevision  int64             `json:"endpoint_revision"`
-	EffectiveScopes   []string          `json:"effective_scopes"`
-	Effect            string            `json:"effect"`
-	RequiredApprovals int               `json:"required_approvals,omitempty"`
-	RequireStepUp     bool              `json:"require_step_up"`
-	Checks            []accessCheckStep `json:"checks"`
+	GroupSources      []configstore.PermissionSource `json:"group_sources,omitempty"`
+	Simulated         bool                           `json:"simulated"`
+	Outcome           string                         `json:"outcome"`
+	EndpointRevision  int64                          `json:"endpoint_revision"`
+	EffectiveScopes   []string                       `json:"effective_scopes"`
+	Effect            string                         `json:"effect"`
+	RequiredApprovals int                            `json:"required_approvals,omitempty"`
+	RequireStepUp     bool                           `json:"require_step_up"`
+	Checks            []accessCheckStep              `json:"checks"`
 }
 
 // Scope input is an administrator's assumption, never a credential. This route
@@ -99,6 +100,7 @@ func (a *App) serveAccessCheck(w http.ResponseWriter, req *http.Request) {
 		}
 		check("user_active", identityErr == nil)
 		if identityErr == nil {
+			result.GroupSources = identity.Groups
 			allowed := identity.Permissions.EffectiveScopes(rt.cfg.Admin)
 			input.Scopes = slices.DeleteFunc(slices.Clone(input.Scopes), func(scope string) bool { return !slices.Contains(allowed, scope) })
 			_, err := identity.Permissions.ToolArguments(endpoint.ID, input.Tool, tool.Effect, input.Arguments)

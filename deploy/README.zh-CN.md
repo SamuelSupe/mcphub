@@ -1,12 +1,12 @@
 # 远程管理与数据库部署
 
-> 本指南用于 v2.3.0 全新部署。内建账号与 Agent 设备授权需要 v2.3.0，v2.2.2 不包含这些功能。
+> 本指南用于 v2.4.0 全新部署。请使用配套的 MCPHub 与 MCPBridge 发行包；不包含迁移流程。
 
 [English](README.md) · [管理员手册](../docs/admin-guide.zh-CN.md) · [文档导航](../docs/README.zh-CN.md)
 
-本目录对应 MCPHub v2.3.0 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
+本目录对应 MCPHub v2.4.0 的远程管理与数据库部署能力。支持 **一个 MCPHub 实例 + SQLite 或 PostgreSQL**。PostgreSQL 提供独立数据库的备份、持久化和运维能力；本版不支持多个网关共享数据库后自动同步运行时配置。
 
-本指南面向 v2.3.0 全新部署。默认配置启用本地管理台与 SQLite；团队远程管理使用本目录模板，增加 HTTPS 管理地址和管理员身份配置。启动管理台后逐个添加后端、分别配置凭证、测试连接，再发布工具。参见 [Vault](../docs/vault-accounts.zh-CN.md)和 [SSO](../docs/sso-and-user-management.zh-CN.md)可选配置。
+本指南面向 v2.4.0 全新部署。默认配置启用本地管理台与 SQLite；团队远程管理使用本目录模板，增加 HTTPS 管理地址和管理员身份配置。启动管理台后逐个添加后端、分别配置凭证、测试连接，再发布工具。参见 [Vault](../docs/vault-accounts.zh-CN.md)和 [SSO](../docs/sso-and-user-management.zh-CN.md)可选配置。
 
 已完成的 MCP POST 请求默认保留 30 天；可将 `admin.request_retention` 设置为 `24h`–`8760h`。管理员请求诊断页支持时间筛选和 NDJSON 导出，详见[请求历史与隐私边界](../docs/admin-guide.zh-CN.md#授权与请求诊断)。请保护数据库备份和导出文件：记录不含参数、结果和 Token，但查询索引仍含可读的身份与路由元数据。
 
@@ -17,7 +17,7 @@
 | 远程管理 + PostgreSQL | 企业单实例部署，数据库独立运维 | [config.remote-postgres.yaml](config.remote-postgres.yaml)、[Compose](compose.postgres.yaml) |
 | 飞书 SSO + Vault + 个人 MCP 账号 | 联调起点，须完成真实租户验收 | [配置示例](config.feishu-vault.example.yaml) |
 
-v2.3.0 服务端包包含这些模板，下载链接提供完全相同的文件。只运行二进制时，把选中的 YAML 保存为 `config.yaml`，后续使用 `--config config.yaml`，不要求完整源码。下面的 `deploy/...` 路径以完整仓库根目录为工作目录。
+v2.4.0 服务端包包含这些模板，下载链接提供完全相同的文件。只运行二进制时，把选中的 YAML 保存为 `config.yaml`，后续使用 `--config config.yaml`，不要求完整源码。下面的 `deploy/...` 路径以完整仓库根目录为工作目录。
 
 ## 身份服务配置
 

@@ -1,3 +1,8 @@
+<h2 id="native-oauth">桌面客户端：一个连接访问多个服务</h2>
+<p>使用标准 OAuth 登录，逐个勾选服务、工具、提示词、资源和订阅；写请求默认关闭，启用后仍需逐次审批。当前组权限与每个服务授权共同约束调用，新增工具不会扩大已有授权。可在门户单独撤销服务授权，也可撤销整个连接。</p>
+<pre><code>mcpbridge login --native --server https://hub.example.com/mcp --profile work
+mcpbridge connect --profile work</code></pre>
+<p>本机有浏览器时使用此流程。原生 MCP 客户端由管理员在「运维中心 → OAuth 客户端」注册回调地址，使用 PKCE 和标准 Bearer 凭证，无需自定义授权 Header。远程无浏览器 Agent 继续使用<a href="device-auth.html">设备链接授权</a>，每次设备配对授权一个服务；现有单服务客户端条目仍可使用。</p>
 <p>远程或无浏览器 Agent 优先使用<a href="device-auth.html">Agent 链接授权</a>：在一个网页中登录并选择权限，或使用 --interactive-auth 提供认证工具。以下原有向导仍可使用。</p>
 <h2 id="terms">几个名称的关系</h2>
 <dl class="term-list"><dt>Profile</dt><dd>本机登录和连接设置，如 work；默认 default。</dd><dt>客户端入口</dt><dd>生成的 ci_… ID，包含一个服务的授权工具和资源范围。</dd><dt>服务 / Endpoint</dt><dd>公司发布的一组业务工具，一个入口对应一个服务。</dd><dt>Broker</dt><dd>多个本机进程共享会话和登录续期，connect --client 按需启动。</dd></dl>

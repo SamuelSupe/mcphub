@@ -68,8 +68,10 @@ func (s *Server) UpdateConnections(ctx context.Context, expected int64, next con
 	if err == nil {
 		s.connections = next
 		// Pending authorizations cannot finish against a replaced source.
+		clear(s.nativePending)
 		clear(s.pending)
 		clear(s.codes)
+		clear(s.connectionTests)
 	}
 	return next, err
 }

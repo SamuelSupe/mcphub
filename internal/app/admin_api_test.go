@@ -130,9 +130,32 @@ func TestBuiltinConsoleAuthenticationAndReset(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &session); err != nil || !session.Authenticated || !session.LocalAccount {
 		t.Fatal("browser session", err, response.Body.String())
 	}
+	oauthBody := []byte(`{"clients":[{"id":"desktop-test","name":"Desktop test","redirect_uris":["http://127.0.0.1/oauth/callback"]}]}`)
+	if w := request("PUT", "/api/v1/oauth-clients", oauthBody, cookie, session.CSRF); w.Code != 409 {
+		t.Fatal("OAuth registration lacked revision protection", w.Code)
+	}
+	if w := request("PUT", "/api/v1/oauth-clients", oauthBody, cookie, session.CSRF, 0); w.Code != 200 {
+		t.Fatal("first OAuth registration failed", w.Code, w.Body.String())
+	}
+	if w := request("PUT", "/api/v1/oauth-clients", oauthBody, cookie, session.CSRF, 0); w.Code != 409 {
+		t.Fatal("stale OAuth registration accepted", w.Code)
+	}
+	if w := request("PUT", "/api/v1/oauth-clients", []byte(`{}`), cookie, session.CSRF, 1); w.Code != 400 {
+		t.Fatal("missing client list removed registrations", w.Code)
+	}
+	savedClients, err := application.store.NativeClients(t.Context())
+	if err != nil || len(savedClients.Clients) != 1 || !savedClients.Clients[0].RequireConsent || !slices.Equal(savedClients.Clients[0].Resources, []string{cfg.Server.PublicURL}) {
+		t.Fatal("native registration contract", savedClients, err)
+	}
 	connectionsBody := []byte(`{"oidc":{"enabled":true,"provider":{"protocol":"oidc","issuer":"https://identity.example.com","client_id":"enterprise-app","name_claim":"name","groups_claim":"groups"},"client_secret":"test-provider-secret"},"ldap":{"enabled":true,"url":"ldaps://ldap.example.com","bind_dn":"cn=reader,dc=example,dc=com","bind_password":"test-directory-secret","user_base_dn":"ou=people,dc=example,dc=com","user_filter":"(uid={{username}})","user_id_attribute":"entryUUID","name_attribute":"cn"}}`)
 	if w := request("PUT", "/api/v1/identity-providers", connectionsBody, cookie, "", 0); w.Code != 403 {
 		t.Fatal("identity configuration bypassed CSRF", w.Code)
+	}
+	if w := request("POST", "/api/v1/identity-providers/test", connectionsBody, cookie, "", 0); w.Code != 403 {
+		t.Fatal("draft login test bypassed CSRF", w.Code)
+	}
+	if w := request("POST", "/api/v1/identity-providers/test", connectionsBody, cookie, session.CSRF); w.Code != 409 {
+		t.Fatal("draft login test lacked revision protection", w.Code)
 	}
 	if w := request("PUT", "/api/v1/identity-providers", connectionsBody, cookie, session.CSRF); w.Code != 409 {
 		t.Fatal("identity configuration lacked revision protection", w.Code)
@@ -187,7 +210,7 @@ func TestBuiltinConsoleAuthenticationAndReset(t *testing.T) {
 	if w := update(user.ID, user.Revision, []byte(`{"enabled":true,"permissions":{"roles":["admin"]}}`)); w.Code != 400 {
 		t.Fatal("user grant accepted", w.Code, w.Body.String())
 	}
-	if w := update(group.ID, group.Revision, []byte(`{"enabled":true,"permissions":{"scopes":["projects:read"]}}`)); w.Code != 200 {
+	if w := update(group.ID, group.Revision, []byte(`{"enabled":true,"permissions":{"roles":["approver"],"scopes":["projects:read"],"access":[{"endpoint_id":"projects","tools":["read"],"resource_rules":[{"argument":"/project","allowed_values":["engineering"]}]}]}}`)); w.Code != 200 {
 		t.Fatal("group grant", w.Code, w.Body.String())
 	}
 	body, _ := json.Marshal(map[string]any{"enabled": true, "groups": []string{group.ID}})
@@ -196,6 +219,25 @@ func TestBuiltinConsoleAuthenticationAndReset(t *testing.T) {
 	}
 	if effective, err := application.store.EffectiveIdentity(t.Context(), user.ID); err != nil || !slices.Contains(effective.Permissions.Scopes, "projects:read") {
 		t.Fatal("API membership not effective", err)
+	}
+	view := request("GET", "/api/v1/identities/"+user.ID+"/effective", nil, cookie, "")
+	var effectiveView struct {
+		Active      bool                       `json:"active"`
+		Permissions config.IdentityPermissions `json:"permissions"`
+	}
+	if view.Code != 200 || json.Unmarshal(view.Body.Bytes(), &effectiveView) != nil || !effectiveView.Active || !slices.Contains(effectiveView.Permissions.Scopes, "projects:read") || !slices.Contains(effectiveView.Permissions.Scopes, cfg.Admin.Approvals.Scopes()[0]) || len(effectiveView.Permissions.Access) != 1 || effectiveView.Permissions.Access[0].ResourceRules[0].AllowedValues[0] != "engineering" {
+		t.Fatal("effective access did not preserve inherited role scopes and resource grants", view.Code, view.Body.String())
+	}
+	group, err = application.store.Identity(t.Context(), group.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := update(group.ID, group.Revision, []byte(`{"enabled":false}`)); w.Code != 200 {
+		t.Fatal("group disable failed", w.Code)
+	}
+	view = request("GET", "/api/v1/identities/"+user.ID+"/effective", nil, cookie, "")
+	if view.Code != 200 || json.Unmarshal(view.Body.Bytes(), &effectiveView) != nil || len(effectiveView.Permissions.Scopes) != 0 || len(effectiveView.Permissions.Access) != 0 {
+		t.Fatal("disabled group remained effective", view.Code, view.Body.String())
 	}
 	portalLogin := httptest.NewRequest("POST", "https://hub.example.com/client-auth/auth/local-login", strings.NewReader(`{"username":"employee","password":"employee-long-password"}`))
 	portalLogin.RemoteAddr = "127.0.0.1:35111"

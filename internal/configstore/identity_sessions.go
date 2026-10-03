@@ -11,13 +11,15 @@ import (
 )
 
 type SSOSession struct {
-	CredentialVersion int64     `json:"credential_version,omitempty"`
-	ID                string    `json:"id"`
-	UserID            string    `json:"user_id"`
-	ClientID          string    `json:"client_id"`
-	Resource          string    `json:"resource"`
-	Scopes            []string  `json:"scopes"`
-	ExpiresAt         time.Time `json:"expires_at"`
+	ClientPolicy      string         `json:"client_policy,omitempty"`
+	Grants            []GrantBinding `json:"grants,omitempty"`
+	CredentialVersion int64          `json:"credential_version,omitempty"`
+	ID                string         `json:"id"`
+	UserID            string         `json:"user_id"`
+	ClientID          string         `json:"client_id"`
+	Resource          string         `json:"resource"`
+	Scopes            []string       `json:"scopes"`
+	ExpiresAt         time.Time      `json:"expires_at"`
 }
 
 func (s *Store) SSOSigningKey(ctx context.Context) (ed25519.PrivateKey, error) {

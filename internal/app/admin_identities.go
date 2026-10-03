@@ -19,7 +19,10 @@ func (a *App) serveAdminIdentities(w http.ResponseWriter, r *http.Request, suffi
 		if !decodeAdminJSON(w, r, &input) {
 			return
 		}
-		if !a.identityProviderAllowed(input.Provider, true) {
+		if input.Provider == "" {
+			input.Provider = config.PermissionGroupProvider
+		}
+		if input.Provider != config.PermissionGroupProvider && !a.identityProviderAllowed(input.Provider, true) {
 			writeAPIError(w, 400, "validation_failed", "select a configured identity provider", "provider")
 			return
 		}
@@ -77,7 +80,7 @@ func (a *App) serveAdminIdentities(w http.ResponseWriter, r *http.Request, suffi
 		// accidentally after an operator changes the configured identity source.
 		current := identities[:0]
 		for _, p := range identities {
-			if a.identityProviderAllowed(p.Provider, true) {
+			if p.Provider == config.PermissionGroupProvider || a.identityProviderAllowed(p.Provider, true) {
 				current = append(current, p)
 			}
 		}
@@ -86,12 +89,20 @@ func (a *App) serveAdminIdentities(w http.ResponseWriter, r *http.Request, suffi
 		if cfg.Auth.Builtin() {
 			provider = "MCPHub"
 		}
-		providers := a.sso.Providers()
-		writeJSON(w, 200, map[string]any{"providers": providers, "enabled": true, "builtin": cfg.Auth.Builtin(), "provider": provider, "directory_sync": cfg.Auth.SSO.DirectoryTokenEnv != "", "identities": current, "endpoints": rt.hub.AuthorizationOptions(rt.allScopes()), "scopes": rt.allScopes()})
+		providers := append(a.sso.Providers(), map[string]string{"id": config.PermissionGroupProvider, "name": "Permission groups"})
+		roleScopes := map[string][]string{}
+		for _, role := range []string{"admin", "approver", "security_reviewer"} {
+			roleScopes[role] = (config.IdentityPermissions{Roles: []string{role}}).EffectiveScopes(cfg.Admin)
+		}
+		writeJSON(w, 200, map[string]any{"providers": providers, "enabled": true, "builtin": cfg.Auth.Builtin(), "provider": provider, "directory_sync": cfg.Auth.SSO.DirectoryTokenEnv != "", "identities": current, "endpoints": rt.hub.AuthorizationOptions(rt.allScopes()), "scopes": rt.allScopes(), "role_scopes": roleScopes})
 		return
 	}
 	if cfg.Auth.SSO == nil {
 		http.NotFound(w, r)
+		return
+	}
+	if strings.HasSuffix(suffix, "/effective") && r.Method == http.MethodGet {
+		a.serveEffectiveIdentity(w, r, strings.TrimSuffix(strings.TrimPrefix(suffix, "/"), "/effective"))
 		return
 	}
 	id := strings.TrimPrefix(suffix, "/")
@@ -104,11 +115,16 @@ func (a *App) serveAdminIdentities(w http.ResponseWriter, r *http.Request, suffi
 		return
 	}
 	var input struct {
-		Enabled     bool                       `json:"enabled"`
-		Permissions config.IdentityPermissions `json:"permissions"`
-		Groups      *[]string                  `json:"groups"`
+		Enabled      bool                       `json:"enabled"`
+		Permissions  config.IdentityPermissions `json:"permissions"`
+		Groups       *[]string                  `json:"groups"`
+		SourceGroups *[]string                  `json:"source_groups"`
 	}
 	if !decodeAdminJSON(w, r, &input) {
+		return
+	}
+	if input.Groups != nil && input.SourceGroups != nil {
+		writeAPIError(w, 400, "validation_failed", "groups and source_groups cannot be combined", "groups")
 		return
 	}
 	if err := input.Permissions.Validate(); err != nil {
@@ -120,7 +136,7 @@ func (a *App) serveAdminIdentities(w http.ResponseWriter, r *http.Request, suffi
 		writeStoreError(w, err)
 		return
 	}
-	if !a.identityProviderAllowed(existing.Provider, true) {
+	if existing.Provider != config.PermissionGroupProvider && !a.identityProviderAllowed(existing.Provider, true) {
 		http.NotFound(w, r)
 		return
 	}
@@ -129,7 +145,15 @@ func (a *App) serveAdminIdentities(w http.ResponseWriter, r *http.Request, suffi
 		return
 	}
 	var updated configstore.Identity
-	if input.Groups != nil {
+	if existing.Kind != "user" && input.Permissions.ScopeMode == "derived" {
+		if err := a.derivePermissionScopes(&input.Permissions); err != nil {
+			writeAPIError(w, 400, "validation_failed", err.Error(), "permissions")
+			return
+		}
+	}
+	if input.SourceGroups != nil {
+		updated, err = a.store.UpdatePermissionGroup(r.Context(), id, revision, input.Enabled, input.Permissions, *input.SourceGroups)
+	} else if input.Groups != nil {
 		if existing.Kind != "user" {
 			writeAPIError(w, 400, "validation_failed", "only users have group memberships", "groups")
 			return
@@ -153,4 +177,28 @@ func (a *App) serveAdminIdentities(w http.ResponseWriter, r *http.Request, suffi
 	a.currentRuntime().hub.PruneIdentityViews(r.Context())
 	w.Header().Set("ETag", revisionETag(updated.Revision))
 	writeJSON(w, 200, updated)
+}
+
+func (a *App) serveEffectiveIdentity(w http.ResponseWriter, r *http.Request, id string) {
+	user, err := a.store.Identity(r.Context(), id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if user.Kind != "user" || !a.identityProviderAllowed(user.Provider, user.DirectoryManaged) {
+		http.NotFound(w, r)
+		return
+	}
+	identity, err := a.store.EffectiveIdentity(r.Context(), id)
+	active := err == nil
+	if err != nil && !errors.Is(err, configstore.ErrIdentityDenied) {
+		writeStoreError(w, err)
+		return
+	}
+	permissions := config.IdentityPermissions{}
+	if active {
+		permissions = identity.Permissions
+		permissions.Scopes = permissions.EffectiveScopes(a.currentConfig().Admin)
+	}
+	writeJSON(w, 200, map[string]any{"identity_id": id, "active": active, "permissions": permissions, "groups": identity.Groups, "verified_at": user.VerifiedAt, "membership_stale": errors.Is(err, configstore.ErrIdentityStale)})
 }

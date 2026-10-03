@@ -8,7 +8,7 @@ MCPHub can bridge OIDC or OAuth2 identity providers that support authorization c
 
 The flow is browser → MCPHub `/sso` → enterprise identity provider → local user/group policy → MCPHub-issued access JWT → MCPHub tool policy and write approval → backend. Upstream tokens are neither MCP credentials nor backend credentials. Advanced deployments may select `auth.mode: external` to verify external JWTs; built-in mode automatically configures the local authorization service.
 
-Start with [built-in accounts](builtin-accounts.md). Enterprise SSO is optional; this guide covers external identity integration. Local and enterprise identities do not share permissions.
+Start with [built-in accounts](builtin-accounts.md). Enterprise SSO is optional; this guide covers external identity integration. Local and enterprise identities remain separate and can reuse policies through independent permission groups.
 
 Default built-in deployments can configure LDAP and OIDC directly in the [Identity services UI](enterprise-login.md), with immediate application. The YAML below is an advanced setup or initial OIDC connection; after the first UI save, database settings take precedence.
 
@@ -82,9 +82,9 @@ Replace endpoints/scopes with those supplied by the provider; these are illustra
 
 ## Local permissions
 
-Use **Users & groups** in the admin UI, or `GET /api/v1/identities` and `PUT /api/v1/identities/{id}` with `If-Match: "revision"`. New users await authorization. New groups/departments have no grants. Use the locally initialized built-in administrator to grant permissions to enterprise groups and enable their members. Users cannot receive direct roles, scopes or tool permissions. For independent external authentication deployments, optional `bootstrap_subjects` adds an enterprise user to a locally managed **Administrators** group only when that user is first created. It grants no business tools and cannot override a later disable.
+Use **Users & groups** in the admin UI, or `GET /api/v1/identities` and `PUT /api/v1/identities/{id}` with `If-Match: "revision"`. New users await authorization. New groups/departments have no grants. Use the locally initialized built-in administrator to map enterprise groups to independent permission groups and enable their members. Users cannot receive direct roles, scopes or tool permissions. For independent external authentication deployments, optional `bootstrap_subjects` adds an enterprise user to a locally managed **Administrators** group only when that user is first created. It grants no business tools and cannot override a later disable.
 
-The permission JSON below is for a **group/department ID**. `POST /api/v1/identities/groups` with `{"name":"Project readers","provider":"<configured provider ID>"}` creates a locally managed group; obtain provider IDs from `GET /api/v1/identities`. Update a user with `{"enabled":true,"groups":["<group MCPHub ID>"]}` and its own revision. Omit `groups` to preserve membership; an explicit empty array removes locally managed memberships only when no upstream memberships exist. Submitted lists must retain every upstream-owned group. Nonempty user `permissions` returns `400 group_permissions_required`. Local policy groups are marked `managed_locally: true`; upstream claims/directory snapshots cannot join them or replace their memberships. See [groups and permissions](builtin-accounts.md#groups-and-permissions).
+The permission JSON below is for a **permission group ID**. `POST /api/v1/identities/groups` with `{"name":"Project readers","provider":"mcphub:permissions"}` creates an independent permission group; `provider` can be omitted. Update a user with `{"enabled":true,"groups":["<group MCPHub ID>"]}` and its own revision. Omit `groups` to preserve membership; an explicit empty array removes locally managed memberships only when no upstream memberships exist. Submitted lists must retain every upstream-owned group. Nonempty user `permissions` returns `400 group_permissions_required`. Local policy groups are marked `managed_locally: true`; upstream claims/directory snapshots cannot join them or replace their memberships. See [groups and permissions](builtin-accounts.md#groups-and-permissions).
 
 ```json
 {"enabled":true,"permissions":{"roles":[],"scopes":["projects:read"],"access":[{"endpoint_id":"projects","tools":["read_project"],"allow_write_requests":false,"resource_rules":[{"argument":"/project","allowed_values":["demo"]}]}]}}
@@ -94,10 +94,12 @@ The permission JSON below is for a **group/department ID**. `POST /api/v1/identi
 - Roles `admin`, `approver`, `security_reviewer` map to existing administrative scopes. Reviewer restrictions and no-self-approval still apply.
 - Configure scopes, endpoint IDs, exact original tool names and business-resource predicates. Empty tool lists grant nothing. New tools receive no implicit user grant.
 - Prompts, resource reads and subscriptions are separate permissions. Business predicates constrain tool arguments, not MCP resource URI ownership.
-- The user inherits the union of active group/department grants from its provider. A tool, write-request flag and all resource conditions must match within one access entry. A grant without resource conditions allows all user-level resources for its listed tools.
+- The user inherits active direct permission groups and explicitly mapped organization groups. A tool, write-request flag and all resource conditions must match within one access entry. A grant without resource conditions allows all user-level resources for its listed tools.
 - Tokens, client grants, shared endpoint/tool scopes, publication, enablement and shared resource rules still apply. Write-request permission does not bypass per-operation approval.
 
 Changes use revision checks and audit events. Login/directory sync cannot modify local roles or grants. Removed scopes take effect on every verification; added scopes require a new login to expand the credential ceiling. Cached views cannot admit calls with obsolete permissions; affected running requests receive cancellation, which cannot undo completed writes. Some MCP clients need to reconnect after a denied request or closed stream. In SSO mode, access-check requires the local MCPHub user ID shown on the management page.
+
+Group PUT accepts `source_groups: ["organization MCPHub group ID"]`; users, nested permission groups and locally managed groups cannot be mapped. Do not combine it with `groups`. Users can join locally managed groups from their own provider or independent permission groups. The console edits business permissions on independent groups; organization groups expose source and enablement. Effective-access responses include `groups` provenance, `verified_at` and `membership_stale`.
 
 ## Automatic department/group synchronization
 
@@ -124,7 +126,7 @@ Employee installation, login and Broker consent are covered by the [user manual]
 
 Access JWTs last ten minutes. `offline_access` enables rotating refresh tokens within an eight-hour local SSO session; another browser login is needed afterward. Upstream credentials are not retained and local refresh does not query upstream account state. Reuse of a consumed refresh token revokes its session family. The signing key is encrypted with the configuration key in the database; refresh credentials are stored only as hashes. Every access token also requires a live stored session and current local permissions.
 
-Fresh SQLite and **single-instance PostgreSQL** storage uses schema **10**. Back up the database and matching encryption key. Pending authorization transactions/codes are in memory and restart with the process; stored sessions and signing keys survive. Apply existing reverse-proxy limits to login and directory endpoints. Global logout, SCIM, SAML, multiple identity-source selection and multi-instance consistency are outside this implementation.
+Fresh SQLite and **single-instance PostgreSQL** storage uses schema **10**. Back up the database and matching encryption key. Pending authorization transactions/codes are in memory and restart with the process; stored sessions and signing keys survive. Apply existing reverse-proxy limits to login and directory endpoints. Global logout, SCIM, SAML, multiple connections of the same provider type and multi-instance consistency are outside this implementation.
 
 Pending or disabled users receive an OAuth `access_denied` callback with the fixed reason `account_access_required`. The CLI stops waiting immediately and the portal directs users to their MCPHub administrator. Sign in again after access is granted; failed login preserves existing local credentials.
 

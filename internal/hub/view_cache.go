@@ -40,7 +40,11 @@ func (h *Hub) releaseView(v *view) {
 	h.viewsMu.Lock()
 	v.activeRequests--
 	v.lastUsed = time.Now()
+	closeRetired := v.retired && v.activeRequests == 0
 	h.viewsMu.Unlock()
+	if closeRetired {
+		v.close()
+	}
 }
 
 // Called with viewsMu held. Active HTTP requests, SDK sessions and subscriptions
@@ -51,7 +55,7 @@ func (h *Hub) evictIdleViewLocked() *view {
 	for key, v := range h.views {
 		// Grant views own personal resource links across requests. Their existing
 		// expiry/revocation cleanup must keep that history for the grant's lifetime.
-		if v.grant != nil || v.activeRequests != 0 || (oldest != nil && !v.lastUsed.Before(oldest.lastUsed)) {
+		if v.hasGrants() || v.activeRequests != 0 || (oldest != nil && !v.lastUsed.Before(oldest.lastUsed)) {
 			continue
 		}
 		active := false

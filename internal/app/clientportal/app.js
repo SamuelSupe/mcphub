@@ -7,16 +7,32 @@ const messages = {
     login: "登录以查看并确认",
     logout: "退出网页会话",
     loading: "正在读取授权…",
-    empty: "尚无客户端授权。在本机运行 mcpbridge client add 发起申请。",
+    empty: "尚无有效连接。在 Agent 终端运行 mcpbridge pair start，或在本机运行 mcpbridge login --native 发起授权。",
     request: "确认客户端授权",
     pair: "请与终端显示的配对码核对",
     confirm: "确认授权",
     deny: "拒绝",
-    revoke: "撤销授权",
-    session: "Broker 会话",
-    endSession: "撤销此会话全部授权",
+    revoke: "撤销此服务授权",
+    session: "连接 ID",
+    endSession: "撤销整个连接",
     done: "已保存。返回终端或 MCP 客户端继续。",
-    mine: "我的客户端",
+    serviceRevoked: "已撤销此服务授权。该连接的其他服务保持有效。",
+    connectionRevoked: "已撤销整个连接。需要使用时，请在客户端重新发起授权。",
+    requestDenied: "已拒绝此次授权请求。客户端未获得访问权限。",
+    mine: "我的连接",
+    portalLabel: "个人授权中心",
+    history: "历史授权",
+    technical: "技术详情",
+    services: "个服务",
+    service: "个服务",
+    revokeService: "仅撤销此服务的授权？该连接的其他服务仍可使用。",
+    revokeConnection: "撤销此连接的全部服务授权？已执行的操作不会撤回。",
+    cancel: "取消",
+    confirmRevoke: "确认撤销",
+    toolsCapability: "工具调用",
+    promptsCapability: "提示词",
+    resourcesCapability: "读取资源",
+    subscriptionsCapability: "资源订阅",
     owner: "当前用户",
     client: "客户端",
     endpoint: "目标",
@@ -52,16 +68,32 @@ const messages = {
     logout: "Sign out of portal",
     loading: "Loading authorizations…",
     empty:
-      "No client authorizations. Run mcpbridge client add on your computer to start.",
+      "No active connections. Run mcpbridge pair start in your Agent terminal, or mcpbridge login --native on your computer.",
     request: "Review client authorization",
     pair: "Compare this pairing code with your terminal",
     confirm: "Authorize client",
     deny: "Deny",
-    revoke: "Revoke access",
-    session: "Broker session",
-    endSession: "Revoke all access in this session",
+    revoke: "Revoke service access",
+    session: "Connection ID",
+    endSession: "Revoke connection",
     done: "Saved. Return to your terminal or MCP client to continue.",
-    mine: "Your clients",
+    serviceRevoked: "Service access revoked. Other services in this connection remain available.",
+    connectionRevoked: "Connection revoked. Start authorization again in your client when needed.",
+    requestDenied: "Authorization request denied. The client has not been granted access.",
+    mine: "Your connections",
+    portalLabel: "Personal authorization",
+    history: "Authorization history",
+    technical: "Technical details",
+    services: "services",
+    service: "service",
+    revokeService: "Revoke access to this service? Other services in this connection stay available.",
+    revokeConnection: "Revoke every service in this connection? Completed operations cannot be undone.",
+    cancel: "Cancel",
+    confirmRevoke: "Confirm revocation",
+    toolsCapability: "Tool calls",
+    promptsCapability: "Prompts",
+    resourcesCapability: "Read resources",
+    subscriptionsCapability: "Resource subscriptions",
     owner: "Signed in as",
     client: "Client",
     endpoint: "Endpoint",
@@ -137,14 +169,38 @@ function action(label, fn, kind = "") {
   });
   return button;
 }
+function confirmRevocation(message, heading = t("revoke")) {
+  return new Promise((resolve) => {
+    const dialog = element("dialog", undefined, "local-account-dialog");
+    dialog.setAttribute("aria-labelledby", "revoke-title");
+    const title = element("h2", heading); title.id = "revoke-title";
+    const buttons = element("div", undefined, "actions");
+    let accepted = false;
+    const cancel = element("button", t("cancel"), "secondary"); cancel.type = "button"; cancel.autofocus = true; cancel.onclick = () => dialog.close();
+    const confirm = element("button", t("confirmRevoke"), "danger"); confirm.type = "button"; confirm.onclick = () => { accepted = true; dialog.close(); };
+    buttons.append(cancel, confirm); dialog.append(title, element("p", message), buttons);
+    dialog.addEventListener("close", () => { dialog.remove(); resolve(accepted); }, { once: true });
+    document.body.append(dialog); dialog.showModal();
+  });
+}
+const activeGrant = (grant) => ["active", "confirmed", "pending", "reconfirmation_required"].includes(grant.status);
+function connectionCard(grants) {
+  const node = element("article", undefined, "card connection-card"), heading = element("div", undefined, "connection-heading");
+  heading.append(element("h2", grants[0].client_name), element("span", `${grants.length} ${t(grants.length === 1 ? "service" : "services")}`, "muted"));
+  if (grants.some(activeGrant)) heading.append(action(t("endSession"), async () => {
+    if (!await confirmRevocation(`${grants[0].client_name} — ${t("revokeConnection")}`, t("endSession"))) return;
+    await api("api/broker-sessions/" + encodeURIComponent(grants[0].broker_session_id) + "/revoke", "POST");
+    byId("message").textContent = t("connectionRevoked"); await load(false);
+  }, "danger"));
+  node.append(heading);
+  for (const grant of grants) node.append(card(grant, false));
+  return node;
+}
 function card(grant, pending) {
   const node = element("article", undefined, "card");
-  node.append(element("h2", grant.client_name));
+  node.append(element(pending ? "h2" : "h3", pending ? grant.client_name : grant.endpoint_id));
   const fields = [
-    [t("session"), grant.broker_session_id],
-    [t("client"), grant.client_instance_id],
-    [t("endpoint"), grant.endpoint_id + " · " + grant.endpoint_uid],
-    [t("scopes"), grant.allowed_scopes?.join(", ") || "—"],
+    ...(pending ? [[t("endpoint"), grant.endpoint_id], [t("scopes"), grant.allowed_scopes?.join(", ") || "—"]] : []),
     [t("tools"), grant.allowed_tools?.join(", ") || "—"],
     [
       t("resources"),
@@ -156,10 +212,10 @@ function card(grant, pending) {
       t("capabilities"),
       Object.entries(grant.capabilities)
         .filter(([, on]) => on)
-        .map(([name]) => name)
+        .map(([name]) => t(name + "Capability"))
         .join(", "),
     ],
-    [t("expires"), new Date(grant.expires_at).toLocaleString()],
+    [t("expires"), new Date(grant.expires_at).toLocaleString(language === "zh" ? "zh-CN" : "en")],
     [t("status"), t(grant.status)],
   ];
   if (pending) fields.unshift([t("pairing"), grant.pairing_code]);
@@ -171,10 +227,15 @@ function card(grant, pending) {
     list,
     element("p", t(grant.allow_write_requests ? "write" : "read"), "notice"),
   );
+  const details = element("details", undefined, "grant-technical");
+  details.append(element("summary", t("technical")));
+  const technical = element("dl");
+  for (const [name, value] of [[t("session"), grant.broker_session_id], [t("client"), grant.client_instance_id], ["Grant ID", grant.grant_id], ["Endpoint UID", grant.endpoint_uid], [t("scopes"), grant.allowed_scopes?.join(", ") || "—"]]) technical.append(element("dt", name), element("dd", value));
+  details.append(technical); node.append(details);
   const buttons = element("div", undefined, "actions");
-  const mutate = async (path) => {
+  const mutate = async (path, message = "done") => {
     await api(path, "POST");
-    byId("message").textContent = t("done");
+    byId("message").textContent = t(message);
     await load(false);
   };
   if (pending && grant.status === "pending") {
@@ -189,29 +250,15 @@ function card(grant, pending) {
         t("deny"),
         () =>
           mutate(
-            "api/client-authorization-requests/" + grant.grant_id + "/deny",
+            "api/client-authorization-requests/" + grant.grant_id + "/deny", "requestDenied",
           ),
         "secondary",
       ),
     );
-  } else if (
-    ["active", "confirmed", "pending", "reconfirmation_required"].includes(
-      grant.status,
-    )
-  ) {
-    buttons.append(
-      action(
-        t("revoke"),
-        () => mutate("api/client-grants/" + grant.grant_id + "/revoke"),
-        "danger",
-      ),
-      action(
-        t("endSession"),
-        () =>
-          mutate("api/broker-sessions/" + grant.broker_session_id + "/revoke"),
-        "secondary",
-      ),
-    );
+  } else if (activeGrant(grant)) {
+    buttons.append(action(t("revoke"), async () => {
+      if (await confirmRevocation(`${grant.endpoint_id} — ${t("revokeService")}`)) await mutate("api/client-grants/" + grant.grant_id + "/revoke", "serviceRevoked");
+    }, "danger"));
   }
   node.append(buttons);
   return node;
@@ -219,6 +266,8 @@ function card(grant, pending) {
 async function load(showLoading = true) {
   for (const id of ["eyebrow", "title", "intro", "footer"])
     byId(id).textContent = t(id);
+  byId("portal-label").textContent = t("portalLabel");
+  document.title = "MCPHub · " + t("portalLabel");
   document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
   byId("language").textContent = language === "zh" ? "English" : "中文";
   if (showLoading) byId("message").textContent = t("loading");
@@ -282,10 +331,22 @@ async function load(showLoading = true) {
     }
     const result = await api("api/client-grants");
     byId("grants").append(element("h2", t("mine")));
-    if (!result.grants.length)
-      byId("grants").append(element("p", t("empty"), "muted"));
+    const connections = new Map();
     for (const grant of result.grants) {
-      if (grant.grant_id !== shownRequest) byId("grants").append(card(grant, false));
+      if (grant.grant_id === shownRequest) continue;
+      const id = grant.broker_session_id || grant.grant_id;
+      if (!connections.has(id)) connections.set(id, []);
+      connections.get(id).push(grant);
+    }
+    const current = [...connections.values()].filter((grants) => grants.some(activeGrant));
+    const previous = [...connections.values()].filter((grants) => !grants.some(activeGrant));
+    if (!current.length) byId("grants").append(element("p", t("empty"), "card muted"));
+    for (const grants of current) byId("grants").append(connectionCard(grants));
+    if (previous.length) {
+      const history = element("details", undefined, "grant-history");
+      history.append(element("summary", `${t("history")} (${previous.length})`));
+      for (const grants of previous) history.append(connectionCard(grants));
+      byId("grants").append(history);
     }
     if (showLoading) byId("message").textContent = "";
     const outcome = new URLSearchParams(location.search).get("connection");

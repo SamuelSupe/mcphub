@@ -24,15 +24,16 @@ var (
 )
 
 type Store struct {
-	identityMu    sync.Mutex
-	identityAdmin *identityAdminPolicy
-	identityCalls map[string]identityCall
-	grantMu       sync.Mutex
-	grantCalls    map[string]map[string]context.CancelFunc
-	db            *database
-	aead          cipher.AEAD
-	delivery      config.ApprovalSettings
-	approvalURL   string
+	identityMaxAge time.Duration
+	identityMu     sync.Mutex
+	identityAdmin  *identityAdminPolicy
+	identityCalls  map[string]identityCall
+	grantMu        sync.Mutex
+	grantCalls     map[string]map[string]context.CancelFunc
+	db             *database
+	aead           cipher.AEAD
+	delivery       config.ApprovalSettings
+	approvalURL    string
 }
 
 type Record struct {

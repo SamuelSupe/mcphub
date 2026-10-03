@@ -3,6 +3,7 @@ let language = localStorage.getItem("mcphub-client-language") || "zh",
   session,
   request,
   busy = false;
+let selection = null;
 const el = (id) => document.getElementById(id),
   text = (zh, en) => (language === "zh" ? zh : en);
 const node = (tag, value, cls) => {
@@ -46,16 +47,17 @@ async function api(path, body) {
         "Pairing expired. Start again in your Agent.",
       ),
       access_denied: text(
-        "当前权限或请求范围不允许此授权。",
-        "Your current permissions or requested scope do not allow this authorization.",
+        "当前权限或请求范围不允许此授权。请检查服务、工具和资源条件。",
+        "This authorization is not permitted. Check your service, tools and resource restrictions.",
       ),
       temporarily_unavailable: text(
         "请求过于频繁或服务暂不可用，请稍后重试。",
         "Too many requests or service unavailable. Retry later.",
       ),
     };
+    const errorCode = typeof d.error === "string" ? d.error : d.error?.code;
     throw Error(
-      messages[d.error] ||
+      messages[errorCode] || (errorCode === "client_grant_insufficient" ? messages.access_denied : "") ||
         text(
           "请求失败，请重新登录后重试。",
           "Request failed. Sign in again and retry.",
@@ -72,9 +74,13 @@ function button(label, fn, cls = "secondary") {
 }
 function fail(error) {
   el("message").textContent = error.message;
+  el("message").focus();
 }
 async function load() {
+  el("language").disabled = true;
   document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+  document.title = text("Agent 配对 · MCPHub", "Agent pairing · MCPHub");
+  el("portal-label").textContent = text("个人授权中心", "Personal authorization");
   el("language").textContent = language === "zh" ? "English" : "中文";
   el("eyebrow").textContent = text(
     "Agent 配对 · 1 登录 → 2 确认范围 → 3 返回 Agent",
@@ -115,10 +121,10 @@ async function load() {
         text("当前账号：", "Signed in as: ") +
           (session.display_name || session.subject),
       ),
-      node("p", session.subject, "muted"),
       button(text("切换账号", "Switch account"), async () => {
         try {
           await api("auth/logout", {});
+          selection = null;
           await load();
         } catch (e) {
           fail(e);
@@ -126,46 +132,54 @@ async function load() {
       }),
     );
     if (!code) {
-      const f = node("form", null, "card"),
-        label = node(
-          "label",
-          text("输入 Agent 显示的配对码", "Enter the code shown by your Agent"),
-        ),
-        input = node("input");
-      input.autocomplete = "off";
-      input.maxLength = 9;
-      input.required = true;
-      input.placeholder = "ABCD-2345";
-      label.append(input);
-      const submit = node(
-        "button",
-        text("查找请求", "Find request"),
-        "primary",
-      );
-      f.append(label, submit);
-      f.onsubmit = (e) => {
-        e.preventDefault();
-        const c = input.value.toUpperCase().replace(/[ -]/g, "");
-        if (!/^[A-Z2-7]{8}$/.test(c)) {
-          fail(
-            Error(
-              text("请输入 8 位配对码。", "Enter the eight-character code."),
-            ),
-          );
-          return;
-        }
-        code = c.slice(0, 4) + "-" + c.slice(4);
-        sessionStorage.setItem("mcphub-device-code", code);
-        load();
-      };
-      el("device").append(f);
+      renderCodeEntry();
       return;
     }
     request = await api("api/device?user_code=" + encodeURIComponent(code));
     render();
   } catch (e) {
     fail(e);
+    if (session?.authenticated) renderCodeEntry(code);
+  } finally {
+    el("language").disabled = busy;
   }
+}
+function renderCodeEntry(previous = "") {
+  const f = node("form", null, "card"),
+    label = node(
+      "label",
+      text("输入 Agent 显示的配对码", "Enter the code shown by your Agent"),
+    ),
+    input = node("input");
+  input.autocomplete = "off";
+  input.maxLength = 9;
+  input.required = true;
+  input.placeholder = "ABCD-2345";
+  input.value = previous;
+  label.append(input);
+  const submit = node(
+    "button",
+    text("查找请求", "Find request"),
+    "primary",
+  );
+  f.append(label, submit);
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    const c = input.value.toUpperCase().replace(/[ -]/g, "");
+    if (!/^[A-Z2-7]{8}$/.test(c)) {
+      fail(
+        Error(
+          text("请输入 8 位配对码。", "Enter the eight-character code."),
+        ),
+      );
+      return;
+    }
+    code = c.slice(0, 4) + "-" + c.slice(4);
+    selection = null;
+    sessionStorage.setItem("mcphub-device-code", code);
+    load();
+  };
+  el("device").append(f);
 }
 function render() {
   const box = node("div", null, "card");
@@ -186,11 +200,6 @@ function render() {
     ),
     node(
       "p",
-      text("实例：", "Instance: ") + request.client_instance_id,
-      "muted",
-    ),
-    node(
-      "p",
       text("身份来源：", "Identity source: ") +
         (request.provider === "mcphub:local"
           ? text("MCPHub 本地账号", "MCPHub local account")
@@ -202,14 +211,19 @@ function render() {
     node(
       "p",
       text("创建时间：", "Requested: ") +
-        new Date(request.created_at).toLocaleString(),
+        new Date(request.created_at).toLocaleString(language === "zh" ? "zh-CN" : "en"),
     ),
     node(
       "p",
       text("有效至：", "Expires: ") +
-        new Date(request.expires_at).toLocaleString(),
+        new Date(request.expires_at).toLocaleString(language === "zh" ? "zh-CN" : "en"),
     ),
   );
+  const technical = node("details", null, "grant-technical");
+  technical.append(node("summary", text("技术详情", "Technical details")),
+    node("p", text("实例：", "Instance: ") + request.client_instance_id),
+    node("p", text("用户 ID：", "User ID: ") + session.subject));
+  box.append(technical);
   if (request.status !== "pending") {
     sessionStorage.removeItem("mcphub-device-code");
     box.append(
@@ -232,6 +246,8 @@ function render() {
   const form = node("form"),
     label = node("label", text("选择服务", "Choose a service")),
     select = node("select");
+  form.id = "device-consent";
+  select.name = "endpoint";
   select.required = true;
   select.append(new Option(text("请选择服务", "Choose a service"), ""));
   for (const ep of request.endpoints) {
@@ -239,6 +255,8 @@ function render() {
       select.append(new Option(ep.id, ep.id));
   }
   if (request.endpoint_id) select.value = request.endpoint_id;
+  const saved = selection?.request === request.request_id && selection?.subject === session.subject ? selection : null;
+  if (saved && [...select.options].some((option) => option.value === saved.endpoint)) select.value = saved.endpoint;
   label.append(select);
   const tools = node("fieldset"),
     legend = node(
@@ -249,6 +267,8 @@ function render() {
   const writeLabel = node("label"),
     write = node("input");
   write.type = "checkbox";
+  write.name = "write";
+  write.checked = !!saved?.write;
   writeLabel.append(
     write,
     node(
@@ -260,9 +280,16 @@ function render() {
     ),
   );
   writeLabel.hidden = !request.allow_write_requests;
+  let toolEndpoint = select.value;
   const redraw = () => {
+    const selected = toolEndpoint === select.value
+      ? [...tools.querySelectorAll("input:checked")].map((input) => input.value)
+      : [];
+    toolEndpoint = select.value;
     tools.replaceChildren(legend);
     const ep = request.endpoints.find((e) => e.id === select.value);
+    writeLabel.hidden = !request.allow_write_requests || !ep?.tools.some((tool) => tool.effect !== "read" && (!request.allowed_tools?.length || request.allowed_tools.includes(tool.name)));
+    if (writeLabel.hidden) write.checked = false;
     for (const t of ep?.tools || []) {
       if (
         request.allowed_tools?.length &&
@@ -275,7 +302,8 @@ function render() {
       i.type = "checkbox";
       i.name = "tools";
       i.value = t.name;
-      l.append(i, node("span", t.name + " · " + t.effect));
+      i.checked = selected.includes(t.name);
+      l.append(i, node("span", t.name + " · " + ({read: text("只读", "Read only"), write: text("写入", "Write"), unknown: text("未分类（按写入处理）", "Unclassified (treated as write)")}[t.effect] || t.effect)));
       tools.append(l);
     }
     if (!select.value)
@@ -304,18 +332,16 @@ function render() {
         ),
       );
   };
-  select.onchange = redraw;
-  write.onchange = redraw;
-  redraw();
   const ttlLabel = node(
       "label",
       text("授权时长（分钟）", "Access duration (minutes)"),
     ),
     ttl = node("input");
   ttl.type = "number";
+  ttl.name = "ttl";
   ttl.min = "1";
   ttl.max = String(Math.floor(request.max_ttl_seconds / 60));
-  ttl.value = String(Math.min(60, Number(ttl.max)));
+  ttl.value = saved?.ttl ?? String(Math.min(60, Number(ttl.max)));
   ttl.required = true;
   ttlLabel.append(ttl);
   const resourceLabel = node(
@@ -327,10 +353,11 @@ function render() {
     ),
     resources = node("textarea");
   resources.rows = 3;
+  resources.name = "resources";
   resources.placeholder = "[]";
   resources.value = request.resource_rules?.length
     ? JSON.stringify(request.resource_rules, null, 2)
-    : "";
+    : saved?.resources || "";
   resources.readOnly = !!request.resource_rules?.length;
   resourceLabel.append(resources);
   const resourceDetails = node("details");
@@ -352,11 +379,18 @@ function render() {
     ),
     resourceLabel,
   );
-  if (resources.readOnly) resourceDetails.open = true;
+  resourceDetails.open = resources.readOnly || !!saved?.detailsOpen;
   const approve = node("button", text("确认授权", "Approve access"), "primary");
   approve.type = "submit";
-  approve.disabled = request.endpoints.length === 0;
   const deny = button(text("拒绝", "Deny"), () => decide("deny", {}), "danger");
+  const sync = () => { approve.disabled = !select.value || !tools.querySelector("input:checked"); };
+  select.onchange = write.onchange = () => { redraw(); sync(); };
+  tools.onchange = sync;
+  redraw();
+  for (const input of tools.querySelectorAll("input")) input.checked = !!saved?.tools.includes(input.value);
+  sync();
+  const actions = node("div", null, "actions");
+  actions.append(approve, deny);
   form.append(
     label,
     writeLabel,
@@ -371,8 +405,7 @@ function render() {
       ),
       "muted",
     ),
-    approve,
-    deny,
+    actions,
   );
   form.onsubmit = (e) => {
     e.preventDefault();
@@ -416,8 +449,11 @@ function render() {
 async function decide(action, body) {
   if (busy) return;
   busy = true;
+  el("language").disabled = true;
   el("message").textContent = "";
-  for (const b of el("device").querySelectorAll("button")) b.disabled = true;
+  const controls = [...el("device").querySelectorAll("button, input, select, textarea"), ...el("identity").querySelectorAll("button")];
+  const disabled = controls.map((control) => control.disabled);
+  controls.forEach((control) => { control.disabled = true; });
   try {
     const result = await api("api/device/" + action, {
       user_code: code,
@@ -441,12 +477,20 @@ async function decide(action, body) {
     );
   } catch (e) {
     fail(e);
-    for (const b of el("device").querySelectorAll("button")) b.disabled = false;
   } finally {
+    controls.forEach((control, index) => { control.disabled = disabled[index]; });
     busy = false;
+    el("language").disabled = false;
   }
 }
 el("language").onclick = () => {
+  const form = el("device").querySelector("#device-consent");
+  if (form) {
+    const values = new FormData(form);
+    selection = { request: request.request_id, subject: session.subject,
+      endpoint: values.get("endpoint"), write: values.has("write"), tools: values.getAll("tools"),
+      ttl: values.get("ttl"), resources: values.get("resources"), detailsOpen: form.querySelector("details").open };
+  }
   language = language === "zh" ? "en" : "zh";
   localStorage.setItem("mcphub-client-language", language);
   load();

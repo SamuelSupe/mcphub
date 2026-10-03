@@ -22,8 +22,12 @@ type ClientToolOption struct {
 }
 
 type ClientEndpointOption struct {
-	ID    string             `json:"id"`
-	Tools []ClientToolOption `json:"tools"`
+	Prompts        bool               `json:"prompts"`
+	Resources      bool               `json:"resources"`
+	Subscriptions  bool               `json:"subscriptions"`
+	RequiredScopes []string           `json:"required_scopes"`
+	ID             string             `json:"id"`
+	Tools          []ClientToolOption `json:"tools"`
 }
 
 func (c ClientAuthorizationConfig) GrantTTL() time.Duration {

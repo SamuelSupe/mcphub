@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -398,6 +399,42 @@ func TestParentCancellationDoesNotInterruptRuntimeBeforeDrain(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("backend call did not finish after release")
+	}
+}
+
+func TestAppCloseWaitsForRetiredRuntime(t *testing.T) {
+	application := newAdminTestApp(t)
+	previous := application.currentRuntime()
+	previous.active.Add(1)
+	release := sync.OnceFunc(previous.active.Done)
+	defer release()
+	candidate, err := newRuntime(application.ctx, previous.cfg, application.logger, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := application.activateCandidate(candidate, previous); err != nil {
+		t.Fatal(err)
+	}
+	closed := make(chan struct{})
+	go func() {
+		application.Close()
+		close(closed)
+	}()
+	select {
+	case <-previous.ctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown did not cancel the retired runtime")
+	}
+	select {
+	case <-closed:
+		t.Fatal("shutdown returned before the retired request drained")
+	case <-time.After(20 * time.Millisecond):
+	}
+	release()
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown did not finish after the retired request drained")
 	}
 }
 

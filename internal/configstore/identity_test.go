@@ -269,6 +269,79 @@ func TestTOTPWindowAndReplay(t *testing.T) {
 
 func TestIdentityLifecycle(t *testing.T) { s, _, _ := newTestStore(t); testIdentityLifecycle(t, s) }
 
+func TestPermissionGroupMapping(t *testing.T) {
+	s, _, _ := newTestStore(t)
+	ctx := t.Context()
+	s.ConfigureIdentityProtection(config.AuthConfig{Mode: "builtin"}, config.AdminConfig{})
+	policy, err := s.CreateGroup(ctx, config.PermissionGroupProvider, "Engineering readers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var users []Identity
+	var sources []string
+	for _, provider := range []string{"ldap:one", "https://oidc.example"} {
+		user, err := s.SyncIdentity(ctx, provider, "same-subject", "Alice", []string{"engineering"}, nil, false, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sources = append(sources, user.Groups[0])
+		user, err = s.UpdateUser(ctx, user.ID, user.Revision, true, user.Groups)
+		if err != nil {
+			t.Fatal(err)
+		}
+		users = append(users, user)
+	}
+	permissions := config.IdentityPermissions{Scopes: []string{"db:read"}, Access: []config.IdentityAccess{{EndpointID: "db", Tools: []string{"read"}, ResourceRules: []config.ResourceRule{{Argument: "/project", AllowedValues: []string{"work"}}}}}}
+	policy, err = s.UpdatePermissionGroup(ctx, policy.ID, policy.Revision, true, permissions, sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, user := range users {
+		effective, err := s.EffectiveIdentity(ctx, user.ID)
+		if err != nil || !effective.Permissions.AllowsTool("db", "read", "read") || len(effective.Groups) != 2 || effective.Groups[1].Origin != "mapping" {
+			t.Fatal("mapping not inherited", effective, err)
+		}
+		if _, err := effective.Permissions.ToolArguments("db", "read", "read", []byte(`{"project":"other"}`)); err == nil {
+			t.Fatal("mapping bypassed resource boundary")
+		}
+	}
+	if users[0].ID == users[1].ID {
+		t.Fatal("source identities merged")
+	}
+	if _, err := s.UpdatePermissionGroup(ctx, policy.ID, policy.Revision, true, permissions, []string{policy.ID}); !errors.Is(err, ErrGroupMembership) {
+		t.Fatal("recursive policy mapping accepted", err)
+	}
+	before, _ := s.EffectiveIdentity(ctx, users[0].ID)
+	call, release, err := s.AdmitIdentity(ctx, before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if _, err := s.SyncIdentity(ctx, users[0].Provider, users[0].ExternalID, "Alice", nil, nil, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if call.Err() == nil {
+		t.Fatal("removed organization membership did not cancel access")
+	}
+	first, _ := s.EffectiveIdentity(ctx, users[0].ID)
+	second, _ := s.EffectiveIdentity(ctx, users[1].ID)
+	if first.Permissions.AllowsTool("db", "read", "read") || !second.Permissions.AllowsTool("db", "read", "read") {
+		t.Fatal("mapping revocation crossed source boundary")
+	}
+	old, _ := readIdentity(ctx, s.db, "id=?", users[1].ID)
+	old.VerifiedAt = time.Now().Add(-25 * time.Hour)
+	tx, _ := s.db.BeginTx(ctx, nil)
+	if _, err = saveIdentity(ctx, tx, old, "test_stale_directory"); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.EffectiveIdentity(ctx, old.ID); !errors.Is(err, ErrIdentityStale) {
+		t.Fatal("stale enterprise membership remained authorized", err)
+	}
+}
+
 func TestLastAdministratorProtection(t *testing.T) {
 	s, _, _ := newTestStore(t)
 	testLastAdministratorProtection(t, s)

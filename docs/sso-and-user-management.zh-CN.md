@@ -16,7 +16,7 @@ mcpbridge / 本地 Broker → MCPHub → 工具策略 → 写审批 → 后端
 
 上游 Token 仅用于身份验证，不作为 MCPHub 调用凭证，也不传给工具后端。高级部署可选择 `auth.mode: external` 验证外部 JWT；默认内建模式会自动配置本地授权服务。
 
-默认先使用[内建账号](builtin-accounts.zh-CN.md)，企业 SSO 是可选功能。此处只说明外部身份接入；本地账号与企业身份的权限不合并。
+默认先使用[内建账号](builtin-accounts.zh-CN.md)，企业 SSO 是可选功能。此处只说明外部身份接入；本地账号与企业身份保持隔离，可以通过独立权限组复用授权策略。
 
 默认内建部署可直接在 [身份服务 UI](enterprise-login.zh-CN.md) 配置 LDAP 与 OIDC，保存立即生效。下面的 YAML 接入用于高级配置／初始 OIDC 连接；第一次 UI 保存后，以数据库设置为准。
 
@@ -105,7 +105,7 @@ upstream:
 
 ## 管理用户与组
 
-进入管理页面的 **用户与组**。首次发现用户默认待授权，管理员需启用账号，在组／部门上配置权限并让用户继承；新组和新部门没有任何权限。默认使用本机初始化的内建管理员为企业用户分配权限。仅在独立外部认证部署需要时才使用 `bootstrap_subjects`，它只在首次创建企业用户时将其加入本地管理的 Administrators 组，不会开放业务工具。
+进入管理页面的 **用户与组**。首次发现用户默认待授权，管理员需启用账号，并通过独立权限组的组织组映射分配权限；新组和新部门没有任何权限。默认使用本机初始化的内建管理员为企业用户分配权限。仅在独立外部认证部署需要时才使用 `bootstrap_subjects`，它只在首次创建企业用户时将其加入本地管理的 Administrators 组，不会开放业务工具。
 
 首次登录待授权或账号被停用时，Hub 会向经过校验的客户端回调返回 `access_denied` 和固定原因 `account_access_required`，CLI 立即结束等待，门户说明应联系 MCPHub 管理员。授权后重新运行登录；失败不会覆盖原有本地凭证。
 
@@ -117,14 +117,14 @@ upstream:
 - 角色为 `admin`、`approver`、`security_reviewer`，分别映射现有管理员、写审批、配置审批 scope。原有审批人范围和禁止自审条件仍然适用。
 - Scope 与 endpoint、精确原始工具名、业务资源条件分别配置。空工具列表不允许工具调用；不会隐式授予新发现工具。
 - 提示词、资源读取和订阅需要单独授权。业务 `resource_rules` 只检查工具参数，不是 MCP resource URI 的所有权策略。
-- 用户只继承同一身份来源中有效部门／组权限的并集，不能配置直接权限。每条服务授权的工具、写申请开关和资源条件作为一个整体匹配；不能从不同授权拼接出更宽的业务资源范围。一条无资源限制的授权会放开该工具的用户级资源限制，因此只应在确实需要时配置。
+- 用户继承直接加入的有效权限组，以及显式组织组映射命中的权限组，不能配置直接权限。每条服务授权的工具、写申请开关和资源条件作为一个整体匹配；不能从不同授权拼接出更宽的业务资源范围。一条无资源限制的授权会放开该工具的用户级资源限制，因此只应在确实需要时配置。
 - 实际调用还需满足 Token scope、客户端 Grant、endpoint/tool scope、发布和启停状态、共享资源策略。允许申请写操作仍然需要逐次审批。
 
 保存采用 `If-Match` 版本检查，并记入变更记录。登录同步、目录推送不修改本地角色、scope 或工具授权。Scope 撤销每次验票生效；新增 scope 需重新登录取得新的授权上限。组织权限变化会重新计算有效权限，旧 MCP 视图不能继续调用；失去权限的在途请求收到取消信号，不能撤回已经完成的写入。部分客户端遇到授权拒绝或流关闭后需重建连接。
 
 管理员 API：`GET /api/v1/identities`；`PUT /api/v1/identities/{id}`（`If-Match: "revision"`）：
 
-以下 `permissions` 示例只用于**组／部门 ID**。通过 `POST /api/v1/identities/groups`，正文 `{"name":"项目只读组","provider":"<已配置身份来源 ID>"}` 创建本地管理的组；身份来源 ID 从 `GET /api/v1/identities` 获取。更新用户使用 `{"enabled":true,"groups":["<组的 MCPHub ID>"]}` 及该用户自己的 revision。省略 `groups` 保留成员关系；没有身份源成员关系时，显式空数组可移出所有组。提交列表必须保留所有由身份源维护的组。用户提交非空 `permissions` 返回 `400 group_permissions_required`。本地策略组标记 `managed_locally: true`，登录声明或目录不能自行加入或覆盖其成员关系。详见[组与权限](builtin-accounts.zh-CN.md#组与权限)。
+以下 `permissions` 示例用于**权限组 ID**。通过 `POST /api/v1/identities/groups`，正文 `{"name":"项目只读组","provider":"mcphub:permissions"}` 创建独立权限组；`provider` 可省略。更新用户使用 `{"enabled":true,"groups":["<组的 MCPHub ID>"]}` 及该用户自己的 revision。省略 `groups` 保留成员关系；没有身份源成员关系时，显式空数组可移出所有组。提交列表必须保留所有由身份源维护的组。用户提交非空 `permissions` 返回 `400 group_permissions_required`。本地策略组标记 `managed_locally: true`，登录声明或目录不能自行加入或覆盖其成员关系。详见[组与权限](builtin-accounts.zh-CN.md#组与权限)。
 
 ```json
 {
@@ -143,6 +143,8 @@ upstream:
 ```
 
 权限检查页面在 SSO 模式下需要填写此处的 MCPHub 用户 ID；上游 subject 仅用于身份映射。
+
+组 PUT 可提交 `source_groups: ["组织组的 MCPHub ID"]`，不能映射用户、嵌套权限组或本地管理组，与 `groups` 不能同时使用。用户可直接加入同来源本地管理组或独立权限组。控制台在独立权限组管理业务授权，组织组只展示来源和启用状态。有效权限 API 返回 `groups` 来源、`verified_at` 和 `membership_stale`。
 
 ## 部门 / 用户组自动同步
 
@@ -182,4 +184,4 @@ upstream:
 
 本地 access JWT 有效期 10 分钟；请求 `offline_access` 后可取得轮换 refresh token，SSO 会话最长 8 小时，之后重新登录。上游凭证不长期保存；本地刷新不会重新查询上游账号。已消费 refresh token 被重放时撤销整个会话。签名私钥使用现有配置密钥加密保存在数据库，refresh token 只保存摘要；access JWT 仍需通过数据库中的会话与最新用户权限检查。备份时必须一同保留数据库与匹配的配置加密密钥。
 
-新部署的 SQLite 和单实例 PostgreSQL 使用 schema 10，备份时分别保管数据库与匹配密钥。授权请求和一次性 code 在进程内，重启需要重新开始未完成的登录；持久化会话和签名密钥保留。登录、目录同步入口仍应纳入已有 HTTPS 代理的请求大小与速率保护。会话最长 8 小时不等于身份源实时在线校验；全局登出、SCIM、SAML、多身份源选择和多实例一致性不属于本次实现。
+新部署的 SQLite 和单实例 PostgreSQL 使用 schema 10，备份时分别保管数据库与匹配密钥。授权请求和一次性 code 在进程内，重启需要重新开始未完成的登录；持久化会话和签名密钥保留。登录、目录同步入口仍应纳入已有 HTTPS 代理的请求大小与速率保护。会话最长 8 小时不等于身份源实时在线校验；全局登出、SCIM、SAML、同类多条身份连接和多实例一致性不属于本次实现。

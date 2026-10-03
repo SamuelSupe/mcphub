@@ -37,6 +37,7 @@ export function renderToolSelection(container, field, tools, emptyMessage) {
       const value = new Set(names(field.value));
       if (check.checked) value.add(tool.name); else value.delete(tool.name);
       field.value = [...value].join("\n");
+      field.dispatchEvent(new Event("change", { bubbles: true }));
     });
     label.append(check, text);
     list.append(label);

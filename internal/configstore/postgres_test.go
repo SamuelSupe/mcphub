@@ -249,3 +249,49 @@ func TestPostgresConfigurationLifecycle(t *testing.T) {
 		}
 	})
 }
+
+func TestPostgresBackupRestore(t *testing.T) {
+	dsn := os.Getenv("MCPHUB_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("MCPHUB_TEST_POSTGRES_DSN is not set")
+	}
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal("invalid test DSN")
+	}
+	db := stdlib.OpenDB(*cfg)
+	defer db.Close()
+	if _, err = db.ExecContext(t.Context(), "CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public"); err != nil {
+		t.Fatal(err)
+	}
+	key := make([]byte, 32)
+	rand.Read(key)
+	stores := []*Store{}
+	for i := 0; i < 2; i++ {
+		schema := "mcphub_backup_" + strings.ToLower(rand.Text())
+		if _, err = db.ExecContext(t.Context(), "CREATE SCHEMA "+schema); err != nil {
+			t.Fatal(err)
+		}
+		defer db.ExecContext(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
+		connection := dsn
+		if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+			u, e := url.Parse(dsn)
+			if e != nil {
+				t.Fatal(e)
+			}
+			q := u.Query()
+			q.Set("search_path", schema+",public")
+			u.RawQuery = q.Encode()
+			connection = u.String()
+		} else {
+			connection += " search_path=" + schema + ",public"
+		}
+		store, e := OpenPostgres(t.Context(), connection, key, false)
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer store.Close()
+		stores = append(stores, store)
+	}
+	testBackupRestore(t, stores[0], key, stores[1])
+}

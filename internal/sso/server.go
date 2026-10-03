@@ -24,6 +24,9 @@ import (
 )
 
 type Server struct {
+	nativePending             map[string]nativeConsent
+	nativeCatalog             func(context.Context, configstore.EffectiveIdentity, []string) []config.ClientEndpointOption
+	nativeConfirm             func(context.Context, configstore.EffectiveIdentity, string, []NativeSelection, time.Duration) ([]configstore.GrantBinding, error)
 	cfg                       *config.Config
 	store                     *configstore.Store
 	client                    *http.Client
@@ -34,6 +37,7 @@ type Server struct {
 	attempts                  map[string]*loginAttempts
 	passwordSlots             chan struct{}
 	connections               config.EnterpriseConnections
+	connectionTests           map[string]*connectionTest
 	deviceCreate, deviceToken http.HandlerFunc
 }
 type login struct {
@@ -46,8 +50,11 @@ type login struct {
 	downstream               authorizationCode
 	connectionsRevision      int64
 	upstream                 config.IdentityProvider
+	connectionTestID         string
 }
 type authorizationCode struct {
+	ClientPolicy                                                  string
+	Grants                                                        []configstore.GrantBinding
 	CredentialVersion                                             int64
 	ClientID, Redirect, Resource, State, Challenge, Nonce, UserID string
 	Scopes                                                        []string
@@ -67,7 +74,7 @@ func New(ctx context.Context, cfg *config.Config, store *configstore.Store) (*Se
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, store: store, key: key, client: authn.LoginHTTPClient(), pending: map[string]login{}, codes: map[string]authorizationCode{}, attempts: map[string]*loginAttempts{}, passwordSlots: make(chan struct{}, 4)}
+	s := &Server{cfg: cfg, store: store, key: key, client: authn.LoginHTTPClient(), pending: map[string]login{}, codes: map[string]authorizationCode{}, nativePending: map[string]nativeConsent{}, connectionTests: map[string]*connectionTest{}, attempts: map[string]*loginAttempts{}, passwordSlots: make(chan struct{}, 4)}
 	if err := s.loadConnections(ctx); err != nil {
 		return nil, err
 	}
@@ -88,6 +95,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
+	case "/sso/consent":
+		s.nativeConsent(w, r)
 	case "/sso/.well-known/openid-configuration", "/.well-known/openid-configuration/sso", "/.well-known/oauth-authorization-server/sso", "/sso/.well-known/oauth-authorization-server":
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", 405)
@@ -109,6 +118,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/sso/callback":
 		if r.Method == http.MethodGet {
 			s.callback(w, r)
+		} else {
+			http.Error(w, "method not allowed", 405)
+		}
+	case "/sso/connection-test":
+		if r.Method == http.MethodGet {
+			s.startConnectionTest(w, r)
 		} else {
 			http.Error(w, "method not allowed", 405)
 		}
@@ -160,6 +175,11 @@ func oauthError(w http.ResponseWriter, status int, code string) {
 
 func (s *Server) cleanupLocked() {
 	now := time.Now()
+	for id, test := range s.connectionTests {
+		if !now.Before(test.result.ExpiresAt) {
+			delete(s.connectionTests, id)
+		}
+	}
 	for state, p := range s.pending {
 		if !now.Before(p.expires) {
 			delete(s.pending, state)
@@ -173,7 +193,11 @@ func (s *Server) cleanupLocked() {
 }
 
 func (s *Server) allowedClient(id, redirect, resource string) bool {
-	for _, c := range s.cfg.Auth.SSO.Clients {
+	clients, err := s.registeredClients(context.Background())
+	if err != nil {
+		return false
+	}
+	for _, c := range clients {
 		if c.ID != id || !slices.Contains(c.Resources, resource) {
 			continue
 		}
@@ -246,4 +270,15 @@ func (s *Server) DeviceClientAllowed(id, resource string) bool {
 		}
 	}
 	return false
+}
+
+// Browsers enforce form-action across a POST redirect chain. Include only the
+// callback already validated for this OAuth request, including its loopback port.
+func browserFormPolicy(redirect string) string {
+	callback, err := url.Parse(redirect)
+	destination := ""
+	if err == nil && (callback.Scheme == "https" || callback.Scheme == "http") && callback.Host != "" {
+		destination = " " + strings.ReplaceAll(callback.Scheme+"://"+callback.Host+callback.EscapedPath(), ";", "%3B")
+	}
+	return "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'" + destination + "; frame-ancestors 'none'; base-uri 'none'"
 }

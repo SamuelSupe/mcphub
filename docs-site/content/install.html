@@ -1,26 +1,26 @@
 <p><strong>客户端现名为 MCPBridge。</strong> 从 v2.2.2 起，用户安装 <code>mcpbridge</code> 连接 Agent；管理员按<a href="admin/install.html">服务端指南</a>安装 <code>mcphub</code>。<code>serve</code>、<code>validate</code> 只属于服务端程序。</p>
 <h2 id="choose">选择正确的下载包</h2>
-<p>最终用户需要安装 <strong>mcpbridge</strong>。从 <a href="https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0">v2.3.0 发行页面</a> 下载下表对应的包和 SHA256SUMS。服务器程序由管理员安装。</p>
+<p>最终用户需要安装 <strong>mcpbridge</strong>。从 <a href="https://github.com/SamuelSupe/mcphub/releases/tag/v2.4.0">v2.4.0 发行页面</a> 下载下表对应的包和 SHA256SUMS。服务器程序由管理员安装。</p>
 <table><thead><tr><th>电脑类型</th><th>下载</th></tr></thead><tbody>
-<tr><td>macOS · Apple Silicon（M 系列）</td><td><code>mcpbridge_v2.3.0_darwin_arm64.tar.gz</code></td></tr>
-<tr><td>macOS · Intel</td><td><code>mcpbridge_v2.3.0_darwin_amd64.tar.gz</code></td></tr>
-<tr><td>Linux · Intel / AMD 64 位</td><td><code>mcpbridge_v2.3.0_linux_amd64.tar.gz</code></td></tr>
-<tr><td>Linux · ARM64</td><td><code>mcpbridge_v2.3.0_linux_arm64.tar.gz</code></td></tr>
-<tr><td>Windows 10+ · Intel / AMD x64</td><td><code>mcpbridge_v2.3.0_windows_amd64.zip</code></td></tr>
-<tr><td>Windows 10+ · ARM64</td><td><code>mcpbridge_v2.3.0_windows_arm64.zip</code></td></tr>
+<tr><td>macOS · Apple Silicon（M 系列）</td><td><code>mcpbridge_v2.4.0_darwin_arm64.tar.gz</code></td></tr>
+<tr><td>macOS · Intel</td><td><code>mcpbridge_v2.4.0_darwin_amd64.tar.gz</code></td></tr>
+<tr><td>Linux · Intel / AMD 64 位</td><td><code>mcpbridge_v2.4.0_linux_amd64.tar.gz</code></td></tr>
+<tr><td>Linux · ARM64</td><td><code>mcpbridge_v2.4.0_linux_arm64.tar.gz</code></td></tr>
+<tr><td>Windows 10+ · Intel / AMD x64</td><td><code>mcpbridge_v2.4.0_windows_amd64.zip</code></td></tr>
+<tr><td>Windows 10+ · ARM64</td><td><code>mcpbridge_v2.4.0_windows_arm64.zip</code></td></tr>
 </tbody></table>
 <p>macOS 在「关于本机」查看芯片；Windows 在「设置 → 系统 → 关于」查看系统类型；Linux 使用 <code>uname -m</code>。<code>x86_64</code> 对应 amd64，<code>aarch64</code> 对应 arm64。</p>
 <h2 id="verify">核对下载文件</h2>
 <p>下载同版本的 <code>SHA256SUMS</code>。计算下载包的 SHA-256，和文件中同名条目的值逐字核对，一致后再解压。下列命令的文件名需按架构替换。</p>
 <h3>macOS Apple Silicon</h3>
-<pre><code>shasum -a 256 mcpbridge_v2.3.0_darwin_arm64.tar.gz
-tar -xzf mcpbridge_v2.3.0_darwin_arm64.tar.gz</code></pre>
+<pre><code>shasum -a 256 mcpbridge_v2.4.0_darwin_arm64.tar.gz
+tar -xzf mcpbridge_v2.4.0_darwin_arm64.tar.gz</code></pre>
 <h3>Linux amd64</h3>
-<pre><code>sha256sum mcpbridge_v2.3.0_linux_amd64.tar.gz
-tar -xzf mcpbridge_v2.3.0_linux_amd64.tar.gz</code></pre>
+<pre><code>sha256sum mcpbridge_v2.4.0_linux_amd64.tar.gz
+tar -xzf mcpbridge_v2.4.0_linux_amd64.tar.gz</code></pre>
 <h3>Windows PowerShell x64</h3>
-<pre><code>Get-FileHash .\mcpbridge_v2.3.0_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcpbridge_v2.3.0_windows_amd64.zip -DestinationPath .\mcpbridge</code></pre>
+<pre><code>Get-FileHash .\mcpbridge_v2.4.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcpbridge_v2.4.0_windows_amd64.zip -DestinationPath .\mcpbridge</code></pre>
 <h2 id="run">让电脑和客户端找到连接器</h2>
 <p>将可执行文件放在固定的私有工具目录并加入 PATH，也可始终使用绝对路径。macOS/Linux 文件名为 <code>mcpbridge</code>，Windows 为 <code>mcpbridge.exe</code>。</p>
 <p>macOS/Linux 在上一步解压后执行：</p>
@@ -30,7 +30,7 @@ export PATH="$HOME/.local/bin:$PATH"
 mcpbridge --version
 mcpbridge setup --help</code></pre>
 <p>此 PATH 设置用于当前终端；后续可运行 <code>"$HOME/.local/bin/mcpbridge"</code>，或将该目录加入 shell 的 PATH。Go 安装路径是 <code>go env GOBIN</code>，为空时是 <code>$(go env GOPATH)/bin</code>，也需加入 PATH。</p>
-<p><code>mcpbridge --version</code> 应显示 <code>mcpbridge 2.3.0 (client)</code>。看到接入参数说明，表示当前终端可以运行连接器。未添加 PATH 的 Windows 用户可运行 <code>.\mcpbridge\mcpbridge.exe setup --help</code>。图形客户端的 PATH 可能不同，因此保留向导生成的绝对路径最稳妥。系统阻止执行时，把具体提示交给 IT 或管理员处理。</p>
-<p>已安装 Go 1.26.8 时，也可执行 <code>go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.3.0</code>。</p>
+<p><code>mcpbridge --version</code> 应显示 <code>mcpbridge 2.4.0 (client)</code>。看到接入参数说明，表示当前终端可以运行连接器。未添加 PATH 的 Windows 用户可运行 <code>.\mcpbridge\mcpbridge.exe setup --help</code>。图形客户端的 PATH 可能不同，因此保留向导生成的绝对路径最稳妥。系统阻止执行时，把具体提示交给 IT 或管理员处理。</p>
+<p>已安装 Go 1.26.8 时，也可执行 <code>go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.4.0</code>。</p>
 <h2 id="compatibility">新部署的服务准备条件</h2>
-<p>使用匹配的 v2.3.0 网关和 MCPBridge。管理员先添加后端、测试连接并发布工具；运行 setup 还需要用户门户和客户端授权。取得实际网关地址、客户端 ID 和所需 scope 后继续。</p>
+<p>使用匹配的 v2.4.0 网关和 MCPBridge。管理员先添加后端、测试连接并发布工具；运行 setup 还需要用户门户和客户端授权。取得实际网关地址、客户端 ID 和所需 scope 后继续。</p>

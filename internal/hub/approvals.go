@@ -93,8 +93,8 @@ func (v *view) requestApproval(ctx context.Context, req *mcp.CallToolRequest, de
 	if err != nil {
 		return toolFailure("Current endpoint identity is unavailable; approval was not created.")
 	}
-	if v.grant != nil {
-		binding := v.grant.GrantBinding
+	if g := v.serviceGrant(def.backendID); g != nil {
+		binding := g.GrantBinding
 		intent.ClientGrant = &binding
 	}
 	intent.Rules, err = config.ResolveApprovalPolicies(def.approvalRules, arguments)

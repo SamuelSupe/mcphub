@@ -97,15 +97,19 @@ export function renderApprovals() {
     }
     const facts = document.createElement("dl");
     for (const [label, value] of [
-      ["审批编号", record.id], ["申请人", record.subject], ["身份服务", record.issuer], ["目标服务", record.target],
+      ["申请人", record.subject], ["目标服务", record.target],
       ["工具类型", t(record.kind === "configuration" ? "配置变更" : record.effect === "write" ? "写入" : "未分类（按写入处理）")], ["申请时间", date.format(new Date(record.created_at))],
       [record.status === "approved" ? "执行期限" : "有效期至", date.format(new Date(record.expires_at))], ["审批人", record.reviewer || "—"],
     ]) facts.append(element("dt", t(label)), element("dd", value));
     facts.append(element("dt", t("批准进度")), element("dd", `${(record.approved_by || []).length} / ${record.required_approvals || 1}`));
     if (record.approved_by?.length) facts.append(element("dt", t("已批准人员")), element("dd", record.approved_by.join(", ")));
     if (record.operation_id) facts.append(element("dt", t("业务操作 ID")), element("dd", record.operation_id));
-    if(record.client_grant) for(const [label,value] of [["客户端入口",record.client_grant.client_instance_id],["Broker 会话",record.client_grant.broker_session_id],["客户端授权",record.client_grant.grant_id],["授权版本",String(record.client_grant.grant_revision)],["目标身份",record.client_grant.endpoint_uid]]) facts.append(element("dt",t(label)),element("dd",value));
     card.append(facts);
+    const technical = document.createElement("details"), identifiers = document.createElement("dl");
+    technical.append(element("summary", t("技术详情")), identifiers);
+    for (const [label, value] of [["审批编号", record.id], ["身份服务", record.issuer]]) identifiers.append(element("dt", t(label)), element("dd", value));
+    if (record.client_grant) for (const [label, value] of [["客户端入口", record.client_grant.client_instance_id], ["Broker 会话", record.client_grant.broker_session_id], ["客户端授权", record.client_grant.grant_id], ["授权版本", String(record.client_grant.grant_revision)], ["目标身份", record.client_grant.endpoint_uid]]) identifiers.append(element("dt", t(label)), element("dd", value));
+    card.append(technical);
     if (record.credentials_changed) card.append(element("strong",t("此提案会更换上游凭证；凭证值已隐藏。")));
     if (record.kind === "configuration") card.append(element("p", t("配置变更需要另一位安全管理员审批，批准后立即应用；版本变化会使提案失效。")));
     if (record.already_approved && record.status === "pending") card.append(element("p", t("你已批准，正在等待另一位审批人。")));
@@ -168,7 +172,8 @@ function renderActions(card, record) {
   if (record.status === "pending" && record.can_review) {
     if (record.step_up_required && !record.already_approved) {
       card.append(element("p", t(record.step_up_verified ? "本次身份验证已通过，短时有效且仅能使用一次。" : "批准前需要加强身份验证。")));
-      controls.append(button("加强身份验证", async () => {
+      const verify = button("加强身份验证", async () => {
+        verify.disabled = true;
         try {
           const proof=isLocalAccount()?await passwordProof():null;
           if(isLocalAccount()&&!proof)return;
@@ -176,7 +181,9 @@ function renderActions(card, record) {
           if(value.verified){snapshot="";await refreshApprovals(request);return;}
           sessionStorage.setItem("mcphub.approval", record.id); location.assign(value.authorization_url);
         } catch (error) { message.textContent = error.message; }
-      }));
+        finally { verify.disabled = false; }
+      });
+      controls.append(verify);
     }
     const confirm = element("label", "", "approval-confirm"); checked = document.createElement("input"); checked.name = "acknowledged"; checked.type = "checkbox"; checked.checked = draft.checked;
     confirm.append(checked, document.createTextNode(t("我已核对申请人、目标和完整请求"))); card.append(confirm);

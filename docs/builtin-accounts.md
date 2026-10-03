@@ -17,18 +17,18 @@ For automated installations, `--password-stdin` reads one password line. Keep pa
 
 ## Groups and permissions
 
-Users hold account state and group membership. Roles, scopes, service, tool and business-resource grants belong to groups; direct user grants are rejected. Users may join multiple groups and inherit the union of active groups from the same identity provider. Disabled groups grant nothing. Groups are flat, without nesting.
+Users hold account state and membership; roles, scopes, services and resource permissions belong to permission groups. Permission groups use `mcphub:permissions`, independently of local, LDAP and OIDC providers. Nested groups are not supported.
 
-1. Select **Create group**, enter a name and choose the identity provider. Use MCPHub for local accounts or the configured enterprise provider for enterprise identities. Membership cannot cross providers.
-2. Expand the group and assign administration, reviewer or security roles, scopes, services, exact original tool names and resource conditions. New groups have no grants.
-3. Expand a user, select **Groups** and save. New local users can sign in but have no groups or tool access; enterprise users must also be enabled in MCPHub.
-4. Sign in again and verify the tool catalog and a real call. Removing membership, disabling a group or revoking its grants recomputes access and blocks unauthorized calls. Added scopes need a new login to expand the credential ceiling.
+1. Choose **Create group** and enter a name. New groups grant nothing.
+2. Select roles, services, exact tools and resource conditions. **Derive from access intent** saves a snapshot of scopes required by selected capabilities. Catalog changes do not expand it. **Advanced: explicit scopes** supports manual scope configuration.
+3. Add local users directly. For enterprise users, map discovered groups under **Organization group mappings**. One permission group may map multiple LDAP/OIDC groups; any active match grants membership. Mappings reference stable MCPHub IDs, never matching names or emails.
+4. Open **View effective access** to inspect direct membership or organization mappings, roles, scopes and services. Sign in again and verify actual discovery and calls.
 
-Multiple groups provide a union, without deny overrides. A narrow grant cannot cancel another group's broad grant. The tool, write-request flag and all resource conditions must match within one access entry; permissions from different groups cannot be stitched into a broader entry. Writes still require individual approval.
+Provider organization groups are synchronized and do not expose business permission editors in the console. Disabling users, groups or mappings recalculates access and cancels unauthorized work. Active permission groups form a union without deny overrides. Tool, write-request flag and all resource conditions must match within one access entry; entries cannot be combined to create a broader grant.
 
-Enterprise claim/directory memberships are read-only in the console. Administrators can also create locally managed policy groups for that enterprise provider and add users manually. Login and directory synchronization preserve these memberships, and an upstream source cannot add users to policy groups. Directory-deactivated users remain denied even if a policy membership persists.
+Enterprise membership is verified at login or complete directory synchronization. `auth.enterprise_membership_max_age` defaults to `24h`, accepts `1m`–`720h`, and also limits existing long-running calls. Expired verification requires login or a new directory snapshot. Local accounts are unaffected. MCPHub does not poll LDAP; disable users or organization groups, remove mappings or revoke permissions in MCPHub when immediate blocking is required.
 
-The last effective administrator cannot be disabled, removed from its administration group, or lose access through disabling/demoting the group. Add another active user to a group with administration access first.
+The last effective administrator cannot be disabled or demoted. The initialized Administrators group retains local recovery access. Grant another active user administrator access before changing the existing administrator.
 
 ## Passwords, disabling and recovery
 
@@ -52,7 +52,7 @@ Recovery does not enable disabled users, change group membership or alter group 
 
 ## MFA and approval verification
 
-In **My account**, enter your current password, select **Enable MFA**, add the displayed secret to a TOTP authenticator, and confirm with its six-digit code. The secret is encrypted with the configuration key. Confirmation signs out all sessions.
+In **My account**, password changes and MFA setup have separate sections and forms. Expand **Enable MFA**, enter your current password, and select **Generate authenticator secret**. Add the displayed secret to a TOTP authenticator, then confirm its six-digit code within five minutes. A failed confirmation preserves the setup instructions and secret. Select **Restart setup** if the secret expires; MFA is enabled only after successful confirmation. The secret is encrypted with the configuration key. Confirmation signs out all sessions.
 
 Once enabled, every local account sign-in and password change requires both the password and TOTP. The implementation uses [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238) SHA1, six digits and a 30-second interval, allowing one adjacent interval. Codes cannot be reused; wait for the next interval after enrollment or sign-in before another authentication.
 
@@ -75,6 +75,6 @@ Default public OAuth registrations:
 
 Clients use standard authorization code, PKCE S256, resource binding and rotating refresh credentials. Proxy `/sso/*`, `/.well-known/oauth-authorization-server/sso`, `/.well-known/openid-configuration/sso`, MCP metadata and `/client-auth/*` to the gateway. Local console sign-in does not depend on the public address being reachable; remote users and MCPBridge need working, trusted HTTPS.
 
-To add enterprise login, configure [LDAP and OIDC](enterprise-login.md) in the console’s Identity services page; both can be enabled together. The login page offers enterprise sign-in, with a LDAP account selector on the authorization page. Enterprise and local accounts have separate identity records and groups: matching names never merge accounts or inherit access. New enterprise identities start pending. Directory synchronization updates only the configured enterprise provider. Keep a local administrator for local recovery.
+To add enterprise login, configure [LDAP and OIDC](enterprise-login.md) in the console’s Identity services page; both can be enabled together. The login page offers enterprise sign-in, with a LDAP account selector on the authorization page. Enterprise and local accounts have separate identity records. Independent permission groups can serve both through explicit direct memberships or organization mappings; matching names never merge accounts or grant access. New enterprise identities start pending. Directory synchronization updates only the configured enterprise provider. Keep a local administrator for local recovery.
 
 Advanced deployments may instead use `auth.mode: external` with an external `auth.issuer`, or the pure YAML example. Those independent deployment options do not offer built-in accounts and are not required for default installation.

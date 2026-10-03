@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -258,6 +259,56 @@ func TestFederatedLoginAndLocalAuthorization(t *testing.T) {
 					t.Fatal(err)
 				}
 				return response
+			}
+			if managed {
+				before := service.Connections()
+				for _, secret := range []string{"wrong-secret", "test-upstream-secret"} {
+					next := before
+					next.OIDC.ClientSecret = secret
+					preview, err := service.TestConnection(ctx, next, "oidc", "admin-a", "", "", "127.0.0.1")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := service.ConnectionTest("admin-b", preview.ID); !errors.Is(err, configstore.ErrNotFound) {
+						t.Fatal("another administrator could read the preview", err)
+					}
+					response := get(preview.StartURL)
+					response.Body.Close()
+					if response.StatusCode != 302 {
+						t.Fatal("preview did not start", response.StatusCode)
+					}
+					upstreamURL := response.Header.Get("Location")
+					response = get(preview.StartURL)
+					response.Body.Close()
+					if response.StatusCode != 400 {
+						t.Fatal("preview start capability was reused", response.StatusCode)
+					}
+					response = get(upstreamURL)
+					response.Body.Close()
+					response = get(response.Header.Get("Location"))
+					response.Body.Close()
+					result, err := service.ConnectionTest("admin-a", preview.ID)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if secret == "wrong-secret" {
+						if result.Status != "failed" || response.StatusCode != 502 {
+							t.Fatal("bad candidate secret was accepted", result.Status, response.StatusCode)
+						}
+					} else if result.Status != "passed" || response.StatusCode != 200 || result.Identity.Subject != "external-user" || result.Identity.Name != "Alice" || !slices.Equal(result.Identity.Groups, []string{"staff"}) || !slices.Equal(result.Identity.Departments, []string{"dev"}) {
+						t.Fatal("candidate identity mapping incorrect", result.Status, result.Identity)
+					}
+					identities, err := store.Identities(ctx)
+					if err != nil || len(identities) != 0 || len(service.codes) != 0 || service.Connections().Revision != before.Revision || service.Connections().OIDC.ClientSecret != before.OIDC.ClientSecret {
+						t.Fatal("preview provisioned an identity, issued a code or changed the active source", err)
+					}
+					service.mu.Lock()
+					service.connectionTests[preview.ID].result.ExpiresAt = time.Now().Add(-time.Second)
+					service.mu.Unlock()
+					if _, err := service.ConnectionTest("admin-a", preview.ID); !errors.Is(err, configstore.ErrNotFound) {
+						t.Fatal("expired preview remained readable", err)
+					}
+				}
 			}
 			var callbackQuery url.Values
 			flow := func(want int) (string, string) {

@@ -77,9 +77,10 @@ type ServerConfig struct {
 }
 
 type AuthConfig struct {
-	Mode   string     `yaml:"mode"`
-	Issuer string     `yaml:"issuer"`
-	SSO    *SSOConfig `yaml:"sso"`
+	EnterpriseMembershipMaxAge Duration   `yaml:"enterprise_membership_max_age"`
+	Mode                       string     `yaml:"mode"`
+	Issuer                     string     `yaml:"issuer"`
+	SSO                        *SSOConfig `yaml:"sso"`
 }
 
 type AdminConfig struct {

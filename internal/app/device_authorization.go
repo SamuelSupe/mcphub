@@ -16,6 +16,13 @@ import (
 )
 
 func deviceError(w http.ResponseWriter, err error) {
+	var grant configstore.GrantError
+	if errors.As(err, &grant) {
+		err = configstore.DeviceDenied
+		if grant == configstore.ErrGrantLimit {
+			err = configstore.DeviceLimited
+		}
+	}
 	code := "temporarily_unavailable"
 	status := http.StatusServiceUnavailable
 	var de configstore.DeviceError

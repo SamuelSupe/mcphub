@@ -1,9 +1,9 @@
 # MCPHub
 
-> 本指南用于 v2.3.0 全新部署。内建账号与 Agent 设备授权需要 v2.3.0，v2.2.2 不包含这些功能。
+> 本指南用于 v2.4.0 全新部署。请使用配套的 MCPHub 与 MCPBridge 发行包；不包含迁移流程。
 
 [![CI](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SamuelSupe/mcphub/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.2.2)
+[![Release](https://img.shields.io/github/v/release/SamuelSupe/mcphub?display_name=tag&sort=semver)](https://github.com/SamuelSupe/mcphub/releases/tag/v2.4.0)
 [![License](https://img.shields.io/github/license/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/SamuelSupe/mcphub)](https://github.com/SamuelSupe/mcphub/blob/main/go.mod)
 
@@ -18,7 +18,7 @@ MCPHub 将已有的远端 MCP Server 和普通 HTTP API 统一提供为 MCP 工�
 | **mcphub — 服务端** | 网关服务器 | `serve`、`validate`、`init-admin` |
 | **mcpbridge — 客户端** | Agent / 用户电脑 | `setup`、`login`、`connect`、`doctor` |
 
-从 v2.2.2 起，客户端程序由 `mcphub-cli` 改名为 `mcpbridge`，下载包以 `mcpbridge_v2.3.0_*` 开头；部署服务端选择 `mcphub_v2.3.0_*`。运行程序的 `--version` 可确认名称、版本与服务端/客户端身份。
+从 v2.2.2 起，客户端程序由 `mcphub-cli` 改名为 `mcpbridge`，下载包以 `mcpbridge_v2.4.0_*` 开头；部署服务端选择 `mcphub_v2.4.0_*`。运行程序的 `--version` 可确认名称、版本与服务端/客户端身份。
 
 ## Agent 链接授权
 
@@ -42,6 +42,17 @@ Agent 没有命令执行能力时，将 stdio 连接参数设为：
 
 每次配对只授权一个服务及工具能力；提示词、资源 URI 或订阅使用原有向导。权限受当前组和已确认范围共同约束，新工具不会自动扩权。所有私有凭证留在 MCPBridge，禁止复制 Token 给 Agent。失败不会覆盖原有可用 profile；换用户或服务器需另建 profile。纯外部签发者继续使用 PKCE 登录与 setup。
 
+桌面上需要一个 Agent 连接访问多个服务时，可使用标准 OAuth 授权：
+
+```sh
+mcpbridge login --native --server https://hub.example.com/mcp --profile work
+mcpbridge connect --profile work
+```
+
+浏览器登录后分别选择每个服务的工具、提示词、资源、订阅、资源条件与有效期。工具默认不选，写申请默认关闭；写操作仍需审批。工具参数条件不能与提示词或资源能力混用。一个连接包含多个独立服务授权，可单项撤销，也可在管理台撤销整个连接；撤销某项后其他有效服务仍可调用。服务目录新增工具不会自动进入原授权。
+
+支持标准 OAuth 的原生 MCP 客户端可由管理员在「运维中心 → OAuth 客户端注册」登记 Client ID 与精确回调，使用 PKCE S256 登录。凭证只通过标准 `Authorization: Bearer` 发送，由服务器绑定内部服务授权，不需要额外 `MCPHub-Grant` Header。修改或删除客户端注册会撤销该客户端的会话与授权。远程无浏览器 Agent 继续使用已有的设备链接配对；一次设备配对仍选择一个服务。
+
 ## 从这里开始
 
 **[在线帮助中心](https://samuelsupe.github.io/mcphub/)**：面向最终用户的 19 篇中英文指南，提供分组导航、全文搜索和客户端配置示例。
@@ -62,7 +73,7 @@ Agent 没有命令执行能力时，将 stdio 连接参数设为：
 
 ## 版本与新部署
 
-当前文档面向 **v2.3.0 全新部署**，默认启用管理台与 SQLite，启动时没有预设后端。客户端程序为 `mcpbridge`，服务端为 `mcphub`。[发行说明](RELEASE_NOTES_v2.3.0.md) · [下载 v2.3.0](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0)。
+当前文档面向 **v2.4.0 全新部署**，默认启用管理台与 SQLite，启动时没有预设后端。客户端程序为 `mcpbridge`，服务端为 `mcphub`。[发行说明](RELEASE_NOTES_v2.4.0.md) · [下载 v2.4.0](https://github.com/SamuelSupe/mcphub/releases/tag/v2.4.0)。
 
 默认配置只要求 `MCPHUB_PUBLIC_URL` 和 `MCPHUB_CONFIG_KEY`。按“启动 MCPHub → 本机初始化管理员 → 登录管理台 → 创建组并授权、添加用户与后端 → 测试连接 → 发布工具”完成新部署。账号密码与 MFA 见[内建账号指南](docs/builtin-accounts.zh-CN.md)；企业 LDAP 与 OIDC 可选，可在管理台同时配置。每个后端分别配置地址、认证凭证和权限，远程管理使用 `deploy/config.remote-*`。
 

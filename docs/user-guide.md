@@ -1,10 +1,10 @@
 # MCPHub user manual
 
-> This guide covers v2.3.0 fresh deployments. Built-in accounts and Agent device authorization require v2.3.0; v2.2.2 does not include these features.
+> This guide covers v2.4.0 fresh deployments. Use matching MCPHub and MCPBridge packages; no migration workflow is included.
 
 [中文](user-guide.zh-CN.md) · [Documentation](README.md) · [Project home](../README.md)
 
-For people using company tools through Codex, Claude Code or another MCP client. This manual covers v2.3.0. Install `mcpbridge` on your own computer; administrators configure the gateway, identity provider and Vault.
+For people using company tools through Codex, Claude Code or another MCP client. This manual covers v2.4.0. Install `mcpbridge` on your own computer; administrators configure the gateway, identity provider and Vault.
 
 For first-time access: **install the CLI → run setup → confirm authorization → add the generated configuration to your client**. If a service requires a personal upstream account, connect it in the portal before completing the connection check.
 
@@ -36,9 +36,24 @@ For Agents without command execution, use these stdio arguments:
 
 The session initializes immediately with only `mcpbridge_auth_start` and `mcpbridge_auth_status`. Start reuses the same unexpired request; status may collect and save credentials and check connectivity. Respect the returned `interval`. Refresh tools after ready. If the Agent does not support `notifications/tools/list_changed`, reconnect using the returned `connect --profile … --client …` command. Failed business calls are never queued or retried automatically. Reauthorization after expiry or revocation is explicit.
 
+The pairing page preserves your service, tools, duration and resource restrictions when switching languages. Only eligible write access is shown. If a code is invalid or expired, start a fresh request in your Agent and enter its new code on the same page. Invalid resource restrictions do not end the request; correct the form and submit again.
+
 Each pairing grants one service and tool capability; use existing setup for prompts, resource URIs or subscriptions. Current groups and the confirmed grant both restrict access, and new tools never expand old grants. Private credentials remain inside MCPBridge. Never copy tokens to an Agent. Failure preserves an existing working profile; choose a new profile for another user or server. Pure external issuers retain PKCE login and setup.
 
 The request, confirmed grant and Broker session must all remain valid when credentials are collected. After expiry, start pairing explicitly again. Canceling an incomplete request cleans up its undelivered credentials; a completed request cannot cancel the delivered login session. Revoke a client through client authorization management. MCPHub checks current access on every business request, so revocation blocks calls immediately without waiting for an Agent status refresh.
+
+### Standard OAuth and multiple services
+
+For one desktop Agent connection spanning multiple services, use standard OAuth consent:
+
+```sh
+mcpbridge login --native --server https://hub.example.com/mcp --profile work
+mcpbridge connect --profile work
+```
+
+After browser login, select tools, prompts, resources, subscriptions, argument conditions and duration per service. Tools and write requests start unchecked; writes still need approval. Tool argument conditions cannot be combined with prompt or resource capabilities. The connection contains independently revocable service grants. Revoking one service leaves other valid services usable; the console can also revoke the entire connection. Newly discovered tools never enter old grants automatically.
+
+Register native MCP clients under **Operations → OAuth client registration** with a Client ID and exact redirects. They use PKCE S256 and only standard `Authorization: Bearer`; the server binds sessions to internal service grants, so no extra `MCPHub-Grant` header is needed. Changing or removing registration revokes that client's sessions and grants. Remote/headless Agents retain device-link pairing, which selects one service per pairing.
 
 ## Before you start
 
@@ -55,26 +70,26 @@ Domains, tools and `ci_example` below are placeholders. Use your actual URL and 
 
 ## Install the CLI
 
-Download the matching MCPBridge package and `SHA256SUMS` from [the v2.3.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.3.0); package names are listed below:
+Download the matching MCPBridge package and `SHA256SUMS` from [the v2.4.0 release](https://github.com/SamuelSupe/mcphub/releases/tag/v2.4.0); package names are listed below:
 
 | Platform | CLI download |
 | --- | --- |
-| macOS Intel | `mcpbridge_v2.3.0_darwin_amd64.tar.gz` |
-| macOS Apple Silicon | `mcpbridge_v2.3.0_darwin_arm64.tar.gz` |
-| Linux amd64 | `mcpbridge_v2.3.0_linux_amd64.tar.gz` |
-| Linux arm64 | `mcpbridge_v2.3.0_linux_arm64.tar.gz` |
-| Windows x64 | `mcpbridge_v2.3.0_windows_amd64.zip` |
-| Windows ARM64 | `mcpbridge_v2.3.0_windows_arm64.zip` |
+| macOS Intel | `mcpbridge_v2.4.0_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `mcpbridge_v2.4.0_darwin_arm64.tar.gz` |
+| Linux amd64 | `mcpbridge_v2.4.0_linux_amd64.tar.gz` |
+| Linux arm64 | `mcpbridge_v2.4.0_linux_arm64.tar.gz` |
+| Windows x64 | `mcpbridge_v2.4.0_windows_amd64.zip` |
+| Windows ARM64 | `mcpbridge_v2.4.0_windows_arm64.zip` |
 
 Compare the download's SHA-256 with `SHA256SUMS`, extract it and put the executable on PATH. Windows requires version 10 or later; choose x64 for Intel/AMD computers and ARM64 for Windows on Arm.
 
 macOS/Linux example (Linux arm64 below; change the filename and use `shasum -a 256` on macOS):
 
 ```bash
-sha256sum mcpbridge_v2.3.0_linux_arm64.tar.gz
+sha256sum mcpbridge_v2.4.0_linux_arm64.tar.gz
 # Compare exactly with the same filename in SHA256SUMS before extracting.
 mkdir -p mcpbridge-release "$HOME/.local/bin"
-tar -xzf mcpbridge_v2.3.0_linux_arm64.tar.gz -C mcpbridge-release
+tar -xzf mcpbridge_v2.4.0_linux_arm64.tar.gz -C mcpbridge-release
 install -m 755 mcpbridge-release/mcpbridge "$HOME/.local/bin/mcpbridge"
 export PATH="$HOME/.local/bin:$PATH"
 mcpbridge --version
@@ -86,8 +101,8 @@ This PATH setting applies to the current terminal. For later runs, use `"$HOME/.
 Windows PowerShell example (substitute the archive for your architecture):
 
 ```powershell
-Get-FileHash .\mcpbridge_v2.3.0_windows_amd64.zip -Algorithm SHA256
-Expand-Archive .\mcpbridge_v2.3.0_windows_amd64.zip -DestinationPath .\mcpbridge
+Get-FileHash .\mcpbridge_v2.4.0_windows_amd64.zip -Algorithm SHA256
+Expand-Archive .\mcpbridge_v2.4.0_windows_amd64.zip -DestinationPath .\mcpbridge
 ```
 
 If you have not added it to PATH, replace `mcpbridge` in subsequent commands with `.\mcpbridge\mcpbridge.exe`.
@@ -95,7 +110,7 @@ If you have not added it to PATH, replace `mcpbridge` in subsequent commands wit
 With Go 1.26.8 installed, you can also run:
 
 ```bash
-go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.3.0
+go install github.com/SamuelSupe/mcphub/v2/cmd/mcpbridge@v2.4.0
 ```
 
 Go installs into `go env GOBIN`, or `$(go env GOPATH)/bin` when GOBIN is empty. Add that directory to PATH. A source-built binary runs as `./mcpbridge` until you install it into your tools directory.
@@ -165,7 +180,7 @@ Approval may require two different reviewers and has an expiry. If the result is
 
 ## Manage client authorizations
 
-At `https://hub.example.com/client-auth/`, inspect, deny or revoke your own grants and sessions. One client entry targets one service (endpoint); authorize different Agents or services separately so each can be revoked independently.
+At `https://hub.example.com/client-auth/`, inspect, deny or revoke your own grants. Active connections appear first, services in the same connection are grouped together, and history is collapsed. **Revoke service access** affects only that service; **Revoke connection** affects every service in that connection. Confirmation explains the scope. Expand technical details to inspect IDs and scopes. Legacy client entries target one endpoint; native OAuth connections can authorize multiple services. Consent supports Chinese and English, shows durations in minutes or hours, and preserves selections when switching language or correcting resource rules.
 
 To select tools and resources explicitly, use the manual commands:
 

@@ -19,6 +19,26 @@ func (a *App) serveAdminClientGrants(w http.ResponseWriter, req *http.Request, s
 		http.NotFound(w, req)
 		return
 	}
+	if strings.HasPrefix(suffix, "/sessions/") && strings.HasSuffix(suffix, "/revoke") && req.Method == http.MethodPost {
+		id := strings.TrimSuffix(strings.TrimPrefix(suffix, "/sessions/"), "/revoke")
+		if id == "" || strings.Contains(id, "/") || len(id) > 128 {
+			http.NotFound(w, req)
+			return
+		}
+		var input struct {
+			Subject string `json:"subject"`
+		}
+		if !decodeAdminJSON(w, req, &input) {
+			return
+		}
+		if err := a.store.RevokeBrokerSession(req.Context(), id, a.currentConfig().Auth.Issuer, input.Subject, "", true); err != nil {
+			writeGrantError(w, err)
+			return
+		}
+		a.currentRuntime().hub.PruneClientGrantViews(req.Context())
+		w.WriteHeader(204)
+		return
+	}
 	if suffix == "" && req.Method == http.MethodGet {
 		params := req.URL.Query()
 		limit := 25

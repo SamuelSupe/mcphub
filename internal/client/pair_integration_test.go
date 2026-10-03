@@ -86,7 +86,7 @@ func TestDevicePairAndInteractiveAgent(t *testing.T) {
 	jar, _ := cookiejar.New(nil)
 	browser := httpClient(hub.Client(), 10*time.Second)
 	browser.Jar = jar
-	browserRequest := func(path string, body any, csrf string) map[string]any {
+	browserRequest := func(path string, body any, csrf string, expected ...int) map[string]any {
 		t.Helper()
 		var raw []byte
 		if body != nil {
@@ -106,7 +106,11 @@ func TestDevicePairAndInteractiveAgent(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		data, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		status := http.StatusOK
+		if len(expected) > 0 {
+			status = expected[0]
+		}
+		if resp.StatusCode != status && !(status == http.StatusOK && resp.StatusCode == http.StatusNoContent) {
 			t.Fatalf("%s: HTTP %d %s", path, resp.StatusCode, data)
 		}
 		out := map[string]any{}
@@ -139,6 +143,13 @@ func TestDevicePairAndInteractiveAgent(t *testing.T) {
 	pending, err := PairFinish(ctx, store, pair.RequestID, false, hub.Client())
 	if err != nil || pending.Status != "pending_user" {
 		t.Fatal("login alone", pending, err)
+	}
+	invalid := browserRequest("api/device/confirm", map[string]any{"user_code": pair.UserCode, "endpoint_id": "alpha", "allowed_tools": []string{"read"}, "ttl_seconds": 3600, "resource_rules": []map[string]any{{}}}, csrf, http.StatusBadRequest)
+	if invalid["error"] != "access_denied" {
+		t.Fatal("invalid restrictions were not reported as a correctable authorization rejection", invalid)
+	}
+	if view := browserRequest("api/device?user_code="+pair.UserCode, nil, ""); view["status"] != "pending" {
+		t.Fatal("invalid restrictions ended the pairing request", view)
 	}
 	approve(pair)
 	ready, err := PairFinish(ctx, store, pair.RequestID, true, hub.Client())

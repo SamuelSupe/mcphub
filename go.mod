@@ -4,7 +4,7 @@ go 1.26.8
 
 require (
 	github.com/coreos/go-oidc/v3 v3.19.0
-	github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
